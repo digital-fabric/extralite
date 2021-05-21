@@ -1,2 +1,51 @@
-# extralite
-An extra-lightweight SQLite3 wrapper for Ruby 
+## Extralite
+
+Extralite is an extra-lightweight SQLite3 wrapper for Ruby. It provides a single
+class with a minimal set of methods to interact with an SQLite3 database.
+
+### Features
+
+- A variety of ways to get back query results: row as hash, row as array, single
+  column, single value.
+- Iterate over records with a block, or collect records into an array.
+- Parameter binding.
+- Get last insert rowid.
+- Get number of rows changed by last query.
+
+### Usage
+
+```ruby
+require 'extralite'
+
+# open a database
+db = Extralite::Database.new('mydb')
+
+# get query results as array of hashes
+db.query_hash('select 1 as foo') #=> [{ :foo => 1 }]
+# or iterate over results
+db.query_hash('select 1 as foo') { |r| p r }
+# { :foo => 1 }
+
+# get query results as array of arrays
+db.query_ary('select 1, 2, 3') #=> [[1, 2, 3]]
+# or iterate over results
+db.query_ary('select 1, 2, 3') { |r| p r }
+# [1, 2, 3]
+
+# get single column query results as array of values
+db.query_single_column('select 42') #=> [42]
+# or iterate over results
+db.query_single_column('select 42') { |v| p v }
+# 42
+
+# get single value from first row of results
+db.query_single_value("select 'foo'") #=> "foo"
+
+# parameter binding (works for all query_xxx methods)
+db.query_hash('select ? as foo, ? as bar', 1, 2) #=> [{ :foo => 1, :bar => 2 }]
+
+# get last insert rowid
+rowid = db.last_insert_id()
+```
+
+
