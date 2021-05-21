@@ -372,5 +372,4 @@ void Init_Extralite() {
   rb_define_method(cDatabase, "filename", Database_filename, -1);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
-  // rb_define_method(cDatabase, "foo", Database_foo, 0);
 }

@@ -21,9 +21,11 @@ require 'extralite'
 db = Extralite::Database.new('mydb')
 
 # get query results as array of hashes
+db.query('select 1 as foo') #=> [{ :foo => 1 }]
+# or:
 db.query_hash('select 1 as foo') #=> [{ :foo => 1 }]
 # or iterate over results
-db.query_hash('select 1 as foo') { |r| p r }
+db.query('select 1 as foo') { |r| p r }
 # { :foo => 1 }
 
 # get query results as array of arrays
@@ -45,7 +47,11 @@ db.query_single_value("select 'foo'") #=> "foo"
 db.query_hash('select ? as foo, ? as bar', 1, 2) #=> [{ :foo => 1, :bar => 2 }]
 
 # get last insert rowid
-rowid = db.last_insert_id()
+rowid = db.last_insert_id
+
+# get rows changed in last query
+rows_changed = db.changes
+
+# get db filename
+Extralite::Database.new('/tmp/my.db').filename #=> "/tmp/my.db"
 ```
-
-
