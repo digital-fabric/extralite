@@ -2,6 +2,8 @@
 #include "ruby.h"
 #include "../sqlite3/sqlite3.h"
 
+VALUE cError;
+
 typedef struct Database_t {
   sqlite3 *sqlite3_db;
 } Database_t;
@@ -52,8 +54,9 @@ VALUE Database_initialize(VALUE self, VALUE path) {
 }
 
 inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
-  fprintf(stderr, "get_column_value col=%d type=%d\n", col, type);
   switch (type) {
+    case SQLITE_NULL:
+      return Qnil;
     case SQLITE_INTEGER:
       return INT2NUM(sqlite3_column_int(stmt, col));
     case SQLITE_FLOAT:
@@ -61,17 +64,73 @@ inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
     case SQLITE_TEXT:
       return rb_str_new_cstr((char *)sqlite3_column_text(stmt, col));
     case SQLITE_BLOB:
-      // TODO: implement
-      return Qfalse;
-    case SQLITE_NULL:
-      return Qnil;
+      rb_raise(cError, "BLOB reading not yet implemented");
     default:
-      // TODO: raise error
-      return Qfalse;
+      rb_raise(cError, "Unknown column type: %d", type);
   }
+
+  return Qnil;
 }
 
-VALUE Database_execute(VALUE self, VALUE sql) {
+VALUE Database_execute_hashes(VALUE self, VALUE sql) {
+  int rc;
+  sqlite3_stmt* stmt;
+  int column_count;
+  int done = 0;
+  Database_t *db;
+  GetDatabase(self, db);
+
+  rc = sqlite3_prepare(db->sqlite3_db, RSTRING_PTR(sql), RSTRING_LEN(sql), &stmt, 0);
+  if (rc) {
+    sqlite3_finalize(stmt);
+    rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+    return Qnil;
+  }
+
+  column_count = sqlite3_column_count(stmt);
+  if (column_count > 0) {
+    VALUE row;
+    VALUE column_names = rb_ary_new2(column_count);
+    for (int i = 0; i < column_count; i++) { 
+      VALUE name = ID2SYM(rb_intern(sqlite3_column_name(stmt, i)));
+      rb_ary_push(column_names, name);
+    }
+
+    row = rb_hash_new();
+    while (!done) {
+      rc = sqlite3_step(stmt);
+      switch (rc) {
+        case SQLITE_ROW:
+          rb_hash_clear(row);
+          for (int i = 0; i < column_count; i++) {
+            VALUE value = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
+            rb_hash_aset(row, RARRAY_AREF(column_names, i), value);
+          }
+          rb_yield(row);
+          continue;
+        case SQLITE_DONE:
+          done = 1;
+          continue;
+        case SQLITE_BUSY:
+          rb_raise(cError, "Database is busy");
+        case SQLITE_ERROR:
+          rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+        default:
+          rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
+      }
+
+    }
+
+    RB_GC_GUARD(column_names);
+    RB_GC_GUARD(row);
+  }
+
+  sqlite3_finalize(stmt);
+
+  return Qnil;
+}
+
+VALUE Database_execute_arrays(VALUE self, VALUE sql) {
   int rc;
   sqlite3_stmt* stmt;
   int column_count;
@@ -88,43 +147,32 @@ VALUE Database_execute(VALUE self, VALUE sql) {
 
   column_count = sqlite3_column_count(stmt);
   if (column_count > 0) {
-    VALUE hash;
-    VALUE column_names = rb_ary_new2(column_count);
-    for (int i = 0; i < column_count; i++) { 
-      VALUE name = ID2SYM(rb_intern(sqlite3_column_name(stmt, i)));
-      rb_ary_push(column_names, name);
-    }
-
-    hash = rb_hash_new();
-    while (1) {
+    VALUE row = rb_ary_new2(column_count);
+    int done = 0;
+    while (!done) {
       rc = sqlite3_step(stmt);
-      fprintf(stderr, "step rc=%d\n", rc);
-      if (rc == SQLITE_ROW) {
-        rb_hash_clear(hash);
-        for (int i = 0; i < column_count; i++) {
-          VALUE value = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
-          rb_hash_aset(hash, RARRAY_AREF(column_names, i), value);
-        }
-        rb_yield(hash);
-      }
-      break;
       switch (rc) {
+        case SQLITE_ROW:
+          rb_ary_clear(row);
+          for (int i = 0; i < column_count; i++) {
+            VALUE value = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
+            rb_ary_push(row, value);
+          }
+          rb_yield(row);
+          continue;
         case SQLITE_DONE:
-          break;
+          done = 1;
+          continue;
         case SQLITE_BUSY:
-          break;
+          rb_raise(cError, "Database is busy");
         case SQLITE_ERROR:
-          fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db->sqlite3_db));
-          break;
+          rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
         default:
-          fprintf(stderr, "rc = %d\n", rc);
-          break;
+          rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
       }
-
     }
 
-    RB_GC_GUARD(column_names);
-    RB_GC_GUARD(hash);
+    RB_GC_GUARD(row);
   }
 
   sqlite3_finalize(stmt);
@@ -138,6 +186,9 @@ void Init_Extralite() {
   rb_define_alloc_func(cDatabase, Database_allocate);
 
   rb_define_method(cDatabase, "initialize", Database_initialize, 1);
-  rb_define_method(cDatabase, "execute", Database_execute, 1);
+  rb_define_method(cDatabase, "execute_hashes", Database_execute_hashes, 1);
+  rb_define_method(cDatabase, "execute_arrays", Database_execute_arrays, 1);
+
+  cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
   // rb_define_method(cDatabase, "foo", Database_foo, 0);
 }
