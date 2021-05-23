@@ -11,8 +11,8 @@ Gem::Specification.new do |s|
   s.homepage    = 'https://github.com/digital-fabric/extralite'
   s.metadata    = {
     "source_code_uri" => "https://github.com/digital-fabric/extralite",
-    "documentation_uri" => "https://digital-fabric.github.io/extralite/",
-    "homepage_uri" => "https://digital-fabric.github.io/extralite/",
+    "documentation_uri" => "https://github.com/digital-fabric/extralite",
+    "homepage_uri" => "https://github.com/digital-fabric/extralite",
     "changelog_uri" => "https://github.com/digital-fabric/extralite/blob/master/CHANGELOG.md"
   }
   s.rdoc_options = ["--title", "extralite", "--main", "README.md"]
