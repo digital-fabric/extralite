@@ -162,12 +162,16 @@ step:
     case SQLITE_DONE:
       break;
     case SQLITE_BUSY:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "Database is busy");
     case SQLITE_ERROR:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
     default:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
   }
+  // TODO, use ensure to finalize statement
   sqlite3_finalize(stmt);
   RB_GC_GUARD(column_names);
   RB_GC_GUARD(row);
