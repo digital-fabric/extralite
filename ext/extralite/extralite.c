@@ -358,6 +358,13 @@ VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
   return filename ? rb_str_new_cstr(filename) : Qnil;
 }
 
+VALUE Database_transaction_active_p(VALUE self) {
+  Database_t *db;
+  GetDatabase(self, db);
+
+  return sqlite3_get_autocommit(db->sqlite3_db) ? Qfalse : Qtrue;
+}
+
 void Init_Extralite() {
   VALUE mExtralite = rb_define_module("Extralite");
   VALUE cDatabase = rb_define_class_under(mExtralite, "Database", rb_cObject);
@@ -374,6 +381,7 @@ void Init_Extralite() {
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "changes", Database_changes, 0);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
+  rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
 }

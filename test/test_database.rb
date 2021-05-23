@@ -41,25 +41,11 @@ class DatabaseTest < MiniTest::Test
     assert_equal 6, r
   end
 
-  def test_transaction
-    error = nil
-    begin
-      @db.transaction do
-        @db.query('insert into t values (7, 8, 9)')
-        raise 'blah'
-      end
-    rescue => error
-    end
-    assert_kind_of RuntimeError, error
-    assert_equal 'blah', error.message
-    assert [2, 5], @db.query_single_column('select y from t')
-
-    @db.transaction do
-      @db.query('insert into t values (7, 8, 9)')
-    end
-    assert [2, 5, 8], @db.query_single_column('select y from t')
-
-    
-
+  def test_transaction_active?
+    assert_equal false, @db.transaction_active?
+    @db.query('begin')
+    assert_equal true, @db.transaction_active?
+    @db.query('rollback')
+    assert_equal false, @db.transaction_active?
   end
 end
