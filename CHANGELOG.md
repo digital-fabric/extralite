@@ -1,3 +1,7 @@
+## 0.4 2021-05-24
+
+- Add support for loading extensions
+
 ## 0.3 2021-05-24
 
 - Add support for running multiple statements
