@@ -123,6 +123,32 @@ static inline VALUE row_to_hash(sqlite3_stmt *stmt, int column_count, VALUE colu
   return row;
 }
 
+inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+  const char *rest = 0;
+  const char *ptr = RSTRING_PTR(sql);
+  const char *end = ptr + RSTRING_LEN(sql);
+  while (1) {
+    int rc = sqlite3_prepare(db, ptr, end - ptr, stmt, &rest);
+    if (rc) {
+      sqlite3_finalize(*stmt);
+      rb_raise(cError, "%s", sqlite3_errmsg(db));
+    }
+
+    if (rest == end) return;
+    
+    // perform current query, but discard its results
+    rc = sqlite3_step(*stmt);
+    sqlite3_finalize(*stmt);
+    switch (rc) {
+    case SQLITE_BUSY:
+      rb_raise(cError, "Database is busy");
+    case SQLITE_ERROR:
+      rb_raise(cError, "%s", sqlite3_errmsg(db));
+    }
+    ptr = rest;
+  }
+}
+
 VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
   int rc;
   sqlite3_stmt* stmt;
@@ -138,13 +164,7 @@ VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
   sql = argv[0];
   GetDatabase(self, db);
 
-  rc = sqlite3_prepare(db->sqlite3_db, RSTRING_PTR(sql), RSTRING_LEN(sql), &stmt, 0);
-  if (rc) {
-    sqlite3_finalize(stmt);
-    rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
-    return Qnil;
-  }
-
+  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   bind_all_parameters(stmt, argc, argv);
   column_count = sqlite3_column_count(stmt);
   column_names = get_column_names(stmt, column_count);
@@ -202,14 +222,7 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
   sql = argv[0];
   GetDatabase(self, db);
 
-  rc = sqlite3_prepare(db->sqlite3_db, RSTRING_PTR(sql), RSTRING_LEN(sql), &stmt, 0);
-  if (rc) {
-    fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db->sqlite3_db));
-    sqlite3_finalize(stmt);
-    // TODO: raise error
-    return Qfalse;
-  }
-
+  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   bind_all_parameters(stmt, argc, argv);
   column_count = sqlite3_column_count(stmt);
 
@@ -225,10 +238,13 @@ step:
     case SQLITE_DONE:
       break;
     case SQLITE_BUSY:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "Database is busy");
     case SQLITE_ERROR:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
     default:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
   }
   sqlite3_finalize(stmt);
@@ -251,14 +267,7 @@ VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
   sql = argv[0];
   GetDatabase(self, db);
 
-  rc = sqlite3_prepare(db->sqlite3_db, RSTRING_PTR(sql), RSTRING_LEN(sql), &stmt, 0);
-  if (rc) {
-    fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db->sqlite3_db));
-    sqlite3_finalize(stmt);
-    // TODO: raise error
-    return Qfalse;
-  }
-
+  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   bind_all_parameters(stmt, argc, argv);
   column_count = sqlite3_column_count(stmt);
   if (column_count != 1)
@@ -268,6 +277,7 @@ VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
   if (!yield_to_block) result = rb_ary_new();
 step:
   rc = sqlite3_step(stmt);
+  printf("rc=%d\n", rc);
   switch (rc) {
     case SQLITE_ROW:
       value = get_column_value(stmt, 0, sqlite3_column_type(stmt, 0));
@@ -276,10 +286,13 @@ step:
     case SQLITE_DONE:
       break;
     case SQLITE_BUSY:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "Database is busy");
     case SQLITE_ERROR:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
     default:
+      sqlite3_finalize(stmt);
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
   }
 
@@ -301,14 +314,7 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
   sql = argv[0];
   GetDatabase(self, db);
 
-  rc = sqlite3_prepare(db->sqlite3_db, RSTRING_PTR(sql), RSTRING_LEN(sql), &stmt, 0);
-  if (rc) {
-    fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db->sqlite3_db));
-    sqlite3_finalize(stmt);
-    // TODO: raise error
-    return Qfalse;
-  }
-
+  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   bind_all_parameters(stmt, argc, argv);
   column_count = sqlite3_column_count(stmt);
   if (column_count != 1)

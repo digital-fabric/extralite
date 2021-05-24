@@ -48,4 +48,10 @@ class DatabaseTest < MiniTest::Test
     @db.query('rollback')
     assert_equal false, @db.transaction_active?
   end
+
+  def test_multiple_statements
+    @db.query("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');")
+
+    assert_equal [1, 4, 'a', 'd'], @db.query_single_column('select x from t order by x')
+  end
 end
