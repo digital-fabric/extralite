@@ -44,10 +44,14 @@ VALUE Database_initialize(VALUE self, VALUE path) {
 
   rc = sqlite3_open(StringValueCStr(path), &db->sqlite3_db);
   if (rc) {
-    fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db->sqlite3_db));
     sqlite3_close(db->sqlite3_db);
-    // TODO: raise error
-    return Qfalse;
+    rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+  }
+
+  rc = sqlite3_enable_load_extension(db->sqlite3_db, 1);
+  if (rc) {
+    sqlite3_close(db->sqlite3_db);
+    rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
 
   return Qnil;
@@ -371,6 +375,21 @@ VALUE Database_transaction_active_p(VALUE self) {
   return sqlite3_get_autocommit(db->sqlite3_db) ? Qfalse : Qtrue;
 }
 
+VALUE Database_load_extension(VALUE self, VALUE path) {
+  Database_t *db;
+  GetDatabase(self, db);
+  char *err_msg;
+
+  int rc = sqlite3_load_extension(db->sqlite3_db, RSTRING_PTR(path), 0, &err_msg);
+  if (rc != SQLITE_OK) {
+    VALUE error = rb_exc_new2(cError, err_msg);
+    sqlite3_free(err_msg);
+    rb_exc_raise(error);
+  }
+
+  return self;
+}
+
 void Init_Extralite() {
   VALUE mExtralite = rb_define_module("Extralite");
   VALUE cDatabase = rb_define_class_under(mExtralite, "Database", rb_cObject);
@@ -388,6 +407,7 @@ void Init_Extralite() {
   rb_define_method(cDatabase, "changes", Database_changes, 0);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
+  rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
 }
