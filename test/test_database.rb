@@ -19,26 +19,49 @@ class DatabaseTest < MiniTest::Test
   def test_query
     r = @db.query('select * from t')
     assert_equal [{x: 1, y: 2, z: 3}, {x: 4, y: 5, z: 6}], r
+
+    r = @db.query('select * from t where x = 2')
+    assert_equal [], r
   end
 
   def test_query_hash
     r = @db.query_hash('select * from t')
     assert_equal [{x: 1, y: 2, z: 3}, {x: 4, y: 5, z: 6}], r
+
+    r = @db.query_hash('select * from t where x = 2')
+    assert_equal [], r
   end
 
   def test_query_ary
     r = @db.query_ary('select * from t')
     assert_equal [[1, 2, 3], [4, 5, 6]], r
+
+    r = @db.query_ary('select * from t where x = 2')
+    assert_equal [], r
+  end
+
+  def test_query_single_row
+    r = @db.query_single_row('select * from t order by x desc limit 1')
+    assert_equal({ x: 4, y: 5, z: 6 }, r)
+
+    r = @db.query_single_row('select * from t where x = 2')
+    assert_nil r
   end
 
   def test_query_single_column
     r = @db.query_single_column('select y from t')
     assert_equal [2, 5], r
-  end
+  
+    r = @db.query_single_column('select y from t where x = 2')
+    assert_equal [], r
+end
 
   def test_query_single_value
     r = @db.query_single_value('select z from t order by Z desc limit 1')
     assert_equal 6, r
+
+    r = @db.query_single_value('select z from t where x = 2')
+    assert_nil r
   end
 
   def test_transaction_active?
@@ -53,5 +76,13 @@ class DatabaseTest < MiniTest::Test
     @db.query("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');")
 
     assert_equal [1, 4, 'a', 'd'], @db.query_single_column('select x from t order by x')
+  end
+
+  def test_empty_sql
+    r = @db.query(' ')
+    assert_nil r
+
+    r = @db.query('select 1 as foo;  ')
+    assert_equal [{ foo: 1 }], r
   end
 end

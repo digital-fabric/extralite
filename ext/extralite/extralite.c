@@ -3,6 +3,7 @@
 #include "../sqlite3/sqlite3.h"
 
 VALUE cError;
+ID ID_STRIP;
 
 typedef struct Database_t {
   sqlite3 *sqlite3_db;
@@ -127,6 +128,15 @@ static inline VALUE row_to_hash(sqlite3_stmt *stmt, int column_count, VALUE colu
   return row;
 }
 
+static inline VALUE row_to_ary(sqlite3_stmt *stmt, int column_count) {
+  VALUE row = rb_ary_new2(column_count);
+  for (int i = 0; i < column_count; i++) {
+    VALUE value = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
+    rb_ary_push(row, value);
+  }
+  return row;
+}
+
 inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   const char *rest = 0;
   const char *ptr = RSTRING_PTR(sql);
@@ -165,7 +175,9 @@ VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
   VALUE sql;
   
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = argv[0];
+  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+
   GetDatabase(self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
@@ -203,15 +215,6 @@ step:
   return result;
 }
 
-static inline VALUE row_to_ary(sqlite3_stmt *stmt, int column_count) {
-  VALUE row = rb_ary_new2(column_count);
-  for (int i = 0; i < column_count; i++) {
-    VALUE value = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
-    rb_ary_push(row, value);
-  }
-  return row;
-}
-
 VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
   int rc;
   sqlite3_stmt* stmt;
@@ -223,7 +226,8 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
   VALUE sql;
 
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = argv[0];
+  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
   GetDatabase(self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
@@ -257,6 +261,47 @@ step:
   return result;
 }
 
+VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
+  int rc;
+  sqlite3_stmt* stmt;
+  int column_count;
+  Database_t *db;
+  VALUE sql;
+  VALUE row = Qnil;
+  VALUE column_names;
+
+  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
+  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+
+  GetDatabase(self, db);
+
+  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
+  bind_all_parameters(stmt, argc, argv);
+  column_count = sqlite3_column_count(stmt);
+  column_names = get_column_names(stmt, column_count);
+
+  rc = sqlite3_step(stmt);
+  switch (rc) {
+    case SQLITE_ROW:
+      row = row_to_hash(stmt, column_count, column_names);
+      break;
+    case SQLITE_DONE:
+      break;
+    case SQLITE_BUSY:
+      rb_raise(cError, "Database is busy");
+    case SQLITE_ERROR:
+      rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+    default:
+      rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
+  }
+
+  sqlite3_finalize(stmt);
+  RB_GC_GUARD(row);
+  RB_GC_GUARD(column_names);
+  return row;
+}
+
 VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
   int rc;
   sqlite3_stmt* stmt;
@@ -268,7 +313,9 @@ VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
   VALUE value;
 
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = argv[0];
+  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+
   GetDatabase(self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
@@ -281,7 +328,6 @@ VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
   if (!yield_to_block) result = rb_ary_new();
 step:
   rc = sqlite3_step(stmt);
-  printf("rc=%d\n", rc);
   switch (rc) {
     case SQLITE_ROW:
       value = get_column_value(stmt, 0, sqlite3_column_type(stmt, 0));
@@ -315,7 +361,9 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
   VALUE value = Qnil;
 
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = argv[0];
+  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+
   GetDatabase(self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
@@ -328,6 +376,8 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
   switch (rc) {
     case SQLITE_ROW:
       value = get_column_value(stmt, 0, sqlite3_column_type(stmt, 0));
+      break;
+    case SQLITE_DONE:
       break;
     case SQLITE_BUSY:
       rb_raise(cError, "Database is busy");
@@ -400,6 +450,7 @@ void Init_Extralite() {
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_hash", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
+  rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
   
@@ -410,4 +461,5 @@ void Init_Extralite() {
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
+  ID_STRIP = rb_intern("strip");
 }
