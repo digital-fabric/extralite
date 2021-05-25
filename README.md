@@ -11,6 +11,7 @@ class with a minimal set of methods to interact with an SQLite3 database.
 - Parameter binding.
 - Get last insert rowid.
 - Get number of rows changed by last query.
+- Load extensions.ss
 
 ### Usage
 
