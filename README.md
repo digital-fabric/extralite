@@ -35,7 +35,7 @@ db.query_ary('select 1, 2, 3') { |r| p r }
 # [1, 2, 3]
 
 # get a single row as a hash
-db.query_single_column("select 1 as foo") #=> { :foo => 1 }
+db.query_single_row("select 1 as foo") #=> { :foo => 1 }
 
 # get single column query results as array of values
 db.query_single_column('select 42') #=> [42]
