@@ -1,3 +1,7 @@
+## 0.6 2021-05-25
+
+- Add more specific errors: `SQLError`, `BusyError`
+
 ## 0.5 2021-05-25
 
 - Implement `Database#query_single_row`
