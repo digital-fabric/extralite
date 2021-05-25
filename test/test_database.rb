@@ -24,6 +24,10 @@ class DatabaseTest < MiniTest::Test
     assert_equal [], r
   end
 
+  def test_invalid_query
+    assert_raises(Extralite::SQLError) { @db.query('blah') }
+  end
+
   def test_query_hash
     r = @db.query_hash('select * from t')
     assert_equal [{x: 1, y: 2, z: 3}, {x: 4, y: 5, z: 6}], r

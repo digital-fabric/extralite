@@ -3,6 +3,8 @@
 #include "../sqlite3/sqlite3.h"
 
 VALUE cError;
+VALUE cSQLError;
+VALUE cBusyError;
 ID ID_STRIP;
 
 typedef struct Database_t {
@@ -145,7 +147,7 @@ inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
     int rc = sqlite3_prepare(db, ptr, end - ptr, stmt, &rest);
     if (rc) {
       sqlite3_finalize(*stmt);
-      rb_raise(cError, "%s", sqlite3_errmsg(db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
     }
 
     if (rest == end) return;
@@ -155,9 +157,9 @@ inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
     sqlite3_finalize(*stmt);
     switch (rc) {
     case SQLITE_BUSY:
-      rb_raise(cError, "Database is busy");
+      rb_raise(cBusyError, "Database is busy");
     case SQLITE_ERROR:
-      rb_raise(cError, "%s", sqlite3_errmsg(db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
     }
     ptr = rest;
   }
@@ -199,10 +201,10 @@ step:
       break;
     case SQLITE_BUSY:
       sqlite3_finalize(stmt);
-      rb_raise(cError, "Database is busy");
+      rb_raise(cBusyError, "Database is busy");
     case SQLITE_ERROR:
       sqlite3_finalize(stmt);
-      rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
     default:
       sqlite3_finalize(stmt);
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
@@ -247,10 +249,10 @@ step:
       break;
     case SQLITE_BUSY:
       sqlite3_finalize(stmt);
-      rb_raise(cError, "Database is busy");
+      rb_raise(cBusyError, "Database is busy");
     case SQLITE_ERROR:
       sqlite3_finalize(stmt);
-      rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
     default:
       sqlite3_finalize(stmt);
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
@@ -289,9 +291,9 @@ VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
     case SQLITE_DONE:
       break;
     case SQLITE_BUSY:
-      rb_raise(cError, "Database is busy");
+      rb_raise(cBusyError, "Database is busy");
     case SQLITE_ERROR:
-      rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
     default:
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
   }
@@ -337,10 +339,10 @@ step:
       break;
     case SQLITE_BUSY:
       sqlite3_finalize(stmt);
-      rb_raise(cError, "Database is busy");
+      rb_raise(cBusyError, "Database is busy");
     case SQLITE_ERROR:
       sqlite3_finalize(stmt);
-      rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
     default:
       sqlite3_finalize(stmt);
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
@@ -380,9 +382,9 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
     case SQLITE_DONE:
       break;
     case SQLITE_BUSY:
-      rb_raise(cError, "Database is busy");
+      rb_raise(cBusyError, "Database is busy");
     case SQLITE_ERROR:
-      rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
     default:
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
   }
@@ -461,5 +463,8 @@ void Init_Extralite() {
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
+  cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
+  cBusyError = rb_define_class_under(mExtralite, "BusyError", cError);
+
   ID_STRIP = rb_intern("strip");
 }
