@@ -1,3 +1,7 @@
+## 0.5 2021-05-25
+
+- Implement `Database#query_single_row`
+
 ## 0.4 2021-05-24
 
 - Add support for loading extensions

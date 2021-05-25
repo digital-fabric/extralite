@@ -5,8 +5,8 @@ class with a minimal set of methods to interact with an SQLite3 database.
 
 ### Features
 
-- A variety of ways to get back query results: row as hash, row as array, single
-  column, single value.
+- A variety of methods for different data access patterns: row as hash, row as array, single
+  single row, single column, single value.
 - Iterate over records with a block, or collect records into an array.
 - Parameter binding.
 - Get last insert rowid.
@@ -33,6 +33,9 @@ db.query_ary('select 1, 2, 3') #=> [[1, 2, 3]]
 # or iterate over results
 db.query_ary('select 1, 2, 3') { |r| p r }
 # [1, 2, 3]
+
+# get a single row as a hash
+db.query_single_column("select 1 as foo") #=> { :foo => 1 }
 
 # get single column query results as array of values
 db.query_single_column('select 42') #=> [42]
