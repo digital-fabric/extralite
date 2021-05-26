@@ -5,13 +5,16 @@ class with a minimal set of methods to interact with an SQLite3 database.
 
 ### Features
 
-- A variety of methods for different data access patterns: row as hash, row as array, single
-  single row, single column, single value.
+- A variety of methods for different data access patterns: row as hash, row as
+  array, single single row, single column, single value.
 - Iterate over records with a block, or collect records into an array.
 - Parameter binding.
+- Correctly execute strings with multiple semicolon-separated queries (handy for
+  creating/modifying schemas).
 - Get last insert rowid.
 - Get number of rows changed by last query.
-- Load extensions.
+- Loading extensions is autmatically enabled. You can find some useful
+  extensions here: https://github.com/nalgeon/sqlean.
 
 ### Usage
 
@@ -19,7 +22,7 @@ class with a minimal set of methods to interact with an SQLite3 database.
 require 'extralite'
 
 # open a database
-db = Extralite::Database.new('mydb')
+db = Extralite::Database.new('/tmp/my.db')
 
 # get query results as array of hashes
 db.query('select 1 as foo') #=> [{ :foo => 1 }]
@@ -53,9 +56,12 @@ db.query_hash('select ? as foo, ? as bar', 1, 2) #=> [{ :foo => 1, :bar => 2 }]
 # get last insert rowid
 rowid = db.last_insert_id
 
-# get rows changed in last query
-rows_changed = db.changes
+# get number of rows changed in last query
+number_of_rows_affected = db.changes
 
 # get db filename
-Extralite::Database.new('/tmp/my.db').filename #=> "/tmp/my.db"
+db.filename #=> "/tmp/my.db"
+
+# load an extension
+db.load_extension('/path/to/extension.so')
 ```
