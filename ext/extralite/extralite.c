@@ -165,233 +165,215 @@ inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   }
 }
 
-VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
+inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
   int rc;
-  sqlite3_stmt* stmt;
-  int column_count;
-  Database_t *db;
-  VALUE result = self;
-  int yield_to_block = rb_block_given_p();
-  VALUE row;
-  VALUE column_names;
-  VALUE sql;
-  
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(argv[0], ID_STRIP, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
-
-  GetDatabase(self, db);
-
-  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
-  bind_all_parameters(stmt, argc, argv);
-  column_count = sqlite3_column_count(stmt);
-  column_names = get_column_names(stmt, column_count);
-
-  // block not given, so prepare the array of records to be returned
-  if (!yield_to_block) result = rb_ary_new();
-    
-step:
   rc = sqlite3_step(stmt);
   switch (rc) {
     case SQLITE_ROW:
-      row = row_to_hash(stmt, column_count, column_names);
-      if (yield_to_block) rb_yield(row); else rb_ary_push(result, row);
-      goto step;
+      return 1;
     case SQLITE_DONE:
-      break;
+      return 0;
     case SQLITE_BUSY:
-      sqlite3_finalize(stmt);
       rb_raise(cBusyError, "Database is busy");
     case SQLITE_ERROR:
-      sqlite3_finalize(stmt);
-      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
     default:
-      sqlite3_finalize(stmt);
       rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
   }
-  // TODO, use ensure to finalize statement
-  sqlite3_finalize(stmt);
+
+  return 0;
+}
+
+typedef struct query_ctx {
+  VALUE self;
+  int argc;
+  VALUE *argv;
+  sqlite3_stmt *stmt;
+} query_ctx;
+
+VALUE cleanup_stmt(VALUE arg) {
+  query_ctx *ctx = (query_ctx *)arg;
+  sqlite3_finalize(ctx->stmt);
+  return Qnil;
+}
+
+VALUE safe_query_hash(VALUE arg) {
+  query_ctx *ctx = (query_ctx *)arg;
+  Database_t *db;
+  VALUE result = ctx->self;
+  int yield_to_block = rb_block_given_p();
+  VALUE row;
+  VALUE sql;
+  int column_count;
+  VALUE column_names;
+  
+  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
+  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+
+  GetDatabase(ctx->self, db);
+
+  prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
+  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
+  column_count = sqlite3_column_count(ctx->stmt);
+  column_names = get_column_names(ctx->stmt, column_count);
+
+  // block not given, so prepare the array of records to be returned
+  if (!yield_to_block) result = rb_ary_new();
+
+  while (stmt_iterate(ctx->stmt, db->sqlite3_db)) {
+    row = row_to_hash(ctx->stmt, column_count, column_names);
+    if (yield_to_block) rb_yield(row); else rb_ary_push(result, row);
+  }
+
   RB_GC_GUARD(column_names);
+  RB_GC_GUARD(row);
+  RB_GC_GUARD(result);
+  return result;
+}
+
+VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
+  query_ctx ctx = { self, argc, argv, 0 };
+  return rb_ensure(safe_query_hash, (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
+}
+
+VALUE safe_query_ary(VALUE arg) {
+  query_ctx *ctx = (query_ctx *)arg;
+  Database_t *db;
+  int column_count;
+  VALUE result = ctx->self;
+  int yield_to_block = rb_block_given_p();
+  VALUE row;
+  VALUE sql;
+
+  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
+  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+  GetDatabase(ctx->self, db);
+
+  prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
+  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
+  column_count = sqlite3_column_count(ctx->stmt);
+
+  // block not given, so prepare the array of records to be returned
+  if (!yield_to_block) result = rb_ary_new();
+
+  while (stmt_iterate(ctx->stmt, db->sqlite3_db)) {
+    row = row_to_ary(ctx->stmt, column_count);
+    if (yield_to_block) rb_yield(row); else rb_ary_push(result, row);
+  }
+  
   RB_GC_GUARD(row);
   RB_GC_GUARD(result);
   return result;
 }
 
 VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
-  int rc;
-  sqlite3_stmt* stmt;
-  int column_count;
-  Database_t *db;
-  VALUE result = self;
-  int yield_to_block = rb_block_given_p();
-  VALUE row;
-  VALUE sql;
-
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(argv[0], ID_STRIP, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
-  GetDatabase(self, db);
-
-  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
-  bind_all_parameters(stmt, argc, argv);
-  column_count = sqlite3_column_count(stmt);
-
-  // block not given, so prepare the array of records to be returned
-  if (!yield_to_block) result = rb_ary_new();
-step:
-  rc = sqlite3_step(stmt);
-  switch (rc) {
-    case SQLITE_ROW:
-      row = row_to_ary(stmt, column_count);
-      if (yield_to_block) rb_yield(row); else rb_ary_push(result, row);
-      goto step;
-    case SQLITE_DONE:
-      break;
-    case SQLITE_BUSY:
-      sqlite3_finalize(stmt);
-      rb_raise(cBusyError, "Database is busy");
-    case SQLITE_ERROR:
-      sqlite3_finalize(stmt);
-      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
-    default:
-      sqlite3_finalize(stmt);
-      rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
-  }
-  sqlite3_finalize(stmt);
-  RB_GC_GUARD(row);
-  RB_GC_GUARD(result);
-  return result;
+  query_ctx ctx = { self, argc, argv, 0 };
+  return rb_ensure(safe_query_ary, (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
 }
 
-VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
-  int rc;
-  sqlite3_stmt* stmt;
-  int column_count;
+VALUE safe_query_single_row(VALUE arg) {
+  query_ctx *ctx = (query_ctx *)arg;
   Database_t *db;
+  int column_count;
   VALUE sql;
   VALUE row = Qnil;
   VALUE column_names;
 
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
+  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  GetDatabase(self, db);
+  GetDatabase(ctx->self, db);
 
-  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
-  bind_all_parameters(stmt, argc, argv);
-  column_count = sqlite3_column_count(stmt);
-  column_names = get_column_names(stmt, column_count);
+  prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
+  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
+  column_count = sqlite3_column_count(ctx->stmt);
+  column_names = get_column_names(ctx->stmt, column_count);
 
-  rc = sqlite3_step(stmt);
-  switch (rc) {
-    case SQLITE_ROW:
-      row = row_to_hash(stmt, column_count, column_names);
-      break;
-    case SQLITE_DONE:
-      break;
-    case SQLITE_BUSY:
-      rb_raise(cBusyError, "Database is busy");
-    case SQLITE_ERROR:
-      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
-    default:
-      rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
-  }
+  if (stmt_iterate(ctx->stmt, db->sqlite3_db))
+    row = row_to_hash(ctx->stmt, column_count, column_names);
 
-  sqlite3_finalize(stmt);
   RB_GC_GUARD(row);
   RB_GC_GUARD(column_names);
   return row;
 }
 
-VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
-  int rc;
-  sqlite3_stmt* stmt;
+VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
+  query_ctx ctx = { self, argc, argv, 0 };
+  return rb_ensure(safe_query_single_row, (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
+}
+
+VALUE safe_query_single_column(VALUE arg) {
+  query_ctx *ctx = (query_ctx *)arg;
+
   int column_count;
   Database_t *db;
-  VALUE result = self;
+  VALUE result = ctx->self;
   int yield_to_block = rb_block_given_p();
   VALUE sql;
   VALUE value;
 
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
+  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  GetDatabase(self, db);
+  GetDatabase(ctx->self, db);
 
-  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
-  bind_all_parameters(stmt, argc, argv);
-  column_count = sqlite3_column_count(stmt);
+  prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
+  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
+  column_count = sqlite3_column_count(ctx->stmt);
   if (column_count != 1)
     rb_raise(cError, "Expected query result to have 1 column");
 
   // block not given, so prepare the array of records to be returned
   if (!yield_to_block) result = rb_ary_new();
-step:
-  rc = sqlite3_step(stmt);
-  switch (rc) {
-    case SQLITE_ROW:
-      value = get_column_value(stmt, 0, sqlite3_column_type(stmt, 0));
-      if (yield_to_block) rb_yield(value); else rb_ary_push(result, value);
-      goto step;
-    case SQLITE_DONE:
-      break;
-    case SQLITE_BUSY:
-      sqlite3_finalize(stmt);
-      rb_raise(cBusyError, "Database is busy");
-    case SQLITE_ERROR:
-      sqlite3_finalize(stmt);
-      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
-    default:
-      sqlite3_finalize(stmt);
-      rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
+
+  while (stmt_iterate(ctx->stmt, db->sqlite3_db)) {
+    value = get_column_value(ctx->stmt, 0, sqlite3_column_type(ctx->stmt, 0));
+    if (yield_to_block) rb_yield(value); else rb_ary_push(result, value);
   }
 
-  sqlite3_finalize(stmt);
   RB_GC_GUARD(value);
   RB_GC_GUARD(result);
   return result;
 }
 
-VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
-  int rc;
-  sqlite3_stmt* stmt;
+VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
+  query_ctx ctx = { self, argc, argv, 0 };
+  return rb_ensure(safe_query_single_column, (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
+}
+
+VALUE safe_query_single_value(VALUE arg) {
+  query_ctx *ctx = (query_ctx *)arg;
   int column_count;
   Database_t *db;
   VALUE sql;
   VALUE value = Qnil;
 
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
+  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  GetDatabase(self, db);
+  GetDatabase(ctx->self, db);
 
-  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
-  bind_all_parameters(stmt, argc, argv);
-  column_count = sqlite3_column_count(stmt);
+  prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
+  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
+  column_count = sqlite3_column_count(ctx->stmt);
   if (column_count != 1)
     rb_raise(cError, "Expected query result to have 1 column");
 
-  rc = sqlite3_step(stmt);
-  switch (rc) {
-    case SQLITE_ROW:
-      value = get_column_value(stmt, 0, sqlite3_column_type(stmt, 0));
-      break;
-    case SQLITE_DONE:
-      break;
-    case SQLITE_BUSY:
-      rb_raise(cBusyError, "Database is busy");
-    case SQLITE_ERROR:
-      rb_raise(cSQLError, "%s", sqlite3_errmsg(db->sqlite3_db));
-    default:
-      rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
-  }
+  if (stmt_iterate(ctx->stmt, db->sqlite3_db))
+    value = get_column_value(ctx->stmt, 0, sqlite3_column_type(ctx->stmt, 0));
 
-  sqlite3_finalize(stmt);
   RB_GC_GUARD(value);
   return value;
+}
+
+VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
+  query_ctx ctx = { self, argc, argv, 0 };
+  return rb_ensure(safe_query_single_value, (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
 }
 
 VALUE Database_last_insert_rowid(VALUE self) {
