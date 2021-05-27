@@ -1,7 +1,8 @@
-## 0.7 2021-05-27
+## 1.0 2021-05-27
 
 - Refactor C code
 - Use `rb_ensure` to finalize stmt
+- Remove bundled `sqlite3.h`, use system-wide header file instead
 
 ## 0.6 2021-05-25
 

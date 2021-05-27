@@ -1,7 +1,8 @@
 ## Extralite
 
-Extralite is an extra-lightweight SQLite3 wrapper for Ruby. It provides a single
-class with a minimal set of methods to interact with an SQLite3 database.
+Extralite is an extra-lightweight (~365 lines of C-code) SQLite3 wrapper for
+Ruby. It provides a single class with a minimal set of methods to interact with
+an SQLite3 database.
 
 ### Features
 
@@ -13,8 +14,8 @@ class with a minimal set of methods to interact with an SQLite3 database.
   creating/modifying schemas).
 - Get last insert rowid.
 - Get number of rows changed by last query.
-- Loading extensions is autmatically enabled. You can find some useful
-  extensions here: https://github.com/nalgeon/sqlean.
+- Load extensions (loading of extensions is autmatically enabled. You can find
+  some useful extensions here: https://github.com/nalgeon/sqlean.)
 
 ### Usage
 
@@ -65,3 +66,24 @@ db.filename #=> "/tmp/my.db"
 # load an extension
 db.load_extension('/path/to/extension.so')
 ```
+
+### Why not just use the sqlite3 gem?
+
+The sqlite3-ruby gem is a popular, solid, well-maintained project, used by
+thousands of developers. I've been doing a lot of work with SQLite3 lately, and
+wanted to have a simpler API that gives me query results in a variety of ways.
+Thus extralite was born.
+
+### What about concurrency?
+
+Extralite currently does not release the GVL. This means that even if queries
+are executed on a separate thread, no other Ruby threads will be scheduled while
+SQLite3 is busy fetching the next record.
+
+In the future Extralite might be changed to release the GVL each time
+`sqlite3_step` is called.
+
+### Can I use it with an ORM like ActiveRecord or Sequel?
+
+Not yet, but you are welcome to contribute adapters for those projects. I will
+be releasing my own not-an-ORM tool in the near future.
