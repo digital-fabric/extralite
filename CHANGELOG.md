@@ -1,3 +1,8 @@
+## 0.7 2021-05-27
+
+- Refactor C code
+- Use `rb_ensure` to finalize stmt
+
 ## 0.6 2021-05-25
 
 - Add more specific errors: `SQLError`, `BusyError`
