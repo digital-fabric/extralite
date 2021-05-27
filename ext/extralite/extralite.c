@@ -197,6 +197,12 @@ VALUE cleanup_stmt(VALUE arg) {
   return Qnil;
 }
 
+#define check_arity_and_prepare_sql(argc, argv, sql) { \
+  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS); \
+  sql = rb_funcall(argv[0], ID_STRIP, 0); \
+  if (RSTRING_LEN(sql) == 0) return Qnil; \
+}
+
 VALUE safe_query_hash(VALUE arg) {
   query_ctx *ctx = (query_ctx *)arg;
   Database_t *db;
@@ -206,11 +212,8 @@ VALUE safe_query_hash(VALUE arg) {
   VALUE sql;
   int column_count;
   VALUE column_names;
-  
-  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
 
+  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
   GetDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
@@ -246,9 +249,7 @@ VALUE safe_query_ary(VALUE arg) {
   VALUE row;
   VALUE sql;
 
-  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
+  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
   GetDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
@@ -281,10 +282,7 @@ VALUE safe_query_single_row(VALUE arg) {
   VALUE row = Qnil;
   VALUE column_names;
 
-  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
-
+  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
   GetDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
@@ -315,10 +313,7 @@ VALUE safe_query_single_column(VALUE arg) {
   VALUE sql;
   VALUE value;
 
-  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
-
+  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
   GetDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
@@ -352,10 +347,7 @@ VALUE safe_query_single_value(VALUE arg) {
   VALUE sql;
   VALUE value = Qnil;
 
-  rb_check_arity(ctx->argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(ctx->argv[0], ID_STRIP, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
-
+  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
   GetDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
