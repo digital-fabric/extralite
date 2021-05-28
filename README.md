@@ -1,10 +1,16 @@
-## Extralite
+# Extralite - a Ruby gem for working with SQLite3 databases
+
+[![Gem Version](https://badge.fury.io/rb/extralite.svg)](http://rubygems.org/gems/extralite)
+[![Modulation Test](https://github.com/digital-fabric/extralite/workflows/Tests/badge.svg)](https://github.com/digital-fabric/extralite/actions?query=workflow%3ATests)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/digital-fabric/extralite/blob/master/LICENSE)
+
+## What is Extralite?
 
 Extralite is an extra-lightweight (~365 lines of C-code) SQLite3 wrapper for
 Ruby. It provides a single class with a minimal set of methods to interact with
 an SQLite3 database.
 
-### Features
+## Features
 
 - A variety of methods for different data access patterns: row as hash, row as
   array, single single row, single column, single value.
@@ -17,7 +23,7 @@ an SQLite3 database.
 - Load extensions (loading of extensions is autmatically enabled. You can find
   some useful extensions here: https://github.com/nalgeon/sqlean.)
 
-### Usage
+## Usage
 
 ```ruby
 require 'extralite'
@@ -67,14 +73,14 @@ db.filename #=> "/tmp/my.db"
 db.load_extension('/path/to/extension.so')
 ```
 
-### Why not just use the sqlite3 gem?
+## Why not just use the sqlite3 gem?
 
 The sqlite3-ruby gem is a popular, solid, well-maintained project, used by
 thousands of developers. I've been doing a lot of work with SQLite3 lately, and
 wanted to have a simpler API that gives me query results in a variety of ways.
 Thus extralite was born.
 
-### What about concurrency?
+## What about concurrency?
 
 Extralite currently does not release the GVL. This means that even if queries
 are executed on a separate thread, no other Ruby threads will be scheduled while
@@ -83,7 +89,7 @@ SQLite3 is busy fetching the next record.
 In the future Extralite might be changed to release the GVL each time
 `sqlite3_step` is called.
 
-### Can I use it with an ORM like ActiveRecord or Sequel?
+## Can I use it with an ORM like ActiveRecord or Sequel?
 
 Not yet, but you are welcome to contribute adapters for those projects. I will
 be releasing my own not-an-ORM tool in the near future.
