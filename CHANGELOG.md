@@ -1,3 +1,7 @@
+## 1.1 2021-06-02
+
+- Add `#close`, `#closed?` methods
+
 ## 1.0 2021-05-27
 
 - Refactor C code

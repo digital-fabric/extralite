@@ -6,7 +6,7 @@
 
 ## What is Extralite?
 
-Extralite is an extra-lightweight (~365 lines of C-code) SQLite3 wrapper for
+Extralite is an extra-lightweight (less than 400 lines of C-code) SQLite3 wrapper for
 Ruby. It provides a single class with a minimal set of methods to interact with
 an SQLite3 database.
 
@@ -71,6 +71,10 @@ db.filename #=> "/tmp/my.db"
 
 # load an extension
 db.load_extension('/path/to/extension.so')
+
+# close database
+db.close
+db.closed? #=> true
 ```
 
 ## Why not just use the sqlite3 gem?
