@@ -39,6 +39,14 @@ static VALUE Database_allocate(VALUE klass) {
 #define GetDatabase(obj, database) \
   TypedData_Get_Struct((obj), Database_t, &Database_type, (database))
 
+// make sure the database is open
+#define GetOpenDatabase(obj, database) { \
+  TypedData_Get_Struct((obj), Database_t, &Database_type, (database)); \
+  if (!(database)->sqlite3_db) { \
+    rb_raise(cError, "Database is closed"); \
+  } \
+}
+
 
 VALUE Database_initialize(VALUE self, VALUE path) {
   int rc;
@@ -58,6 +66,27 @@ VALUE Database_initialize(VALUE self, VALUE path) {
   }
 
   return Qnil;
+}
+
+VALUE Database_close(VALUE self) {
+  int rc;
+  Database_t *db;
+  GetDatabase(self, db);
+
+  rc = sqlite3_close(db->sqlite3_db);
+  if (rc) {
+    rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+  }
+
+  db->sqlite3_db = 0;
+  return self;
+}
+
+VALUE Database_closed_p(VALUE self) {
+  Database_t *db;
+  GetDatabase(self, db);
+
+  return db->sqlite3_db ? Qfalse : Qtrue;
 }
 
 inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
@@ -214,7 +243,7 @@ VALUE safe_query_hash(VALUE arg) {
   VALUE column_names;
 
   check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-  GetDatabase(ctx->self, db);
+  GetOpenDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
   bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
@@ -250,7 +279,7 @@ VALUE safe_query_ary(VALUE arg) {
   VALUE sql;
 
   check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-  GetDatabase(ctx->self, db);
+  GetOpenDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
   bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
@@ -283,7 +312,7 @@ VALUE safe_query_single_row(VALUE arg) {
   VALUE column_names;
 
   check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-  GetDatabase(ctx->self, db);
+  GetOpenDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
   bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
@@ -314,7 +343,7 @@ VALUE safe_query_single_column(VALUE arg) {
   VALUE value;
 
   check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-  GetDatabase(ctx->self, db);
+  GetOpenDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
   bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
@@ -348,7 +377,7 @@ VALUE safe_query_single_value(VALUE arg) {
   VALUE value = Qnil;
 
   check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-  GetDatabase(ctx->self, db);
+  GetOpenDatabase(ctx->self, db);
 
   prepare_multi_stmt(db->sqlite3_db, &ctx->stmt, sql);
   bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
@@ -370,14 +399,14 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
 
 VALUE Database_last_insert_rowid(VALUE self) {
   Database_t *db;
-  GetDatabase(self, db);
+  GetOpenDatabase(self, db);
 
   return INT2NUM(sqlite3_last_insert_rowid(db->sqlite3_db));
 }
 
 VALUE Database_changes(VALUE self) {
   Database_t *db;
-  GetDatabase(self, db);
+  GetOpenDatabase(self, db);
 
   return INT2NUM(sqlite3_changes(db->sqlite3_db));
 }
@@ -386,7 +415,7 @@ VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
   const char *db_name;
   const char *filename;
   Database_t *db;
-  GetDatabase(self, db);
+  GetOpenDatabase(self, db);
 
   rb_check_arity(argc, 0, 1);
   db_name = (argc == 1) ? StringValueCStr(argv[0]) : "main";
@@ -396,14 +425,14 @@ VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
 
 VALUE Database_transaction_active_p(VALUE self) {
   Database_t *db;
-  GetDatabase(self, db);
+  GetOpenDatabase(self, db);
 
   return sqlite3_get_autocommit(db->sqlite3_db) ? Qfalse : Qtrue;
 }
 
 VALUE Database_load_extension(VALUE self, VALUE path) {
   Database_t *db;
-  GetDatabase(self, db);
+  GetOpenDatabase(self, db);
   char *err_msg;
 
   int rc = sqlite3_load_extension(db->sqlite3_db, RSTRING_PTR(path), 0, &err_msg);
@@ -422,6 +451,8 @@ void Init_Extralite() {
   rb_define_alloc_func(cDatabase, Database_allocate);
 
   rb_define_method(cDatabase, "initialize", Database_initialize, 1);
+  rb_define_method(cDatabase, "close", Database_close, 0);
+  rb_define_method(cDatabase, "closed?", Database_closed_p, 0);
   
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_hash", Database_query_hash, -1);

@@ -89,4 +89,15 @@ end
     r = @db.query('select 1 as foo;  ')
     assert_equal [{ foo: 1 }], r
   end
+
+  def test_close
+    assert_equal false, @db.closed?
+    r = @db.query_single_value('select 42')
+    assert_equal 42, r
+
+    assert_equal @db, @db.close
+    assert_equal true, @db.closed?
+    
+    assert_raises(Extralite::Error) { @db.query_single_value('select 42') }
+  end
 end
