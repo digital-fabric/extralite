@@ -1,3 +1,7 @@
+## 1.2 2021-06-06
+
+- Add support for big integers
+
 ## 1.1 2021-06-02
 
 - Add `#close`, `#closed?` methods
