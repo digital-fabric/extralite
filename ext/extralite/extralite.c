@@ -94,7 +94,7 @@ inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
     case SQLITE_NULL:
       return Qnil;
     case SQLITE_INTEGER:
-      return INT2NUM(sqlite3_column_int(stmt, col));
+      return LL2NUM(sqlite3_column_int64(stmt, col));
     case SQLITE_FLOAT:
       return DBL2NUM(sqlite3_column_double(stmt, col));
     case SQLITE_TEXT:
@@ -114,7 +114,7 @@ static inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value
       sqlite3_bind_null(stmt, pos);
       return;
     case T_FIXNUM:
-      sqlite3_bind_int(stmt, pos, NUM2INT(value));
+      sqlite3_bind_int64(stmt, pos, NUM2LL(value));
       return;
     case T_FLOAT:
       sqlite3_bind_double(stmt, pos, NUM2DBL(value));
