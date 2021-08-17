@@ -470,6 +470,9 @@ void Init_Extralite() {
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
   cBusyError = rb_define_class_under(mExtralite, "BusyError", cError);
+  rb_gc_register_mark_object(cError);
+  rb_gc_register_mark_object(cSQLError);
+  rb_gc_register_mark_object(cBusyError);
 
   ID_STRIP = rb_intern("strip");
 }
