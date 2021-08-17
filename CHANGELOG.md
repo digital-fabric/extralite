@@ -1,3 +1,7 @@
+## 1.3 2021-08-17
+
+- Pin error classes (for better compatibility with `GC.compact`)
+
 ## 1.2 2021-06-06
 
 - Add support for big integers
