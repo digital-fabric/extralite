@@ -222,7 +222,7 @@ typedef struct query_ctx {
 
 VALUE cleanup_stmt(VALUE arg) {
   query_ctx *ctx = (query_ctx *)arg;
-  sqlite3_finalize(ctx->stmt);
+  if (ctx->stmt) sqlite3_finalize(ctx->stmt);
   return Qnil;
 }
 
