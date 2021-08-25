@@ -23,7 +23,6 @@ Gem::Specification.new do |s|
 
   s.add_development_dependency  'rake-compiler',        '1.1.1'
   s.add_development_dependency  'minitest',             '5.14.4'
-  s.add_development_dependency  'minitest-reporters',   '1.4.2'
   s.add_development_dependency  'simplecov',            '0.17.1'
   s.add_development_dependency  'rubocop',              '0.85.1'
   s.add_development_dependency  'pry',                  '0.13.1'

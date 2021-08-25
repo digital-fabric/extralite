@@ -1,3 +1,7 @@
+## 1.4 2021-08-25
+
+- Fix possible segfault in cleanup_stmt
+
 ## 1.3 2021-08-17
 
 - Pin error classes (for better compatibility with `GC.compact`)
