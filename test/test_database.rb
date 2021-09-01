@@ -101,3 +101,71 @@ end
     assert_raises(Extralite::Error) { @db.query_single_value('select 42') }
   end
 end
+
+class ScenarioTest < MiniTest::Test
+  def setup
+    @db = Extralite::Database.new('/tmp/extralite.db')
+    @db.query('create table if not exists t (x,y,z)')
+    @db.query('delete from t')
+    @db.query('insert into t values (1, 2, 3)')
+    @db.query('insert into t values (4, 5, 6)')
+  end
+
+  def test_concurrent_transactions
+    done = false
+    t = Thread.new do
+      db = Extralite::Database.new('/tmp/extralite.db')
+      db.query 'begin immediate'
+      sleep 0.01 until done
+
+      while true
+        begin
+          db.query 'commit'
+          break
+        rescue Extralite::BusyError
+          sleep 0.01
+        end
+      end
+    end
+
+    sleep 0.1
+    @db.query 'begin deferred'
+    result = @db.query_single_column('select x from t')
+    assert_equal [1, 4], result
+
+    assert_raises(Extralite::BusyError) do
+      @db.query('insert into t values (7, 8, 9)')
+    end
+
+    done = true
+    sleep 0.1
+
+    assert_raises(Extralite::BusyError) do
+      @db.query('insert into t values (7, 8, 9)')
+    end
+
+    assert_equal true, @db.transaction_active?
+
+    # the thing to do in this case is to commit the read transaction, allowing
+    # the other thread to commit its write transaction, and then we can
+    # "upgrade" to a write transaction
+
+    @db.query('commit')
+
+    while true
+      begin
+        @db.query('begin immediate')
+        break
+      rescue Extralite::BusyError
+        sleep 0.1
+      end
+    end
+
+    @db.query('insert into t values (7, 8, 9)')
+    @db.query('commit')
+
+    result = @db.query_single_column('select x from t')
+    assert_equal [1, 4, 7], result
+  end
+end
+
