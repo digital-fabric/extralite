@@ -109,7 +109,7 @@ inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
 }
 
 static inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
-  switch (TYPE(value)) { 
+  switch (TYPE(value)) {
     case T_NIL:
       sqlite3_bind_null(stmt, pos);
       return;
@@ -143,7 +143,7 @@ static inline void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv
 
 static inline VALUE get_column_names(sqlite3_stmt *stmt, int column_count) {
   VALUE arr = rb_ary_new2(column_count);
-  for (int i = 0; i < column_count; i++) { 
+  for (int i = 0; i < column_count; i++) {
     VALUE name = ID2SYM(rb_intern(sqlite3_column_name(stmt, i)));
     rb_ary_push(arr, name);
   }
@@ -180,7 +180,7 @@ inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
     }
 
     if (rest == end) return;
-    
+
     // perform current query, but discard its results
     rc = sqlite3_step(*stmt);
     sqlite3_finalize(*stmt);
@@ -292,7 +292,7 @@ VALUE safe_query_ary(VALUE arg) {
     row = row_to_ary(ctx->stmt, column_count);
     if (yield_to_block) rb_yield(row); else rb_ary_push(result, row);
   }
-  
+
   RB_GC_GUARD(row);
   RB_GC_GUARD(result);
   return result;
@@ -453,14 +453,14 @@ void Init_Extralite() {
   rb_define_method(cDatabase, "initialize", Database_initialize, 1);
   rb_define_method(cDatabase, "close", Database_close, 0);
   rb_define_method(cDatabase, "closed?", Database_closed_p, 0);
-  
+
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_hash", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
-  
+
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "changes", Database_changes, 0);
   rb_define_method(cDatabase, "filename", Database_filename, -1);

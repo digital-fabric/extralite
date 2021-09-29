@@ -55,7 +55,7 @@ class DatabaseTest < MiniTest::Test
   def test_query_single_column
     r = @db.query_single_column('select y from t')
     assert_equal [2, 5], r
-  
+
     r = @db.query_single_column('select y from t where x = 2')
     assert_equal [], r
 end
@@ -97,7 +97,7 @@ end
 
     assert_equal @db, @db.close
     assert_equal true, @db.closed?
-    
+
     assert_raises(Extralite::Error) { @db.query_single_value('select 42') }
   end
 end
