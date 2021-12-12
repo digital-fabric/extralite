@@ -173,7 +173,7 @@ inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   const char *ptr = RSTRING_PTR(sql);
   const char *end = ptr + RSTRING_LEN(sql);
   while (1) {
-    int rc = sqlite3_prepare(db, ptr, end - ptr, stmt, &rest);
+    int rc = sqlite3_prepare_v2(db, ptr, end - ptr, stmt, &rest);
     if (rc) {
       sqlite3_finalize(*stmt);
       rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
