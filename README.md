@@ -6,7 +6,7 @@
 
 ## What is Extralite?
 
-Extralite is an extra-lightweight (less than 420 lines of C-code) SQLite3
+Extralite is an extra-lightweight (less than 430 lines of C-code) SQLite3
 wrapper for Ruby. It provides a single class with a minimal set of methods to
 interact with an SQLite3 database.
 
@@ -14,10 +14,11 @@ interact with an SQLite3 database.
 
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
-- Super fast - [up to 12x faster](#performance) than the
-  [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem.
-- Improved concurrency for multithreaded apps: the Ruby GVL is released while
-  preparing SQL statements.
+- Super fast - [up to 12.5x faster](#performance) than the
+  [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem (see also
+  [comparison](#why-not-just-use-the-sqlite3-gem).)
+- Improved [concurrency](#concurrency) for multithreaded apps: the Ruby GVL is
+  released while preparing SQL statements and while iterating over results.
 - Iterate over records with a block, or collect records into an array.
 - Parameter binding.
 - Automatically execute SQL strings containing multiple semicolon-separated
@@ -98,34 +99,41 @@ Here's a table summarizing the differences between the two gems:
 |custom functions in Ruby|yes|no|
 |custom collations|yes|no|
 |custom aggregate functions|yes|no|
-|Concurrency|does not release GVL|releases GVL while preparing statements|
+|Multithread friendly|no|[yes](#concurrency)|
 |Code size|~2650LoC|~500LoC|
-|Performance|1x|1.5x to 12x (see [below](#performance))|
+|Performance|1x|1.5x to 12.5x (see [below](#performance))|
 
 ## What about concurrency?
 
-Extralite releases the GVL while preparing SQL statements. In the future,
-extralite will optionally release the GVL while calling sqlite3_step.
-
-Releasing the GVL allows other threads to run while the sqlite3 library is busy
-compiling SQL into bytecode, or fetching the next row.
+Extralite releases the GVL while making blocking calls to the sqlite3 library,
+that is while preparing SQL statements and fetching rows. Releasing the GVL
+allows other threads to run while the sqlite3 library is busy compiling SQL into
+bytecode, or fetching the next row. This does not seem to hurt Extralite's
+performance:
 
 ## Performance
 
 A benchmark script is
 [included](https://github.com/digital-fabric/extralite/blob/main/test/perf.rb),
 creating a table of various row counts, then fetching the entire table using
-either `sqlite3` or `extralite`. This benchmark shows Extralite to be up to 12
+either `sqlite3` or `extralite`. This benchmark shows Extralite to be up to 12.5
 times faster than `sqlite3` when fetching a large number of rows. Here are the
 results (using the `sqlite3` gem performance as baseline):
 
 |Row count|sqlite3-ruby (baseline)|Extralite (relative - rounded)|
 |-:|-:|-:|
 |10|1x|1.5x|
-|1K|1x|8x|
-|100K|1x|12x|
+|1K|1x|7x|
+|100K|1x|12.5x|
+
+(If you're interested in checking this yourself, just run the script and let me
+know if your results are different.)
 
 ## Can I use it with an ORM like ActiveRecord or Sequel?
 
-Not yet, but you are welcome to contribute adapters for those projects. I will
-be releasing my own not-an-ORM tool in the near future.
+Not yet, but you are welcome to contribute adapters for those projects.
+
+## Contributing
+
+Contributions in the form of issues, PRs or comments will be greatly
+appreciated!
