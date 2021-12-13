@@ -8,7 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        ruby: [2.6, 2.7, 3.0]
+        ruby: [2.6, 2.7, '3.0']
 
     name: >-
       ${{matrix.os}}, ${{matrix.ruby}}
@@ -16,13 +16,10 @@ jobs:
     runs-on: ${{matrix.os}}
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-ruby@v1
+    - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{matrix.ruby}}
-    - name: Install dependencies
-      run: |
-        gem install bundler
-        bundle install
+        bundler-cache: true # 'bundle install' and cache
     - name: Show Linux kernel version
       run: uname -r
     - name: Compile C-extension
