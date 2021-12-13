@@ -206,4 +206,3 @@ class ScenarioTest < MiniTest::Test
     assert_equal [1, 4, 7], result
   end
 end
-
