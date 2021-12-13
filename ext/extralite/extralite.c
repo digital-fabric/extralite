@@ -228,10 +228,21 @@ inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   }
 }
 
-inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
+struct step_ctx {
+  sqlite3_stmt *stmt;
   int rc;
-  rc = sqlite3_step(stmt);
-  switch (rc) {
+};
+
+void *stmt_iterate_without_gvl(void *ptr) {
+  struct step_ctx *ctx = (struct step_ctx *)ptr;
+  ctx->rc = sqlite3_step(ctx->stmt);
+  return NULL;
+}
+
+inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
+  struct step_ctx ctx = {stmt, 0};
+  rb_thread_call_without_gvl(stmt_iterate_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  switch (ctx.rc) {
     case SQLITE_ROW:
       return 1;
     case SQLITE_DONE:
@@ -241,7 +252,7 @@ inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
     case SQLITE_ERROR:
       rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
     default:
-      rb_raise(cError, "Invalid return code for sqlite3_step: %d (please open an issue on https://github.com/digital-fabric/extralite)", rc);
+      rb_raise(cError, "Invalid return code for sqlite3_step: %d (please open an issue on https://github.com/digital-fabric/extralite)", ctx.rc);
   }
 
   return 0;
