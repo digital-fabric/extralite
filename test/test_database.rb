@@ -111,6 +111,33 @@ end
 
     assert_raises(Extralite::Error) { @db.query_single_value('select 42') }
   end
+
+  def test_parameter_binding_simple
+    r = @db.query('select x, y, z from t where x = ?', 1)
+    assert_equal [{ x: 1, y: 2, z: 3 }], r
+
+    r = @db.query('select x, y, z from t where z = ?', 6)
+    assert_equal [{ x: 4, y: 5, z: 6 }], r
+  end
+
+  def test_parameter_binding_with_index
+    r = @db.query('select x, y, z from t where x = ?2', 0, 1)
+    assert_equal [{ x: 1, y: 2, z: 3 }], r
+
+    r = @db.query('select x, y, z from t where z = ?3', 3, 4, 6)
+    assert_equal [{ x: 4, y: 5, z: 6 }], r
+  end
+
+  def test_parameter_binding_with_name
+    r = @db.query('select x, y, z from t where x = :x', x: 1, y: 2)
+    assert_equal [{ x: 1, y: 2, z: 3 }], r
+
+    r = @db.query('select x, y, z from t where z = :zzz', 'zzz' => 6)
+    assert_equal [{ x: 4, y: 5, z: 6 }], r
+
+    r = @db.query('select x, y, z from t where z = :bazzz', ':bazzz' => 6)
+    assert_equal [{ x: 4, y: 5, z: 6 }], r
+  end
 end
 
 class ScenarioTest < MiniTest::Test

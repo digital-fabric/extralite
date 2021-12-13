@@ -6,7 +6,10 @@
 VALUE cError;
 VALUE cSQLError;
 VALUE cBusyError;
+
+ID ID_KEYS;
 ID ID_STRIP;
+ID ID_TO_S;
 
 typedef struct Database_t {
   sqlite3 *sqlite3_db;
@@ -109,6 +112,33 @@ inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
   return Qnil;
 }
 
+static void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value);
+
+static inline void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
+  VALUE keys = rb_funcall(hash, ID_KEYS, 0);
+  int len = RARRAY_LEN(keys);
+  for (int i = 0; i < len; i++) {
+    VALUE k = RARRAY_AREF(keys, i);
+    VALUE v = rb_hash_aref(hash, k);
+
+    switch (TYPE(k)) {
+      case T_FIXNUM:
+        bind_parameter_value(stmt, NUM2INT(k), v);
+        return;
+      case T_SYMBOL:
+        k = rb_funcall(k, ID_TO_S, 0);
+      case T_STRING:
+        if(RSTRING_PTR(k)[0] != ':') k = rb_str_plus(rb_str_new2(":"), k);
+        int pos = sqlite3_bind_parameter_index(stmt, StringValuePtr(k));
+        bind_parameter_value(stmt, pos, v);
+        return;
+      default:
+      rb_raise(cError, "Cannot bind hash key value idx %d", i);
+    }
+  }
+  RB_GC_GUARD(keys);
+}
+
 static inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
   switch (TYPE(value)) {
     case T_NIL:
@@ -128,6 +158,9 @@ static inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value
       return;
     case T_STRING:
       sqlite3_bind_text(stmt, pos, RSTRING_PTR(value), RSTRING_LEN(value), SQLITE_TRANSIENT);
+      return;
+    case T_HASH:
+      bind_hash_parameter_values(stmt, value);
       return;
     default:
       rb_raise(cError, "Cannot bind parameter at position %d", pos);
@@ -519,5 +552,7 @@ void Init_Extralite() {
   rb_gc_register_mark_object(cSQLError);
   rb_gc_register_mark_object(cBusyError);
 
-  ID_STRIP = rb_intern("strip");
+  ID_KEYS   = rb_intern("keys");
+  ID_STRIP  = rb_intern("strip");
+  ID_TO_S   = rb_intern("to_s");
 }
