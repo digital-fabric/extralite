@@ -17,8 +17,9 @@ interact with an SQLite3 database.
 - Super fast - [up to 12.5x faster](#performance) than the
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem (see also
   [comparison](#why-not-just-use-the-sqlite3-gem).)
-- Improved [concurrency](#concurrency) for multithreaded apps: the Ruby GVL is
-  released while preparing SQL statements and while iterating over results.
+- Improved [concurrency](#what-about-concurrency) for multithreaded apps: the
+  Ruby GVL is released while preparing SQL statements and while iterating over
+  results.
 - Iterate over records with a block, or collect records into an array.
 - Parameter binding.
 - Automatically execute SQL strings containing multiple semicolon-separated
@@ -99,7 +100,7 @@ Here's a table summarizing the differences between the two gems:
 |custom functions in Ruby|yes|no|
 |custom collations|yes|no|
 |custom aggregate functions|yes|no|
-|Multithread friendly|no|[yes](#concurrency)|
+|Multithread friendly|no|[yes](#what-about-concurrency)|
 |Code size|~2650LoC|~500LoC|
 |Performance|1x|1.5x to 12.5x (see [below](#performance))|
 
