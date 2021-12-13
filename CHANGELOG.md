@@ -1,3 +1,8 @@
+## 1.5 2021-12-13
+
+- Release GVL while preparing statements
+- Use `sqlite3_prepare_v2` instead of deprecated `sqlite_prepare`
+
 ## 1.4 2021-08-25
 
 - Fix possible segfault in cleanup_stmt
