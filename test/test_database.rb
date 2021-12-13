@@ -4,7 +4,7 @@ require_relative 'helper'
 
 class DatabaseTest < MiniTest::Test
   def setup
-    @db = Extralite::Database.new('/tmp/extralite.db')
+    @db = Extralite::Database.new(':memory:')
     @db.query('create table if not exists t (x,y,z)')
     @db.query('delete from t')
     @db.query('insert into t values (1, 2, 3)')
@@ -80,6 +80,17 @@ end
     @db.query("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');")
 
     assert_equal [1, 4, 'a', 'd'], @db.query_single_column('select x from t order by x')
+  end
+
+  def test_multiple_statements_with_error
+    error = nil
+    begin
+      @db.query("insert into t values foo; insert into t values ('d', 'e', 'f');")
+    rescue => error
+    end
+
+    assert_kind_of Extralite::SQLError, error
+    assert_equal 'near "foo": syntax error', error.message
   end
 
   def test_empty_sql
