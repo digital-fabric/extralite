@@ -12,7 +12,7 @@ task :recompile => [:clean, :compile]
 
 task :default => [:compile, :test]
 task :test do
-  exec 'ruby test/test_database.rb'
+  exec 'ruby test/run.rb'
 end
 
 CLEAN.include "**/*.o", "**/*.so", "**/*.so.*", "**/*.a", "**/*.bundle", "**/*.jar", "pkg", "tmp"

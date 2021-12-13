@@ -20,8 +20,6 @@ jobs:
       with:
         ruby-version: ${{matrix.ruby}}
         bundler-cache: true # 'bundle install' and cache
-    - name: Show Linux kernel version
-      run: uname -r
     - name: Compile C-extension
       run: bundle exec rake compile
     - name: Run tests
