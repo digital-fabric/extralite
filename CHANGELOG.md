@@ -1,3 +1,7 @@
+## 1.6 2021-12-13
+
+- Release GVL while fetching rows
+
 ## 1.5 2021-12-13
 
 - Release GVL while preparing statements
