@@ -14,7 +14,7 @@ interact with an SQLite3 database.
 
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
-- Super fast - up to 12x faster than the
+- Super fast - [up to 12x faster](#performance) than the
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem.
 - Improved concurrency for multithreaded apps: the Ruby GVL is released while
   preparing SQL statements.
