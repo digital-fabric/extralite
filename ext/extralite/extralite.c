@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "ruby.h"
+#include "ruby/thread.h"
 #include <sqlite3.h>
 
 VALUE cError;
@@ -168,29 +169,62 @@ static inline VALUE row_to_ary(sqlite3_stmt *stmt, int column_count) {
   return row;
 }
 
-inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
-  const char *rest = 0;
-  const char *ptr = RSTRING_PTR(sql);
-  const char *end = ptr + RSTRING_LEN(sql);
+struct multi_stmt_ctx {
+  sqlite3 *db;
+  sqlite3_stmt **stmt;
+  const char *str;
+  int len;
+  int rc;
+};
+
+void *prepare_multi_stmt_without_gvl(void *ptr) {
+  struct multi_stmt_ctx *ctx = (struct multi_stmt_ctx *)ptr;
+  const char *rest = NULL;
+  const char *str = ctx->str;
+  const char *end = ctx->str + ctx->len;
   while (1) {
-    int rc = sqlite3_prepare_v2(db, ptr, end - ptr, stmt, &rest);
-    if (rc) {
-      sqlite3_finalize(*stmt);
-      rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+    ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
+    if (ctx->rc) {
+      sqlite3_finalize(*ctx->stmt);
+      return NULL;
     }
 
-    if (rest == end) return;
+    if (rest == end) return NULL;
 
     // perform current query, but discard its results
-    rc = sqlite3_step(*stmt);
-    sqlite3_finalize(*stmt);
-    switch (rc) {
+    ctx->rc = sqlite3_step(*ctx->stmt);
+    sqlite3_finalize(*ctx->stmt);
+    switch (ctx->rc) {
     case SQLITE_BUSY:
-      rb_raise(cBusyError, "Database is busy");
     case SQLITE_ERROR:
-      rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+    case SQLITE_MISUSE:
+      return NULL;
     }
-    ptr = rest;
+    str = rest;
+  }
+  return NULL;
+}
+
+/*
+This function prepares a statement from an SQL string containing one or more SQL
+statements. It will release the GVL while the statements are being prepared and
+executed. All statements excluding the last one are executed. The last statement
+is not executed, but instead handed back to the caller for looping over results.
+*/
+inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+  struct multi_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
+  rb_thread_call_without_gvl(prepare_multi_stmt_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  RB_GC_GUARD(sql);
+
+  switch (ctx.rc) {
+  case 0:
+    return;
+  case SQLITE_BUSY:
+    rb_raise(cBusyError, "Database is busy");
+  case SQLITE_ERROR:
+    rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+  default:
+    rb_raise(cError, "Invalid return code for prepare_multi_stmt_without_gvl: %d (please open an issue on https://github.com/digital-fabric/extralite)", ctx.rc);
   }
 }
 
@@ -207,7 +241,7 @@ inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
     case SQLITE_ERROR:
       rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
     default:
-      rb_raise(cError, "Invalid return code for sqlite3_step: %d", rc);
+      rb_raise(cError, "Invalid return code for sqlite3_step: %d (please open an issue on https://github.com/digital-fabric/extralite)", rc);
   }
 
   return 0;
