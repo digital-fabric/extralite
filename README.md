@@ -6,18 +6,22 @@
 
 ## What is Extralite?
 
-Extralite is an extra-lightweight (less than 400 lines of C-code) SQLite3 wrapper for
-Ruby. It provides a single class with a minimal set of methods to interact with
-an SQLite3 database.
+Extralite is an extra-lightweight (less than 420 lines of C-code) SQLite3
+wrapper for Ruby. It provides a single class with a minimal set of methods to
+interact with an SQLite3 database.
 
 ## Features
 
-- A variety of methods for different data access patterns: row as hash, row as
-  array, single single row, single column, single value.
+- A variety of methods for different data access patterns: rows as hashes, rows
+  as arrays, single row, single column, single value.
+- Super fast - up to 10x faster than the
+  [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem.
+- Improved concurrency for multithreaded apps: the Ruby GVL is released while
+  preparing SQL statements.
 - Iterate over records with a block, or collect records into an array.
 - Parameter binding.
-- Correctly execute strings with multiple semicolon-separated queries (handy for
-  creating/modifying schemas).
+- Automatically execute SQL strings containing multiple semicolon-separated
+  queries (handy for creating/modifying schemas).
 - Get last insert rowid.
 - Get number of rows changed by last query.
 - Load extensions (loading of extensions is autmatically enabled. You can find
@@ -80,18 +84,46 @@ db.closed? #=> true
 ## Why not just use the sqlite3 gem?
 
 The sqlite3-ruby gem is a popular, solid, well-maintained project, used by
-thousands of developers. I've been doing a lot of work with SQLite3 lately, and
-wanted to have a simpler API that gives me query results in a variety of ways.
-Thus extralite was born.
+thousands of developers. I've been doing a lot of work with SQLite3 databases
+lately, and wanted to have a simpler API that gives me query results in a
+variety of ways. Thus extralite was born.
+
+Here's a table summarizing the differences between the two gems:
+
+| |sqlite3-ruby|Extralite|
+|-|-|-|
+|API design|multiple classes|single class|
+|Query results|row as hash, row as array, single row, single value|row as hash, row as array, single column, single row, single value|
+|execute multiple statements|separate API (#execute_batch)|integrated|
+|custom functions in Ruby|yes|no|
+|custom collations|yes|no|
+|custom aggregate functions|yes|no|
+|Concurrency|does not release GVL|releases GVL while preparing statements|
+|Code size|~2650LoC|~500LoC|
+|Performance|1x|1.5x to 12x (see [below](#performance))|
 
 ## What about concurrency?
 
-Extralite currently does not release the GVL. This means that even if queries
-are executed on a separate thread, no other Ruby threads will be scheduled while
-SQLite3 is busy fetching the next record.
+Extralite releases the GVL while preparing SQL statements. In the future,
+extralite will optionally release the GVL while calling sqlite3_step.
 
-In the future Extralite might be changed to release the GVL each time
-`sqlite3_step` is called.
+Releasing the GVL allows other threads to run while the sqlite3 library is busy
+compiling SQL into bytecode, or fetching the next row.
+
+## Performance
+
+A benchmark script is
+[included](https://github.com/digital-fabric/extralite/blob/main/test/perf.rb),
+creating a table of various row counts, then fetching the entire table using
+either `sqlite3` or `extralite`. This benchmark shows Extralite to be up to 12
+times faster than `sqlite3` when fetching a large number of rows. Here are the
+results (using the `sqlite3` gem performance as baseline):
+
+|Row count|sqlite3-ruby (baseline)|Extralite (relative - rounded)|
+|-:|-:|-:|
+|10|1x|1.5x|
+|1K|1x|8x|
+|100K|1x|12x|
 
 ## Can I use it with an ORM like ActiveRecord or Sequel?
 
