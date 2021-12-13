@@ -28,6 +28,7 @@ interact with an SQLite3 database.
 - Get number of rows changed by last query.
 - Load extensions (loading of extensions is autmatically enabled. You can find
   some useful extensions here: https://github.com/nalgeon/sqlean.)
+- Includes a [Sequel adapter](#usage-with-sequel) (an ActiveRecord)
 
 ## Usage
 
@@ -66,6 +67,11 @@ db.query_single_value("select 'foo'") #=> "foo"
 # parameter binding (works for all query_xxx methods)
 db.query_hash('select ? as foo, ? as bar', 1, 2) #=> [{ :foo => 1, :bar => 2 }]
 
+# parameter binding of named parameters
+db.query('select * from foo where bar = :bar', bar: 42)
+db.query('select * from foo where bar = :bar', 'bar' => 42)
+db.query('select * from foo where bar = :bar', ':bar' => 42)
+
 # get last insert rowid
 rowid = db.last_insert_id
 
@@ -83,19 +89,39 @@ db.close
 db.closed? #=> true
 ```
 
+## Usage with Sequel
+
+Extralite includes an adapter for
+[Sequel](https://github.com/jeremyevans/sequel). To use the Extralite adapter,
+just use the `extralite` scheme instead of `sqlite`:
+
+```ruby
+DB = Sequel.connect('extralite:blog.db')
+articles = DB[:articles]
+p articles.to_a
+```
+
+(Make sure you include `extralite` as a dependency in your `Gemfile`.)
+
 ## Why not just use the sqlite3 gem?
 
-The sqlite3-ruby gem is a popular, solid, well-maintained project, used by
-thousands of developers. I've been doing a lot of work with SQLite3 databases
-lately, and wanted to have a simpler API that gives me query results in a
-variety of ways. Thus extralite was born.
+The [sqlite3-ruby](https://github.com/sparklemotion/sqlite3-ruby) gem is a
+popular, solid, well-maintained project, used by thousands of developers. I've
+been doing a lot of work with SQLite3 databases lately, and wanted to have a
+simpler API that gives me query results in a variety of ways. Thus extralite was
+born.
+
+Extralite is quite a bit [faster](#performance) than sqlite3-ruby and is also
+[thread-friendly](#what-about-concurrency). On the other hand, Extralite does
+not have support for defining custom functions, aggregates and collations. If
+you're using those features, you'll need to stick with sqlite3-ruby.
 
 Here's a table summarizing the differences between the two gems:
 
 | |sqlite3-ruby|Extralite|
 |-|-|-|
 |API design|multiple classes|single class|
-|Query results|row as hash, row as array, single row, single value|row as hash, row as array, single column, single row, single value|
+|Query results|row as hash, row as array, single row, single value|row as hash, row as array, __single column__, single row, single value|
 |execute multiple statements|separate API (#execute_batch)|integrated|
 |custom functions in Ruby|yes|no|
 |custom collations|yes|no|
@@ -129,10 +155,6 @@ results (using the `sqlite3` gem performance as baseline):
 
 (If you're interested in checking this yourself, just run the script and let me
 know if your results are different.)
-
-## Can I use it with an ORM like ActiveRecord or Sequel?
-
-Not yet, but you are welcome to contribute adapters for those projects.
 
 ## Contributing
 

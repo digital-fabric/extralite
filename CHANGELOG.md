@@ -1,3 +1,8 @@
+## 1.7 2021-12-13
+
+- Add extralite Sequel adapter
+- Add support for binding hash parameters
+
 ## 1.6 2021-12-13
 
 - Release GVL while fetching rows

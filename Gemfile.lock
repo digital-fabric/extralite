@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    extralite (1.6)
+    extralite (1.7)
 
 GEM
   remote: https://rubygems.org/
@@ -36,6 +36,7 @@ GEM
     rubocop-ast (1.5.0)
       parser (>= 3.0.1.1)
     ruby-progressbar (1.11.0)
+    sequel (5.51.0)
     simplecov (0.17.1)
       docile (~> 1.1)
       json (>= 1.8, < 3)
@@ -52,6 +53,7 @@ DEPENDENCIES
   pry (= 0.13.1)
   rake-compiler (= 1.1.1)
   rubocop (= 0.85.1)
+  sequel (= 5.51.0)
   simplecov (= 0.17.1)
 
 BUNDLED WITH
