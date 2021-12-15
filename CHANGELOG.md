@@ -1,3 +1,7 @@
+## 1.10 2021-12-15
+
+- Fix mutliple parameter binding with hash
+
 ## 1.9 2021-12-15
 
 - Add support for reading BLOBs
