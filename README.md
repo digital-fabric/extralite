@@ -6,7 +6,7 @@
 
 ## What is Extralite?
 
-Extralite is an extra-lightweight (less than 430 lines of C-code) SQLite3
+Extralite is an extra-lightweight (less than 460 lines of C-code) SQLite3
 wrapper for Ruby. It provides a single class with a minimal set of methods to
 interact with an SQLite3 database.
 
@@ -127,7 +127,7 @@ Here's a table summarizing the differences between the two gems:
 |custom collations|yes|no|
 |custom aggregate functions|yes|no|
 |Multithread friendly|no|[yes](#what-about-concurrency)|
-|Code size|~2650LoC|~500LoC|
+|Code size|~2650LoC|~530LoC|
 |Performance|1x|1.5x to 12.5x (see [below](#performance))|
 
 ## What about concurrency?
