@@ -3,6 +3,7 @@
 [![Gem Version](https://badge.fury.io/rb/extralite.svg)](http://rubygems.org/gems/extralite)
 [![Modulation Test](https://github.com/digital-fabric/extralite/workflows/Tests/badge.svg)](https://github.com/digital-fabric/extralite/actions?query=workflow%3ATests)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/digital-fabric/extralite/blob/master/LICENSE)
+[Documentation](https://www.rubydoc.info/gems/extralite)
 
 ## What is Extralite?
 
