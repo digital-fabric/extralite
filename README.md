@@ -1,4 +1,4 @@
-# Extralite - a Ruby gem for working with SQLite3 databases
+# Extralite - a fast Ruby gem for working with SQLite3 databases
 
 [![Gem Version](https://badge.fury.io/rb/extralite.svg)](http://rubygems.org/gems/extralite)
 [![Modulation Test](https://github.com/digital-fabric/extralite/workflows/Tests/badge.svg)](https://github.com/digital-fabric/extralite/actions?query=workflow%3ATests)
@@ -6,9 +6,9 @@
 
 ## What is Extralite?
 
-Extralite is an extra-lightweight (less than 460 lines of C-code) SQLite3
-wrapper for Ruby. It provides a single class with a minimal set of methods to
-interact with an SQLite3 database.
+Extralite is a fast, extra-lightweight (less than 460 lines of C-code) SQLite3
+wrapper for Ruby. It provides a single class with a minimal set of methods for
+interacting with an SQLite3 database.
 
 ## Features
 
