@@ -1,3 +1,7 @@
+## 1.8 2021-12-15
+
+- Add documentation
+
 ## 1.7 2021-12-13
 
 - Add extralite Sequel adapter
