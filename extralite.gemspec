@@ -21,10 +21,10 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
   s.required_ruby_version = '>= 2.6'
 
-  s.add_development_dependency  'rake-compiler',        '1.1.1'
-  s.add_development_dependency  'minitest',             '5.14.4'
+  s.add_development_dependency  'rake-compiler',        '1.1.6'
+  s.add_development_dependency  'minitest',             '5.15.0'
   s.add_development_dependency  'simplecov',            '0.17.1'
-  s.add_development_dependency  'rubocop',              '0.85.1'
-  s.add_development_dependency  'pry',                  '0.13.1'
+  s.add_development_dependency  'yard',                 '0.9.27'
+
   s.add_development_dependency  'sequel',               '5.51.0'
 end

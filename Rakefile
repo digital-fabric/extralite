@@ -16,3 +16,11 @@ task :test do
 end
 
 CLEAN.include "**/*.o", "**/*.so", "**/*.so.*", "**/*.a", "**/*.bundle", "**/*.jar", "pkg", "tmp"
+
+require "yard"
+YARD_FILES = FileList["ext/extralite/extralite.c"]
+
+YARD::Rake::YardocTask.new do |t|
+  t.files   = YARD_FILES
+  t.options = %w(-o doc --readme README.md)
+end
