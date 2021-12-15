@@ -136,16 +136,16 @@ static inline void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
     switch (TYPE(k)) {
       case T_FIXNUM:
         bind_parameter_value(stmt, NUM2INT(k), v);
-        return;
+        break;
       case T_SYMBOL:
         k = rb_funcall(k, ID_TO_S, 0);
       case T_STRING:
         if(RSTRING_PTR(k)[0] != ':') k = rb_str_plus(rb_str_new2(":"), k);
         int pos = sqlite3_bind_parameter_index(stmt, StringValuePtr(k));
         bind_parameter_value(stmt, pos, v);
-        return;
+        break;
       default:
-      rb_raise(cError, "Cannot bind hash key value idx %d", i);
+        rb_raise(cError, "Cannot bind hash key value idx %d", i);
     }
   }
   RB_GC_GUARD(keys);

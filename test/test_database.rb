@@ -139,6 +139,14 @@ end
     assert_equal [{ x: 4, y: 5, z: 6 }], r
   end
 
+  def test_parameter_binding_with_index_key
+    r = @db.query('select x, y, z from t where z = ?', 1 => 3)
+    assert_equal [{ x: 1, y: 2, z: 3 }], r
+
+    r = @db.query('select x, y, z from t where x = ?2', 1 => 42, 2 => 4)
+    assert_equal [{ x: 4, y: 5, z: 6 }], r
+  end
+
   def test_value_casting
     r = @db.query_single_value("select 'abc'")
     assert_equal 'abc', r
