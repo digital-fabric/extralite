@@ -73,7 +73,7 @@ db.query('select * from foo where bar = :bar', 'bar' => 42)
 db.query('select * from foo where bar = :bar', ':bar' => 42)
 
 # get last insert rowid
-rowid = db.last_insert_id
+rowid = db.last_insert_rowid
 
 # get number of rows changed in last query
 number_of_rows_affected = db.changes
