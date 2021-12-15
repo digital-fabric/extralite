@@ -1,3 +1,7 @@
+## 1.9 2021-12-15
+
+- Add support for reading BLOBs
+
 ## 1.8.2 2021-12-15
 
 - Add documentation
