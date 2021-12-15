@@ -1,5 +1,9 @@
 # frozen-string-literal: true
 
+# This file was adapted from the SQLite adapter included in Sequel:
+# https://github.com/jeremyevans/sequel
+# (distributed under the MIT license)
+
 require 'extralite'
 require 'sequel/adapters/shared/sqlite'
 
