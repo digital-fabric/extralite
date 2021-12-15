@@ -138,6 +138,23 @@ end
     r = @db.query('select x, y, z from t where z = :bazzz', ':bazzz' => 6)
     assert_equal [{ x: 4, y: 5, z: 6 }], r
   end
+
+  def test_value_casting
+    r = @db.query_single_value("select 'abc'")
+    assert_equal 'abc', r
+
+    r = @db.query_single_value('select 123')
+    assert_equal 123, r
+
+    r = @db.query_single_value('select 12.34')
+    assert_equal 12.34, r
+
+    r = @db.query_single_value('select zeroblob(4)')
+    assert_equal "\x00\x00\x00\x00", r
+
+    r = @db.query_single_value('select null')
+    assert_nil r
+  end
 end
 
 class ScenarioTest < MiniTest::Test

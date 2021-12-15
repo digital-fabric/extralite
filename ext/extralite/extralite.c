@@ -116,7 +116,7 @@ inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
     case SQLITE_TEXT:
       return rb_str_new_cstr((char *)sqlite3_column_text(stmt, col));
     case SQLITE_BLOB:
-      rb_raise(cError, "BLOB reading not yet implemented");
+      return rb_str_new((const char *)sqlite3_column_blob(stmt, col), (long)sqlite3_column_bytes(stmt, col));
     default:
       rb_raise(cError, "Unknown column type: %d", type);
   }
