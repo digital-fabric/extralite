@@ -1,9 +1,25 @@
-# Extralite - a fast Ruby gem for working with SQLite3 databases
+<h1 align="center">
+  Extralite
+</h1>
 
-[![Gem Version](https://badge.fury.io/rb/extralite.svg)](http://rubygems.org/gems/extralite)
-[![Modulation Test](https://github.com/digital-fabric/extralite/workflows/Tests/badge.svg)](https://github.com/digital-fabric/extralite/actions?query=workflow%3ATests)
-[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/digital-fabric/extralite/blob/master/LICENSE)
-[Documentation](https://www.rubydoc.info/gems/extralite)
+<h4 align="center">A fast Ruby gem for working with SQLite3 databases</h4>
+
+<p align="center">
+  <a href="http://rubygems.org/gems/extralite">
+    <img src="https://badge.fury.io/rb/extralite.svg" alt="Ruby gem">
+  </a>
+  <a href="https://github.com/digital-fabric/extralite/actions?query=workflow%3ATests">
+    <img src="https://github.com/digital-fabric/extralite/workflows/Tests/badge.svg" alt="Tests">
+  </a>
+  <a href="https://github.com/digital-fabric/extralite/blob/master/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.rubydoc.info/gems/extralite">DOCS</a> |
+  <a href="https://noteflakes.com/articles/2021-12-15-extralite">BLOG POST</a>
+</p>
 
 ## What is Extralite?
 
