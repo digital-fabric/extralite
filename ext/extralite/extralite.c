@@ -105,7 +105,7 @@ VALUE Database_closed_p(VALUE self) {
   return db->sqlite3_db ? Qfalse : Qtrue;
 }
 
-inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
+static inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
   switch (type) {
     case SQLITE_NULL:
       return Qnil;
@@ -284,7 +284,7 @@ void *stmt_iterate_without_gvl(void *ptr) {
   return NULL;
 }
 
-inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
+static inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
   struct step_ctx ctx = {stmt, 0};
   rb_thread_call_without_gvl(stmt_iterate_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
   switch (ctx.rc) {
