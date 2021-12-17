@@ -1,3 +1,7 @@
+## 1.11 2021-12-17
+
+- Fix compilation on MacOS (#3)
+
 ## 1.10 2021-12-15
 
 - Fix mutliple parameter binding with hash
