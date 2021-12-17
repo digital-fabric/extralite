@@ -128,8 +128,8 @@ static void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value);
 
 static inline void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
   VALUE keys = rb_funcall(hash, ID_KEYS, 0);
-  int len = RARRAY_LEN(keys);
-  for (int i = 0; i < len; i++) {
+  long len = RARRAY_LEN(keys);
+  for (long i = 0; i < len; i++) {
     VALUE k = RARRAY_AREF(keys, i);
     VALUE v = rb_hash_aref(hash, k);
 
@@ -145,7 +145,7 @@ static inline void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
         bind_parameter_value(stmt, pos, v);
         break;
       default:
-        rb_raise(cError, "Cannot bind hash key value idx %d", i);
+        rb_raise(cError, "Cannot bind hash key value idx %ld", i);
     }
   }
   RB_GC_GUARD(keys);
@@ -218,7 +218,7 @@ struct multi_stmt_ctx {
   sqlite3 *db;
   sqlite3_stmt **stmt;
   const char *str;
-  int len;
+  long len;
   int rc;
 };
 
@@ -256,7 +256,7 @@ statements. It will release the GVL while the statements are being prepared and
 executed. All statements excluding the last one are executed. The last statement
 is not executed, but instead handed back to the caller for looping over results.
 */
-inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+static inline void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   struct multi_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
   rb_thread_call_without_gvl(prepare_multi_stmt_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
   RB_GC_GUARD(sql);
