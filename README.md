@@ -45,7 +45,7 @@ interacting with an SQLite3 database.
 - Get number of rows changed by last query.
 - Load extensions (loading of extensions is autmatically enabled. You can find
   some useful extensions here: https://github.com/nalgeon/sqlean.)
-- Includes a [Sequel adapter](#usage-with-sequel) (an ActiveRecord)
+- Includes a [Sequel adapter](#usage-with-sequel).
 
 ## Usage
 
