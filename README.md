@@ -113,7 +113,7 @@ Extralite includes an adapter for
 just use the `extralite` scheme instead of `sqlite`:
 
 ```ruby
-DB = Sequel.connect('extralite:blog.db')
+DB = Sequel.connect('extralite://blog.db')
 articles = DB[:articles]
 p articles.to_a
 ```
