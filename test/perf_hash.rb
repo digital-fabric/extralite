@@ -4,8 +4,8 @@ require 'bundler/inline'
 
 gemfile do
   source 'https://rubygems.org'
-  gem 'sqlite3'
   gem 'extralite', path: '..'
+  gem 'sqlite3'
   gem 'benchmark-ips'
 end
 
