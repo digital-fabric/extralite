@@ -51,6 +51,15 @@ static VALUE Database_allocate(VALUE klass) {
   } \
 }
 
+/* call-seq: sqlite3_version
+ *
+ * Returns the sqlite3 version used by Extralite.
+ */
+
+VALUE Extralite_sqlite3_version(VALUE self) {
+  return rb_str_new_cstr(sqlite3_version);
+}
+
 /* call-seq: initialize(path)
  *
  * Initializes a new SQLite database with the given path.
@@ -658,6 +667,8 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
 
 void Init_Extralite() {
   VALUE mExtralite = rb_define_module("Extralite");
+  rb_define_singleton_method(mExtralite, "sqlite3_version", Extralite_sqlite3_version, 0);
+
   VALUE cDatabase = rb_define_class_under(mExtralite, "Database", rb_cObject);
   rb_define_alloc_func(cDatabase, Database_allocate);
 

@@ -163,6 +163,20 @@ end
     r = @db.query_single_value('select null')
     assert_nil r
   end
+
+
+
+  def test_extension_loading
+    case RUBY_PLATFORM
+    when /linux/
+      @db.load_extension(File.join(__dir__, 'extensions/text.so'))
+    when /darwin/
+      @db.load_extension(File.join(__dir__, 'extensions/text.dylib'))
+    end
+    
+    r = @db.query_single_value("select reverse('abcd')")
+    assert_equal 'dcba', r
+  end
 end
 
 class ScenarioTest < MiniTest::Test

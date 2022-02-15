@@ -29,6 +29,8 @@ interacting with an SQLite3 database.
 
 ## Features
 
+- Zero dependencies: Extralite bundles SQLite3 version 3.37.2 - no need to
+  install any `libsqlite3` packages.
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
 - Super fast - [up to 12.5x faster](#performance) than the
@@ -51,6 +53,9 @@ interacting with an SQLite3 database.
 
 ```ruby
 require 'extralite'
+
+# get sqlite3 version
+Extralite.sqlite3_version #=> "3.37.2"
 
 # open a database
 db = Extralite::Database.new('/tmp/my.db')
@@ -137,6 +142,7 @@ Here's a table summarizing the differences between the two gems:
 
 | |sqlite3-ruby|Extralite|
 |-|-|-|
+|SQLite3 dependency|depends on OS-installed libsqlite3|bundles latest version of SQLite3|
 |API design|multiple classes|single class|
 |Query results|row as hash, row as array, single row, single value|row as hash, row as array, __single column__, single row, single value|
 |execute multiple statements|separate API (#execute_batch)|integrated|
