@@ -19,7 +19,7 @@ Gem::Specification.new do |s|
   s.extra_rdoc_files = ["README.md"]
   s.extensions = ["ext/extralite/extconf.rb"]
   s.require_paths = ["lib"]
-  s.required_ruby_version = '>= 2.6'
+  s.required_ruby_version = '>= 2.7'
 
   s.add_development_dependency  'rake-compiler',        '1.1.6'
   s.add_development_dependency  'minitest',             '5.15.0'
