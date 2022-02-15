@@ -49,6 +49,20 @@ interacting with an SQLite3 database.
   some useful extensions here: https://github.com/nalgeon/sqlean.)
 - Includes a [Sequel adapter](#usage-with-sequel).
 
+## Installation
+
+To use Extralite in your Ruby app, add the following to your `Gemfile`:
+
+```ruby
+gem 'extralite'
+```
+
+You can also run `gem install extralite` if you just want to check it out.
+
+> **Important note**: Extralite will take a while to install (on my modest
+> machine it takes about a minute). This is owing to the fact that Extralite
+> bundles the sqlite3 code, which is compiled upon installation.
+
 ## Usage
 
 ```ruby
@@ -136,7 +150,7 @@ born.
 Extralite is quite a bit [faster](#performance) than sqlite3-ruby and is also
 [thread-friendly](#what-about-concurrency). On the other hand, Extralite does
 not have support for defining custom functions, aggregates and collations. If
-you're using those features, you'll need to stick with sqlite3-ruby.
+you're using any of those features, you'll have to stick to sqlite3-ruby.
 
 Here's a table summarizing the differences between the two gems:
 
@@ -150,7 +164,7 @@ Here's a table summarizing the differences between the two gems:
 |custom collations|yes|no|
 |custom aggregate functions|yes|no|
 |Multithread friendly|no|[yes](#what-about-concurrency)|
-|Code size|~2650LoC|~530LoC|
+|Code size|~2650LoC|~480LoC|
 |Performance|1x|1.5x to 12.5x (see [below](#performance))|
 
 ## What about concurrency?
