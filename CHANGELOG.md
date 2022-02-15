@@ -1,3 +1,8 @@
+## 1.12 2022-02-15
+
+- Add `Extralite.sqlite3_version` method
+- Bundle sqlite3 in gem
+
 ## 1.11 2021-12-17
 
 - Fix compilation on MacOS (#3)
