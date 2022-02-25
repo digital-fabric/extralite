@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+version = ARGV[0]
+raise "Please specify version" unless version
+
+require 'fileutils'
+require 'date'
+
+FileUtils.cd '/tmp'
+
+version_id = version.gsub('.', '')
+version_id += '0' * (7 - version_id.length)
+url = "https://sqlite.org/#{Date.today.year}/sqlite-amalgamation-#{version_id}.zip"
+dest = File.expand_path('../ext/extralite', __dir__)
+
+puts "Downloading from #{url}..."
+`curl #{url} > #{version_id}.zip`
+
+puts "Unzipping zip file..."
+`unzip -o #{version_id}.zip`
+
+puts "Copying source files"
+`cp sqlite-amalgamation-#{version_id}/sqlite3.* #{dest}/`
+
+puts 'Done updating source files'
