@@ -25,12 +25,14 @@
 
 Extralite is a fast, extra-lightweight (less than 460 lines of C-code) SQLite3
 wrapper for Ruby. It provides a single class with a minimal set of methods for
-interacting with an SQLite3 database.
+interacting with an SQLite3 database. Extralite bundles the latest version of
+SQLite, offering access to the latest features and enhancements.
 
 ## Features
 
-- Zero dependencies: Extralite bundles SQLite3 version 3.37.2 - no need to
-  install any `libsqlite3` packages.
+- Zero dependencies: Extralite bundles SQLite3 version
+  [3.38.0](https://sqlite.org/releaselog/3_38_0.html) - no need to install any
+  `libsqlite3` packages.
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
 - Super fast - [up to 12.5x faster](#performance) than the
@@ -68,7 +70,7 @@ You can also run `gem install extralite` if you just want to check it out.
 require 'extralite'
 
 # get sqlite3 version
-Extralite.sqlite3_version #=> "3.37.2"
+Extralite.sqlite3_version #=> "3.38.0"
 
 # open a database
 db = Extralite::Database.new('/tmp/my.db')
