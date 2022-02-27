@@ -222,7 +222,7 @@ large number of rows.
 |100K|201.6K rows/s|1934K rows/s|__9.6x__|
 
 As those benchmarks show, Extralite is capabale of reading up to 3M rows/second
-when fetching rows as arrays, and up to 2.2M rows/second when fetching
+when fetching rows as arrays, and up to 2.6M rows/second when fetching
 rows as hashes.
 
 ## Contributing
