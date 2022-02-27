@@ -3,7 +3,12 @@
 
 #include "ruby.h"
 #include "ruby/thread.h"
+
+#ifdef EXTRALITE_NO_BUNDLE
 #include <sqlite3.h>
+#else
+#include "../sqlite3/sqlite3.h"
+#endif
 
 // debug utility
 #define INSPECT(str, obj) { \
