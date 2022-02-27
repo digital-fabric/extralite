@@ -1,3 +1,7 @@
+## 1.13.1 2022-02-27
+
+- Fix compilation on TruffleRuby
+
 ## 1.13 2022-02-27
 
 - Implement prepared statements (#7)
