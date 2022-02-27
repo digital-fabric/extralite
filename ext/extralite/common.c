@@ -75,11 +75,9 @@ inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
   }
 }
 
-static inline void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv) {
-  if (argc > 1) {
-    for (int i = 1; i < argc; i++) {
-      bind_parameter_value(stmt, i, argv[i]);
-    }
+void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv) {
+  for (int i = 0; i < argc; i++) {
+    bind_parameter_value(stmt, i + 1, argv[i]);
   }
 }
 
@@ -110,14 +108,23 @@ static inline VALUE row_to_ary(sqlite3_stmt *stmt, int column_count) {
   return row;
 }
 
+typedef struct {
+  sqlite3 *db;
+  sqlite3_stmt **stmt;
+  const char *str;
+  long len;
+  int rc;
+} prepare_stmt_ctx;
+
 void *prepare_multi_stmt_without_gvl(void *ptr) {
-  multi_stmt_ctx *ctx = (multi_stmt_ctx *)ptr;
+  prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
   const char *rest = NULL;
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
   while (1) {
     ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
     if (ctx->rc) {
+      // error
       sqlite3_finalize(*ctx->stmt);
       return NULL;
     }
@@ -145,7 +152,7 @@ executed. All statements excluding the last one are executed. The last statement
 is not executed, but instead handed back to the caller for looping over results.
 */
 void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
-  multi_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
+  prepare_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
   rb_thread_call_without_gvl(prepare_multi_stmt_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
   RB_GC_GUARD(sql);
 
@@ -156,6 +163,50 @@ void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
     rb_raise(cBusyError, "Database is busy");
   case SQLITE_ERROR:
     rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+  default:
+    rb_raise(cError, "Invalid return code for prepare_multi_stmt_without_gvl: %d (please open an issue on https://github.com/digital-fabric/extralite)", ctx.rc);
+  }
+}
+
+#define SQLITE_MULTI_STMT -1
+
+void *prepare_single_stmt_without_gvl(void *ptr) {
+  prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
+  const char *rest = NULL;
+  const char *str = ctx->str;
+  const char *end = ctx->str + ctx->len;
+
+  ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
+  if (ctx->rc)
+    goto discard_stmt;
+  else if (rest != end) {
+    ctx->rc = SQLITE_MULTI_STMT;
+    goto discard_stmt;
+  }
+  goto end;
+discard_stmt:
+  if (*ctx->stmt) {
+    sqlite3_finalize(*ctx->stmt);
+    *ctx->stmt = NULL;
+  }
+end:
+  return NULL;
+}
+
+void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+  prepare_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
+  rb_thread_call_without_gvl(prepare_single_stmt_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  RB_GC_GUARD(sql);
+
+  switch (ctx.rc) {
+  case 0:
+    return;
+  case SQLITE_BUSY:
+    rb_raise(cBusyError, "Database is busy");
+  case SQLITE_ERROR:
+    rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+  case SQLITE_MULTI_STMT:
+    rb_raise(cSQLError, "A prepared statement does not accept SQL strings with multiple queries");
   default:
     rb_raise(cError, "Invalid return code for prepare_multi_stmt_without_gvl: %d (please open an issue on https://github.com/digital-fabric/extralite)", ctx.rc);
   }
@@ -191,30 +242,18 @@ inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
   return 0;
 }
 
-VALUE cleanup_stmt(VALUE arg) {
-  query_ctx *ctx = (query_ctx *)arg;
+VALUE cleanup_stmt(query_ctx *ctx) {
   if (ctx->stmt) sqlite3_finalize(ctx->stmt);
   return Qnil;
-}
-
-#define check_arity_and_prepare_sql(argc, argv, sql) { \
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS); \
-  sql = rb_funcall(argv[0], ID_STRIP, 0); \
-  if (RSTRING_LEN(sql) == 0) return Qnil; \
 }
 
 VALUE safe_query_hash(query_ctx *ctx) {
   VALUE result = ctx->self;
   int yield_to_block = rb_block_given_p();
   VALUE row;
-  VALUE sql;
   int column_count;
   VALUE column_names;
 
-  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-
-  prepare_multi_stmt(ctx->sqlite3_db, &ctx->stmt, sql);
-  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
   column_count = sqlite3_column_count(ctx->stmt);
   column_names = get_column_names(ctx->stmt, column_count);
 
@@ -237,12 +276,7 @@ VALUE safe_query_ary(query_ctx *ctx) {
   VALUE result = ctx->self;
   int yield_to_block = rb_block_given_p();
   VALUE row;
-  VALUE sql;
 
-  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-
-  prepare_multi_stmt(ctx->sqlite3_db, &ctx->stmt, sql);
-  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
   column_count = sqlite3_column_count(ctx->stmt);
 
   // block not given, so prepare the array of records to be returned
@@ -260,14 +294,9 @@ VALUE safe_query_ary(query_ctx *ctx) {
 
 VALUE safe_query_single_row(query_ctx *ctx) {
   int column_count;
-  VALUE sql;
   VALUE row = Qnil;
   VALUE column_names;
 
-  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-
-  prepare_multi_stmt(ctx->sqlite3_db, &ctx->stmt, sql);
-  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
   column_count = sqlite3_column_count(ctx->stmt);
   column_names = get_column_names(ctx->stmt, column_count);
 
@@ -283,13 +312,8 @@ VALUE safe_query_single_column(query_ctx *ctx) {
   int column_count;
   VALUE result = ctx->self;
   int yield_to_block = rb_block_given_p();
-  VALUE sql;
   VALUE value;
 
-  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-
-  prepare_multi_stmt(ctx->sqlite3_db, &ctx->stmt, sql);
-  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
   column_count = sqlite3_column_count(ctx->stmt);
   if (column_count != 1)
     rb_raise(cError, "Expected query result to have 1 column");
@@ -309,13 +333,8 @@ VALUE safe_query_single_column(query_ctx *ctx) {
 
 VALUE safe_query_single_value(query_ctx *ctx) {
   int column_count;
-  VALUE sql;
   VALUE value = Qnil;
 
-  check_arity_and_prepare_sql(ctx->argc, ctx->argv, sql);
-
-  prepare_multi_stmt(ctx->sqlite3_db, &ctx->stmt, sql);
-  bind_all_parameters(ctx->stmt, ctx->argc, ctx->argv);
   column_count = sqlite3_column_count(ctx->stmt);
   if (column_count != 1)
     rb_raise(cError, "Expected query result to have 1 column");

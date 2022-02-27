@@ -5,13 +5,24 @@
 #include "ruby/thread.h"
 #include <sqlite3.h>
 
+// debug utility
+#define INSPECT(str, obj) { \
+  printf(str); \
+  VALUE s = rb_funcall(obj, rb_intern("inspect"), 0); \
+  printf(": %s\n", StringValueCStr(s)); \
+}
+
 #define SAFE(f) (VALUE (*)(VALUE))(f)
+
+extern VALUE cDatabase;
+extern VALUE cPreparedStatement;
 
 extern VALUE cError;
 extern VALUE cSQLError;
 extern VALUE cBusyError;
 
 extern ID ID_KEYS;
+extern ID ID_NEW;
 extern ID ID_STRIP;
 extern ID ID_TO_S;
 
@@ -20,18 +31,15 @@ typedef struct {
 } Database_t;
 
 typedef struct {
-  sqlite3 *db;
-  sqlite3_stmt **stmt;
-  const char *str;
-  long len;
-  int rc;
-} multi_stmt_ctx;
+  VALUE db;
+  VALUE sql;
+  sqlite3 *sqlite3_db;
+  sqlite3_stmt *stmt;
+} PreparedStatement_t;
 
 typedef struct {
   VALUE self;
   sqlite3 *sqlite3_db;
-  int argc;
-  VALUE *argv;
   sqlite3_stmt *stmt;
 } query_ctx;
 
@@ -41,6 +49,11 @@ VALUE safe_query_single_column(query_ctx *ctx);
 VALUE safe_query_single_row(query_ctx *ctx);
 VALUE safe_query_single_value(query_ctx *ctx);
 
-VALUE cleanup_stmt(VALUE arg);
+void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
+void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
+void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);
+VALUE cleanup_stmt(query_ctx *ctx);
+
+sqlite3 *Database_sqlite3_db(VALUE self);
 
 #endif /* EXTRALITE_H */

@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include "extralite.h"
 
+VALUE cDatabase;
 VALUE cError;
 VALUE cSQLError;
 VALUE cBusyError;
 
 ID ID_KEYS;
+ID ID_NEW;
 ID ID_STRIP;
 ID ID_TO_S;
 
@@ -15,10 +17,7 @@ static size_t Database_size(const void *ptr) {
 
 static void Database_free(void *ptr) {
   Database_t *db = ptr;
-  if (db->sqlite3_db) {
-    sqlite3_close(db->sqlite3_db);
-  }
-  // close db
+  if (db->sqlite3_db) sqlite3_close(db->sqlite3_db);
   free(ptr);
 }
 
@@ -45,7 +44,14 @@ static VALUE Database_allocate(VALUE klass) {
   } \
 }
 
-/* call-seq: sqlite3_version
+sqlite3 *Database_sqlite3_db(VALUE self) {
+  Database_t *db;
+  GetDatabase(self, db);
+  return db->sqlite3_db;
+}
+
+/* call-seq:
+ *   Extralite.sqlite3_version -> version
  *
  * Returns the sqlite3 version used by Extralite.
  */
@@ -54,7 +60,8 @@ VALUE Extralite_sqlite3_version(VALUE self) {
   return rb_str_new_cstr(sqlite3_version);
 }
 
-/* call-seq: initialize(path)
+/* call-seq:
+ *   db.initialize(path)
  *
  * Initializes a new SQLite database with the given path.
  */
@@ -79,7 +86,8 @@ VALUE Database_initialize(VALUE self, VALUE path) {
   return Qnil;
 }
 
-/* call-seq: close
+/* call-seq:
+ *   db.close -> db
  *
  * Closes the database.
  */
@@ -97,9 +105,12 @@ VALUE Database_close(VALUE self) {
   return self;
 }
 
-/* call-seq: closed?
+/* call-seq:
+ *   db.closed? -> bool
  *
  * Returns true if the database is closed.
+ *
+ * @return [bool] is database closed
  */
 VALUE Database_closed_p(VALUE self) {
   Database_t *db;
@@ -108,9 +119,28 @@ VALUE Database_closed_p(VALUE self) {
   return db->sqlite3_db ? Qfalse : Qtrue;
 }
 
+static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *)) {
+  Database_t *db;
+  sqlite3_stmt *stmt;
+  VALUE sql;
+
+  // extract query from args
+  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
+  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+
+  // prepare query ctx
+  GetOpenDatabase(self, db);
+  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
+  bind_all_parameters(stmt, argc - 1, argv + 1);
+  query_ctx ctx = { self, db->sqlite3_db, stmt };
+
+  return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+}
+
 /* call-seq:
- *    query(sql, *parameters, &block)
- *    query_hash(sql, *parameters, &block)
+ *    db.query(sql, *parameters, &block) -> [...]
+ *    db.query_hash(sql, *parameters, &block) -> [...]
  *
  * Runs a query returning rows as hashes (with symbol keys). If a block is
  * given, it will be called for each row. Otherwise, an array containing all
@@ -132,13 +162,11 @@ VALUE Database_closed_p(VALUE self) {
  *     db.query('select * from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
-  query_ctx ctx = { self, db->sqlite3_db, argc, argv, 0 };
-  return rb_ensure(SAFE(safe_query_hash), (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
+  return Database_perform_query(argc, argv, self, safe_query_hash);
 }
 
-/* call-seq: query_ary(sql, *parameters, &block)
+/* call-seq:
+ *   db.query_ary(sql, *parameters, &block) -> [...]
  *
  * Runs a query returning rows as arrays. If a block is given, it will be called
  * for each row. Otherwise, an array containing all rows is returned.
@@ -159,13 +187,11 @@ VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
  *     db.query_ary('select * from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
-  query_ctx ctx = { self, db->sqlite3_db, argc, argv, 0 };
-  return rb_ensure(SAFE(safe_query_ary), (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
+  return Database_perform_query(argc, argv, self, safe_query_ary);
 }
 
-/* call-seq: query_single_row(sql, *parameters)
+/* call-seq:
+ *   db.query_single_row(sql, *parameters) -> {...}
  *
  * Runs a query returning a single row as a hash.
  *
@@ -185,13 +211,11 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
  *     db.query_single_row('select * from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
-  query_ctx ctx = { self, db->sqlite3_db, argc, argv, 0 };
-  return rb_ensure(SAFE(safe_query_single_row), (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
+  return Database_perform_query(argc, argv, self, safe_query_single_row);
 }
 
-/* call-seq: query_single_column(sql, *parameters, &block)
+/* call-seq:
+ *   db.query_single_column(sql, *parameters, &block) -> [...]
  *
  * Runs a query returning single column values. If a block is given, it will be called
  * for each value. Otherwise, an array containing all values is returned.
@@ -212,13 +236,11 @@ VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
  *     db.query_single_column('select x from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
-  query_ctx ctx = { self, db->sqlite3_db, argc, argv, 0 };
-  return rb_ensure(SAFE(safe_query_single_column), (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
+  return Database_perform_query(argc, argv, self, safe_query_single_column);
 }
 
-/* call-seq: query_single_value(sql, *parameters)
+/* call-seq:
+ *   db.query_single_value(sql, *parameters) -> value
  *
  * Runs a query returning a single value from the first row.
  *
@@ -238,13 +260,11 @@ VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
  *     db.query_single_value('select x from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
-  query_ctx ctx = { self, db->sqlite3_db, argc, argv, 0 };
-  return rb_ensure(SAFE(safe_query_single_value), (VALUE)&ctx, cleanup_stmt, (VALUE)&ctx);
+  return Database_perform_query(argc, argv, self, safe_query_single_value);
 }
 
-/* call-seq: last_insert_rowid
+/* call-seq:
+ *   db.last_insert_rowid -> int
  *
  * Returns the rowid of the last inserted row.
  */
@@ -255,7 +275,8 @@ VALUE Database_last_insert_rowid(VALUE self) {
   return INT2NUM(sqlite3_last_insert_rowid(db->sqlite3_db));
 }
 
-/* call-seq: changes
+/* call-seq:
+ *   db.changes -> int
  *
  * Returns the number of changes made to the database by the last operation.
  */
@@ -266,7 +287,8 @@ VALUE Database_changes(VALUE self) {
   return INT2NUM(sqlite3_changes(db->sqlite3_db));
 }
 
-/* call-seq: filename
+/* call-seq:
+ *   db.filename -> string
  *
  * Returns the database filename.
  */
@@ -282,7 +304,8 @@ VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
   return filename ? rb_str_new_cstr(filename) : Qnil;
 }
 
-/* call-seq: transaction_active?
+/* call-seq:
+ *   db.transaction_active? -> bool
  *
  * Returns true if a transaction is currently in progress.
  */
@@ -293,7 +316,8 @@ VALUE Database_transaction_active_p(VALUE self) {
   return sqlite3_get_autocommit(db->sqlite3_db) ? Qfalse : Qtrue;
 }
 
-/* call-seq: load_extension(path)
+/* call-seq:
+ *   db.load_extension(path) -> db
  *
  * Loads an extension with the given path.
  */
@@ -312,11 +336,20 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
   return self;
 }
 
-void Init_Extralite() {
+/* call-seq:
+ *   db.prepare(sql) -> Extralite::PreparedStatement
+ *
+ * Creates a prepared statement with the given SQL query.
+ */
+VALUE Database_prepare(VALUE self, VALUE sql) {
+  return rb_funcall(cPreparedStatement, ID_NEW, 2, self, sql);
+}
+
+void Init_ExtraliteDatabase() {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "sqlite3_version", Extralite_sqlite3_version, 0);
 
-  VALUE cDatabase = rb_define_class_under(mExtralite, "Database", rb_cObject);
+  cDatabase = rb_define_class_under(mExtralite, "Database", rb_cObject);
   rb_define_alloc_func(cDatabase, Database_allocate);
 
   rb_define_method(cDatabase, "initialize", Database_initialize, 1);
@@ -336,6 +369,8 @@ void Init_Extralite() {
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 
+  rb_define_method(cDatabase, "prepare", Database_prepare, 1);
+
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
   cBusyError = rb_define_class_under(mExtralite, "BusyError", cError);
@@ -344,6 +379,7 @@ void Init_Extralite() {
   rb_gc_register_mark_object(cBusyError);
 
   ID_KEYS   = rb_intern("keys");
+  ID_NEW    = rb_intern("new");
   ID_STRIP  = rb_intern("strip");
   ID_TO_S   = rb_intern("to_s");
 }

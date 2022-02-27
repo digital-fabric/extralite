@@ -16,7 +16,7 @@ task :test do
   exec 'ruby test/run.rb'
 end
 
-CLEAN.include '**/*.o', '**/*.so', '**/*.so.*', '**/*.a', '**/*.bundle', '**/*.jar', 'pkg', 'tmp'
+CLEAN.include 'lib/*.o', 'lib/*.so', 'lib/*.so.*', 'lib/*.a', 'lib/*.bundle', 'lib/*.jar', 'pkg', 'tmp'
 
 require 'yard'
 YARD_FILES = FileList['ext/extralite/extralite.c', 'lib/extralite.rb', 'lib/sequel/adapters/extralite.rb']

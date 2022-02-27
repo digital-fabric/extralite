@@ -1,5 +1,7 @@
-void Init_Extralite();
+void Init_ExtraliteDatabase();
+void Init_ExtralitePreparedStatement();
 
 void Init_extralite_ext() {
-  Init_Extralite();
+  Init_ExtraliteDatabase();
+  Init_ExtralitePreparedStatement();
 }
