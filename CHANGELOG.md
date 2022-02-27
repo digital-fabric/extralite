@@ -1,3 +1,8 @@
+## 1.13 2022-02-27
+
+- Implement prepared statements (#7)
+- Update SQLite to 3.38.0 (#6)
+
 ## 1.12 2022-02-15
 
 - Add `Extralite.sqlite3_version` method
