@@ -23,10 +23,10 @@
 
 ## What is Extralite?
 
-Extralite is a fast, extra-lightweight (less than 460 lines of C-code) SQLite3
-wrapper for Ruby. It provides a single class with a minimal set of methods for
-interacting with an SQLite3 database. Extralite bundles the latest version of
-SQLite, offering access to the latest features and enhancements.
+Extralite is a fast, extra-lightweight (about 600 lines of C-code) SQLite3
+wrapper for Ruby. It provides a minimal set of methods for interacting with an
+SQLite3 database, as well as prepared statements. Extralite bundles the latest
+version of SQLite, offering access to the latest features and enhancements.
 
 ## Features
 
@@ -35,6 +35,7 @@ SQLite, offering access to the latest features and enhancements.
   `libsqlite3` packages.
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
+- Prepared statements.
 - Super fast - [up to 12.5x faster](#performance) than the
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem (see also
   [comparison](#why-not-just-use-the-sqlite3-gem).)
@@ -109,6 +110,12 @@ db.query('select * from foo where bar = :bar', bar: 42)
 db.query('select * from foo where bar = :bar', 'bar' => 42)
 db.query('select * from foo where bar = :bar', ':bar' => 42)
 
+# prepared statements
+stmt = db.prepare('select ? as foo, ? as bar') #=> Extralite::PreparedStatement
+stmt.query(1, 2) #=> [{ :foo => 1, :bar => 2 }]
+# PreparedStatement offers the same data access methods as the Database class,
+# but without the sql parameter.
+
 # get last insert rowid
 rowid = db.last_insert_rowid
 
@@ -160,12 +167,13 @@ Here's a table summarizing the differences between the two gems:
 |SQLite3 dependency|depends on OS-installed libsqlite3|bundles latest version of SQLite3|
 |API design|multiple classes|single class|
 |Query results|row as hash, row as array, single row, single value|row as hash, row as array, __single column__, single row, single value|
-|execute multiple statements|separate API (#execute_batch)|integrated|
+|Execute multiple statements|separate API (#execute_batch)|integrated|
+|Prepared statements|yes|yes|
 |custom functions in Ruby|yes|no|
 |custom collations|yes|no|
 |custom aggregate functions|yes|no|
 |Multithread friendly|no|[yes](#concurrency)|
-|Code size|~2650LoC|~480LoC|
+|Code size|~2650LoC|~600LoC|
 |Performance|1x|1.5x to 12.5x (see [below](#performance))|
 
 ## Concurrency
@@ -181,31 +189,41 @@ performance:
 A benchmark script is included, creating a table of various row counts, then
 fetching the entire table using either `sqlite3` or `extralite`. This benchmark
 shows Extralite to be up to ~12 times faster than `sqlite3` when fetching a
-large number of rows. Here are the [results for fetching rows as
-hashes](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb):
+large number of rows.
+
+### Rows as hashes
+
+ [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb)
 
 |Row count|sqlite3-ruby|Extralite|Advantage|
 |-:|-:|-:|-:|
-|10|75336 rows/s|134244 rows/s|__1.78x__|
+|10|75.3K rows/s|134.2K rows/s|__1.78x__|
 |1K|286.8K rows/s|2106.4K rows/s|__7.35x__|
-|100K|181K rows/s|2275.3K rows/s|__12.53x__|
+|100K|181.0K rows/s|2275.3K rows/s|__12.53x__|
 
-When [fetching rows as
-arrays](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
-Extralite also significantly outperforms sqlite3-ruby:
+### Rows as arrays
+
+[Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
 
 |Row count|sqlite3-ruby|Extralite|Advantage|
 |-:|-:|-:|-:|
-|10|64365 rows/s|94031 rows/s|__1.46x__|
+|10|64.3K rows/s|94.0K rows/s|__1.46x__|
 |1K|498.9K rows/s|2478.2K rows/s|__4.97x__|
 |100K|441.1K rows/s|3023.4K rows/s|__6.85x__|
 
-(If you're interested in checking this yourself, just run the script and let me
-know if your results are better/worse.)
+### Prepared statements
 
-As those benchmarks show, Extralite is capabale of reading more than 3M
-rows/second (when fetching rows as arrays), and more than 2.2M rows/second (when
-fetching rows as hashes.)
+[Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_prepared.rb)
+
+|Row count|sqlite3-ruby|Extralite|Advantage|
+|-:|-:|-:|-:|
+|10|241.8K rows/s|888K rows/s|__3.67x__|
+|1K|298.6K rows/s|2606K rows/s|__8.73x__|
+|100K|201.6K rows/s|1934K rows/s|__9.6x__|
+
+As those benchmarks show, Extralite is capabale of reading up to 3M rows/second
+when fetching rows as arrays, and up to 2.2M rows/second when fetching
+rows as hashes.
 
 ## Contributing
 
