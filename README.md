@@ -38,6 +38,8 @@ latest features and enhancements.
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
 - Prepared statements.
+- Use system-installed sqlite3, or the [bundled latest version of
+  SQLite3](#installing-the-extralite-sqlite3-bundle).
 - Super fast - [up to 12.5x faster](#performance) than the
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem (see also
   [comparison](#why-not-just-use-the-sqlite3-gem).)
@@ -63,7 +65,7 @@ gem 'extralite'
 
 You can also run `gem install extralite` if you just want to check it out.
 
-## Installing the Extralite-SQLite3 bundle
+### Installing the Extralite-SQLite3 bundle
 
 If you don't have sqlite3 installed on your system, do not want to use the
 system-installed version of SQLite3, or would like to use the latest version of
@@ -175,7 +177,7 @@ Here's a table summarizing the differences between the two gems:
 
 | |sqlite3-ruby|Extralite|
 |-|-|-|
-|SQLite3 dependency|depends on OS-installed libsqlite3|bundles latest version of SQLite3|
+|SQLite3 dependency|depends on OS-installed libsqlite3|Use either system sqlite3 or [bundled latest version of SQLite3](#installing-the-extralite-sqlite3-bundle)|
 |API design|multiple classes|single class|
 |Query results|row as hash, row as array, single row, single value|row as hash, row as array, __single column__, single row, single value|
 |Execute multiple statements|separate API (#execute_batch)|integrated|
