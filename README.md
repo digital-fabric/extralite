@@ -25,14 +25,16 @@
 
 Extralite is a fast, extra-lightweight (about 600 lines of C-code) SQLite3
 wrapper for Ruby. It provides a minimal set of methods for interacting with an
-SQLite3 database, as well as prepared statements. Extralite bundles the latest
-version of SQLite, offering access to the latest features and enhancements.
+SQLite3 database, as well as prepared statements.
+
+Extralite comes in two flavors: the `extralite` gem which uses the
+system-installed sqlite3 library, and the `extralite-bundle` gem which bundles
+the latest version of SQLite
+([3.38.0](https://sqlite.org/releaselog/3_38_0.html)), offering access to the
+latest features and enhancements.
 
 ## Features
 
-- Zero dependencies: Extralite bundles SQLite3 version
-  [3.38.0](https://sqlite.org/releaselog/3_38_0.html) - no need to install any
-  `libsqlite3` packages.
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
 - Prepared statements.
@@ -61,9 +63,18 @@ gem 'extralite'
 
 You can also run `gem install extralite` if you just want to check it out.
 
-> **Important note**: Extralite will take a while to install (on my modest
-> machine it takes about a minute). This is owing to the fact that Extralite
-> bundles the sqlite3 code, which is compiled upon installation.
+## Installing the Extralite-SQLite3 bundle
+
+If you don't have sqlite3 installed on your system, do not want to use the
+system-installed version of SQLite3, or would like to use the latest version of
+SQLite3, you can install the `extralite-bundle` gem, which integrates the
+SQLite3 source code.
+
+> **Important note**: The `extralite-bundle` will take a while to install (on my
+> modest machine it takes about a minute), due to the size of the sqlite3 code.
+
+Usage of the `extralite-bundle` gem is identical to the usage of the normal
+`extralite` gem.
 
 ## Usage
 
@@ -71,7 +82,7 @@ You can also run `gem install extralite` if you just want to check it out.
 require 'extralite'
 
 # get sqlite3 version
-Extralite.sqlite3_version #=> "3.38.0"
+Extralite.sqlite3_version #=> "3.35.2"
 
 # open a database
 db = Extralite::Database.new('/tmp/my.db')
@@ -224,6 +235,12 @@ large number of rows.
 As those benchmarks show, Extralite is capabale of reading up to 3M rows/second
 when fetching rows as arrays, and up to 2.6M rows/second when fetching
 rows as hashes.
+
+## License
+
+The source code for Extralite is published under the [MIT license](LICENSE). The
+source code for SQLite is in the [public
+domain](https://sqlite.org/copyright.html).
 
 ## Contributing
 

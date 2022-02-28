@@ -1,3 +1,6 @@
+- Introduce `extralite-bundle` gem for bundling SQLite, use system lib by
+  default.
+
 ## 1.13.1 2022-02-27
 
 - Fix compilation on TruffleRuby
