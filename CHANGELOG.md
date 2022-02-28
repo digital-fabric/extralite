@@ -1,3 +1,5 @@
+## 1.14 2022-02-28
+
 - Introduce `extralite-bundle` gem for bundling SQLite, use system lib by
   default.
 
