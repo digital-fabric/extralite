@@ -7,8 +7,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-10.15]
-        ruby: [2.7, 3.0, 3.1, truffleruby]
+        os: [ubuntu-latest, macos-latest]
+        ruby: ['2.7', '3.0', '3.1', truffleruby]
 
     name: >-
       ${{matrix.os}}, ${{matrix.ruby}}
