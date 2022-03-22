@@ -31,7 +31,7 @@ void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
 
     switch (TYPE(k)) {
       case T_FIXNUM:
-        bind_parameter_value(stmt, NUM2INT(k), v);
+        bind_parameter_value(stmt, FIX2INT(k), v);
         break;
       case T_SYMBOL:
         k = rb_funcall(k, ID_TO_S, 0);

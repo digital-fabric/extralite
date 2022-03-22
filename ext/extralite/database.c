@@ -272,7 +272,7 @@ VALUE Database_last_insert_rowid(VALUE self) {
   Database_t *db;
   GetOpenDatabase(self, db);
 
-  return INT2NUM(sqlite3_last_insert_rowid(db->sqlite3_db));
+  return INT2FIX(sqlite3_last_insert_rowid(db->sqlite3_db));
 }
 
 /* call-seq:
@@ -284,7 +284,7 @@ VALUE Database_changes(VALUE self) {
   Database_t *db;
   GetOpenDatabase(self, db);
 
-  return INT2NUM(sqlite3_changes(db->sqlite3_db));
+  return INT2FIX(sqlite3_changes(db->sqlite3_db));
 }
 
 /* call-seq:
