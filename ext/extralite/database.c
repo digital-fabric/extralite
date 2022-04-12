@@ -264,6 +264,15 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
+ *   db.columns(sql) -> columns
+ *
+ * Returns the column names for the given query, without running it.
+ */
+VALUE Database_columns(VALUE self, VALUE sql) {
+  return Database_perform_query(1, &sql, self, safe_query_columns);
+}
+
+/* call-seq:
  *   db.last_insert_rowid -> int
  *
  * Returns the rowid of the last inserted row.
@@ -362,6 +371,7 @@ void Init_ExtraliteDatabase() {
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
+  rb_define_method(cDatabase, "columns", Database_columns, 1);
 
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "changes", Database_changes, 0);

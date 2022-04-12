@@ -218,6 +218,15 @@ VALUE PreparedStatement_sql(VALUE self) {
   return stmt->sql;
 }
 
+/* call-seq:
+ *   stmt.columns -> columns
+ *
+ * Returns the column names for the prepared statement without running it.
+ */
+VALUE PreparedStatement_columns(VALUE self) {
+  return PreparedStatement_perform_query(0, NULL, self, safe_query_columns);
+}
+
 void Init_ExtralitePreparedStatement() {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -235,4 +244,7 @@ void Init_ExtralitePreparedStatement() {
   rb_define_method(cPreparedStatement, "query_single_row", PreparedStatement_query_single_row, -1);
   rb_define_method(cPreparedStatement, "query_single_column", PreparedStatement_query_single_column, -1);
   rb_define_method(cPreparedStatement, "query_single_value", PreparedStatement_query_single_value, -1);
+
+  rb_define_method(cPreparedStatement, "columns", PreparedStatement_columns, 0);
+
 }

@@ -68,6 +68,11 @@ end
     assert_nil r
   end
 
+  def test_columns
+    r = @db.columns('select x, z from t')
+    assert_equal [:x, :z], r
+  end
+
   def test_transaction_active?
     assert_equal false, @db.transaction_active?
     @db.query('begin')

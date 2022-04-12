@@ -53,6 +53,7 @@ VALUE safe_query_hash(query_ctx *ctx);
 VALUE safe_query_single_column(query_ctx *ctx);
 VALUE safe_query_single_row(query_ctx *ctx);
 VALUE safe_query_single_value(query_ctx *ctx);
+VALUE safe_query_columns(query_ctx *ctx);
 
 void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
 void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);

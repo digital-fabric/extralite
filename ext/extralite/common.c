@@ -345,3 +345,7 @@ VALUE safe_query_single_value(query_ctx *ctx) {
   RB_GC_GUARD(value);
   return value;
 }
+
+VALUE safe_query_columns(query_ctx *ctx) {
+  return get_column_names(ctx->stmt, sqlite3_column_count(ctx->stmt));
+}

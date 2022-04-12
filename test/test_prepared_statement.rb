@@ -162,4 +162,10 @@ end
     r = @db.prepare('select null').query_single_value
     assert_nil r
   end
+
+  def test_prepared_statement_columns
+    r = @db.prepare("select 'abc' as a, 'def' as b").columns
+    assert_equal [:a, :b], r
+  end
+
 end
