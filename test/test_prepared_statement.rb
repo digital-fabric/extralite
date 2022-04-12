@@ -168,4 +168,17 @@ end
     assert_equal [:a, :b], r
   end
 
+  def test_prepared_statement_close
+    p = @db.prepare("select 'abc'")
+
+    assert_equal false, p.closed?
+
+    p.close
+    assert_equal true, p.closed?
+
+    p.close
+    assert_equal true, p.closed?
+
+    assert_raises { p.query_single_value }
+  end
 end

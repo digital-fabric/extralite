@@ -63,6 +63,9 @@ static inline VALUE PreparedStatement_perform_query(int argc, VALUE *argv, VALUE
   PreparedStatement_t *stmt;
   GetPreparedStatement(self, stmt);
 
+  if (!stmt->stmt)
+    rb_raise(cError, "Prepared statement is closed");
+
   sqlite3_reset(stmt->stmt);
   sqlite3_clear_bindings(stmt->stmt);
   bind_all_parameters(stmt->stmt, argc, argv);
@@ -227,6 +230,34 @@ VALUE PreparedStatement_columns(VALUE self) {
   return PreparedStatement_perform_query(0, NULL, self, safe_query_columns);
 }
 
+/* call-seq:
+ *   stmt.close -> stmt
+ *
+ * Closes the prepared statement. Running a closed prepared statement will raise
+ * an error.
+ */
+VALUE PreparedStatement_close(VALUE self) {
+  PreparedStatement_t *stmt;
+  GetPreparedStatement(self, stmt);
+  if (stmt->stmt) {
+    sqlite3_finalize(stmt->stmt);
+    stmt->stmt = NULL;
+  }
+  return self;
+}
+
+/* call-seq:
+ *   stmt.closed? -> closed
+ *
+ * Returns true if the prepared statement is closed.
+ */
+VALUE PreparedStatement_closed_p(VALUE self) {
+  PreparedStatement_t *stmt;
+  GetPreparedStatement(self, stmt);
+
+  return stmt->stmt ? Qfalse : Qtrue;
+}
+
 void Init_ExtralitePreparedStatement() {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -247,4 +278,6 @@ void Init_ExtralitePreparedStatement() {
 
   rb_define_method(cPreparedStatement, "columns", PreparedStatement_columns, 0);
 
+  rb_define_method(cPreparedStatement, "close", PreparedStatement_close, 0);
+  rb_define_method(cPreparedStatement, "closed?", PreparedStatement_closed_p, 0);
 }
