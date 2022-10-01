@@ -1,3 +1,8 @@
+## 1.15 2022-10-01
+
+- Add `Database#pragma` method
+- Add `Database#tables` method
+
 ## 1.14 2022-02-28
 
 - Introduce `extralite-bundle` gem for bundling SQLite, use system lib by
