@@ -138,6 +138,14 @@ number_of_rows_affected = db.changes
 # get db filename
 db.filename #=> "/tmp/my.db"
 
+# get list of tables
+db.tables #=> ['foo', 'bar']
+
+# get and set pragmas
+db.pragma(:journal_mode) #=> 'delete'
+db.pragma(journal_mode: 'wal')
+db.pragma(:journal_mode) #=> 'wal'
+
 # load an extension
 db.load_extension('/path/to/extension.so')
 

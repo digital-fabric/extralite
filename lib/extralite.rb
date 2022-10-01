@@ -17,5 +17,29 @@ module Extralite
 
   # An SQLite database
   class Database
+    alias_method :execute, :query
+
+    TABLES_SQL = <<~SQL
+      SELECT name FROM sqlite_schema
+      WHERE type ='table'
+        AND name NOT LIKE 'sqlite_%';
+    SQL
+
+    def tables
+      query_single_column(TABLES_SQL)
+    end
+
+    def pragma(value)
+      value.is_a?(Hash) ? pragma_set(value) : pragma_get(value)
+    end
+
+    def pragma_set(values)
+      sql = values.inject(+'') { |s, (k, v)| s += "pragma #{k}=#{v}; " }
+      query(sql)
+    end
+
+    def pragma_get(key)
+      query_single_value("pragma #{key}")
+    end
   end
 end

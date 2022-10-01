@@ -182,6 +182,31 @@ end
     r = @db.query_single_value("select reverse('abcd')")
     assert_equal 'dcba', r
   end
+
+  def test_tables
+    assert_equal ['t'], @db.tables
+
+    @db.query('create table foo (bar text)')
+    assert_equal ['t', 'foo'], @db.tables
+
+    @db.query('drop table t')
+    assert_equal ['foo'], @db.tables
+
+    @db.query('drop table foo')
+    assert_equal [], @db.tables
+  end
+
+  def test_pragma
+    assert_equal 'memory', @db.pragma('journal_mode')
+    assert_equal 2, @db.pragma('synchronous')
+
+    assert_equal 1, @db.pragma(:schema_version)
+    assert_equal 0, @db.pragma(:recursive_triggers)
+
+    assert_equal [], @db.pragma(schema_version: 33, recursive_triggers: 1)
+    assert_equal 33, @db.pragma(:schema_version)
+    assert_equal 1, @db.pragma(:recursive_triggers)
+  end
 end
 
 class ScenarioTest < MiniTest::Test
