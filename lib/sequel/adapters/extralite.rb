@@ -122,17 +122,17 @@ module Sequel
         
         connection_pragmas.each{|s| log_connection_yield(s, db){db.query(s)}}
         
-        # class << db
-        #   attr_reader :prepared_statements
-        # end
-        # db.instance_variable_set(:@prepared_statements, {})
+        class << db
+          attr_reader :prepared_statements
+        end
+        db.instance_variable_set(:@prepared_statements, {})
         
         db
       end
 
       # Disconnect given connections from the database.
       def disconnect_connection(c)
-        # c.prepared_statements.each_value{|v| v.first.close}
+        c.prepared_statements.each_value{|v| v.first.close }
         c.close
       end
       
@@ -149,13 +149,13 @@ module Sequel
       # Drop any prepared statements on the connection when executing DDL.  This is because
       # prepared statements lock the table in such a way that you can't drop or alter the
       # table while a prepared statement that references it still exists.
-      # def execute_ddl(sql, opts=OPTS)
-      #   synchronize(opts[:server]) do |conn|
-      #     conn.prepared_statements.values.each{|cps, s| cps.close}
-      #     conn.prepared_statements.clear
-      #     super
-      #   end
-      # end
+      def execute_ddl(sql, opts=OPTS)
+        synchronize(opts[:server]) do |conn|
+          conn.prepared_statements.values.each{|cps, s| cps.close}
+          conn.prepared_statements.clear
+          super
+        end
+      end
       
       def execute_insert(sql, opts=OPTS)
         _execute(:insert, sql, opts)
@@ -193,7 +193,7 @@ module Sequel
       def _execute(type, sql, opts, &block)
         begin
           synchronize(opts[:server]) do |conn|
-            # return execute_prepared_statement(conn, type, sql, opts, &block) if sql.is_a?(Symbol)
+            return execute_prepared_statement(conn, type, sql, opts, &block) if sql.is_a?(Symbol)
             log_args = opts[:arguments]
             args = {}
             opts.fetch(:arguments, OPTS).each{|k, v| args[k] = prepared_statement_argument(v) }
