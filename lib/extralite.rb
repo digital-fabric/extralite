@@ -39,7 +39,7 @@ module Extralite
     end
 
     def pragma_get(key)
-      query_single_value("pragma #{key}")
+      query("pragma #{key}")
     end
   end
 end

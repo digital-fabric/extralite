@@ -197,15 +197,15 @@ end
   end
 
   def test_pragma
-    assert_equal 'memory', @db.pragma('journal_mode')
-    assert_equal 2, @db.pragma('synchronous')
+    assert_equal [{journal_mode: 'memory'}], @db.pragma('journal_mode')
+    assert_equal [{synchronous: 2}], @db.pragma('synchronous')
 
-    assert_equal 1, @db.pragma(:schema_version)
-    assert_equal 0, @db.pragma(:recursive_triggers)
+    assert_equal [{schema_version: 1}], @db.pragma(:schema_version)
+    assert_equal [{recursive_triggers: 0}], @db.pragma(:recursive_triggers)
 
     assert_equal [], @db.pragma(schema_version: 33, recursive_triggers: 1)
-    assert_equal 33, @db.pragma(:schema_version)
-    assert_equal 1, @db.pragma(:recursive_triggers)
+    assert_equal [{schema_version: 33}], @db.pragma(:schema_version)
+    assert_equal [{recursive_triggers: 1}], @db.pragma(:recursive_triggers)
   end
 end
 
