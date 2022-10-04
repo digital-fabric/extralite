@@ -1,3 +1,7 @@
+## 1.16 2022-10-04
+
+- Fix `Database#pragma` to always return array of records
+
 ## 1.15 2022-10-01
 
 - Add `Database#pragma` method
