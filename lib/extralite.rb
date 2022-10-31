@@ -20,7 +20,7 @@ module Extralite
     alias_method :execute, :query
 
     TABLES_SQL = <<~SQL
-      SELECT name FROM sqlite_schema
+      SELECT name FROM sqlite_master
       WHERE type ='table'
         AND name NOT LIKE 'sqlite_%';
     SQL
