@@ -1,3 +1,7 @@
+## 1.17 2022-10-31
+
+- Fix `Database#tables` to work on older version of sqlite (pre 3.33.0)
+
 ## 1.16 2022-10-04
 
 - Fix `Database#pragma` to always return array of records
