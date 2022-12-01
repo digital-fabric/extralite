@@ -1,3 +1,7 @@
+## 1.18 2022-12-01
+
+- Fix usage with system sqlite3 lib where `load_extension` is disabled
+
 ## 1.17 2022-10-31
 
 - Fix `Database#tables` to work on older version of sqlite (pre 3.33.0)
