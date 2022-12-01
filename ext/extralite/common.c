@@ -81,6 +81,16 @@ void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv) {
   }
 }
 
+void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj) {
+  if (TYPE(obj) == T_ARRAY) {
+    int count = RARRAY_LEN(obj);
+    for (int i = 0; i < count; i++)
+      bind_parameter_value(stmt, i + 1, RARRAY_AREF(obj, i));
+  }
+  else
+    bind_parameter_value(stmt, 1, obj);
+}
+
 static inline VALUE get_column_names(sqlite3_stmt *stmt, int column_count) {
   VALUE arr = rb_ary_new2(column_count);
   for (int i = 0; i < column_count; i++) {
@@ -223,7 +233,7 @@ void *stmt_iterate_without_gvl(void *ptr) {
   return NULL;
 }
 
-static inline int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
+int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
   struct step_ctx ctx = {stmt, 0};
   rb_thread_call_without_gvl(stmt_iterate_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
   switch (ctx.rc) {
@@ -262,7 +272,8 @@ VALUE safe_query_hash(query_ctx *ctx) {
 
   while (stmt_iterate(ctx->stmt, ctx->sqlite3_db)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
-    if (yield_to_block) rb_yield(row); else rb_ary_push(result, row);
+    if (yield_to_block) rb_yield(row);
+    else                rb_ary_push(result, row);
   }
 
   RB_GC_GUARD(column_names);
@@ -284,7 +295,8 @@ VALUE safe_query_ary(query_ctx *ctx) {
 
   while (stmt_iterate(ctx->stmt, ctx->sqlite3_db)) {
     row = row_to_ary(ctx->stmt, column_count);
-    if (yield_to_block) rb_yield(row); else rb_ary_push(result, row);
+    if (yield_to_block) rb_yield(row);
+    else                rb_ary_push(result, row);
   }
 
   RB_GC_GUARD(row);
@@ -344,6 +356,22 @@ VALUE safe_query_single_value(query_ctx *ctx) {
 
   RB_GC_GUARD(value);
   return value;
+}
+
+VALUE safe_execute_multi(query_ctx *ctx) {
+  int count = RARRAY_LEN(ctx->params);
+  int changes = 0;
+
+  for (int i = 0; i < count; i++) {
+    sqlite3_reset(ctx->stmt);
+    sqlite3_clear_bindings(ctx->stmt);
+    bind_all_parameters_from_object(ctx->stmt, RARRAY_AREF(ctx->params, i));
+
+    while (stmt_iterate(ctx->stmt, ctx->sqlite3_db));
+    changes += sqlite3_changes(ctx->sqlite3_db);
+  }
+
+  return INT2FIX(changes);
 }
 
 VALUE safe_query_columns(query_ctx *ctx) {

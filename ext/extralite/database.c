@@ -266,6 +266,34 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
+ *   db.execute_multi(sql, params_array) -> changes
+ *
+ * Executes the given query for each list of parameters in params_array. Returns
+ * the number of changes effected. This method is designed for inserting
+ * multiple records.
+ *
+ *     records = [
+ *       [1, 2, 3],
+ *       [4, 5, 6]
+ *     ]
+ *     db.execute_multi_query('insert into foo values (?, ?, ?)', records)
+ *
+ */
+VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
+  Database_t *db;
+  sqlite3_stmt *stmt;
+
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+
+  // prepare query ctx
+  GetOpenDatabase(self, db);
+  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
+  query_ctx ctx = { self, db->sqlite3_db, stmt, params_array };
+
+  return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+}
+
+/* call-seq:
  *   db.columns(sql) -> columns
  *
  * Returns the column names for the given query, without running it.
@@ -375,6 +403,7 @@ void Init_ExtraliteDatabase() {
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
+  rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
   rb_define_method(cDatabase, "columns", Database_columns, 1);
 
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);

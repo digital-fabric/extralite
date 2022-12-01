@@ -181,4 +181,23 @@ end
 
     assert_raises { p.query_single_value }
   end
+
+  def test_prepared_statement_execute_multi
+    @db.query('create table foo (a, b, c)')
+    assert_equal [], @db.query('select * from foo')
+
+    records = [
+      [1, '2', 3],
+      ['4', 5, 6]
+    ]
+
+    p = @db.prepare('insert into foo values (?, ?, ?)')
+    changes = p.execute_multi(records)
+
+    assert_equal 2, changes
+    assert_equal [
+      { a: 1, b: '2', c: 3 },
+      { a: '4', b: 5, c: 6 }
+    ], @db.query('select * from foo')
+  end  
 end

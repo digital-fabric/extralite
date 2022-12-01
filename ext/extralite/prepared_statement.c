@@ -198,6 +198,32 @@ VALUE PreparedStatement_query_single_value(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
+ *   stmt.execute_multi(params_array) -> changes
+ *
+ * Executes the prepared statment for each list of parameters in params_array.
+ * Returns the number of changes effected. This method is designed for inserting
+ * multiple records.
+ *
+ *     stmt = db.prepare('insert into foo values (?, ?, ?)')
+ *     records = [
+ *       [1, 2, 3],
+ *       [4, 5, 6]
+ *     ]
+ *     stmt.execute_multi_query(records)
+ *
+ */
+VALUE PreparedStatement_execute_multi(VALUE self, VALUE params_array) {
+  PreparedStatement_t *stmt;
+  GetPreparedStatement(self, stmt);
+
+  if (!stmt->stmt)
+    rb_raise(cError, "Prepared statement is closed");
+
+  query_ctx ctx = { self, stmt->sqlite3_db, stmt->stmt, params_array };
+  return safe_execute_multi(&ctx);
+}
+
+/* call-seq:
  *   stmt.database -> database
  *   stmt.db -> database
  *
@@ -274,6 +300,7 @@ void Init_ExtralitePreparedStatement() {
   rb_define_method(cPreparedStatement, "query_single_row", PreparedStatement_query_single_row, -1);
   rb_define_method(cPreparedStatement, "query_single_column", PreparedStatement_query_single_column, -1);
   rb_define_method(cPreparedStatement, "query_single_value", PreparedStatement_query_single_value, -1);
+  rb_define_method(cPreparedStatement, "execute_multi", PreparedStatement_execute_multi, 1);
 
   rb_define_method(cPreparedStatement, "columns", PreparedStatement_columns, 0);
 

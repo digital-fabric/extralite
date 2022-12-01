@@ -207,6 +207,24 @@ end
     assert_equal [{schema_version: 33}], @db.pragma(:schema_version)
     assert_equal [{recursive_triggers: 1}], @db.pragma(:recursive_triggers)
   end
+
+  def test_execute_multi
+    @db.query('create table foo (a, b, c)')
+    assert_equal [], @db.query('select * from foo')
+
+    records = [
+      [1, '2', 3],
+      ['4', 5, 6]
+    ]
+
+    changes = @db.execute_multi('insert into foo values (?, ?, ?)', records)
+
+    assert_equal 2, changes
+    assert_equal [
+      { a: 1, b: '2', c: 3 },
+      { a: '4', b: 5, c: 6 }
+    ], @db.query('select * from foo')
+  end
 end
 
 class ScenarioTest < MiniTest::Test
