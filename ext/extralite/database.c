@@ -77,11 +77,13 @@ VALUE Database_initialize(VALUE self, VALUE path) {
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
 
+#ifdef HAVE_SQLITE3_ENABLE_LOAD_EXTENSION
   rc = sqlite3_enable_load_extension(db->sqlite3_db, 1);
   if (rc) {
     sqlite3_close(db->sqlite3_db);
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
+#endif
 
   return Qnil;
 }
@@ -325,6 +327,7 @@ VALUE Database_transaction_active_p(VALUE self) {
   return sqlite3_get_autocommit(db->sqlite3_db) ? Qfalse : Qtrue;
 }
 
+#ifdef HAVE_SQLITE3_LOAD_EXTENSION
 /* call-seq:
  *   db.load_extension(path) -> db
  *
@@ -344,6 +347,7 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
 
   return self;
 }
+#endif
 
 /* call-seq:
  *   db.prepare(sql) -> Extralite::PreparedStatement
@@ -377,7 +381,10 @@ void Init_ExtraliteDatabase() {
   rb_define_method(cDatabase, "changes", Database_changes, 0);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
+
+#ifdef HAVE_SQLITE3_LOAD_EXTENSION
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
+#endif
 
   rb_define_method(cDatabase, "prepare", Database_prepare, 1);
 

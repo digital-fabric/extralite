@@ -102,7 +102,7 @@ have_func('sqlite3_enable_load_extension')
 have_func('sqlite3_load_extension')
 
 unless have_func('sqlite3_open_v2')
-  abort "Please use a newer version of SQLite3"
+  abort 'Please use a newer version of SQLite3'
 end
 
 have_func('sqlite3_prepare_v2')

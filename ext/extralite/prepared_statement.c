@@ -53,7 +53,6 @@ VALUE PreparedStatement_initialize(VALUE self, VALUE db, VALUE sql) {
   stmt->sqlite3_db = Database_sqlite3_db(db);
   stmt->sql = sql;
 
-  // TODO: setup stmt
   prepare_single_stmt(stmt->sqlite3_db, &stmt->stmt, sql);
 
   return Qnil;
