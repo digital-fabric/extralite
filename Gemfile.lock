@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    extralite (1.18)
+    extralite (1.19)
 
 GEM
   remote: https://rubygems.org/

@@ -51,6 +51,7 @@ latest features and enhancements.
   queries (handy for creating/modifying schemas).
 - Get last insert rowid.
 - Get number of rows changed by last query.
+- Execute the same query with multiple parameter lists (useful for inserting records).
 - Load extensions (loading of extensions is autmatically enabled. You can find
   some useful extensions here: https://github.com/nalgeon/sqlean.)
 - Includes a [Sequel adapter](#usage-with-sequel).
@@ -122,6 +123,10 @@ db.query_hash('select ? as foo, ? as bar', 1, 2) #=> [{ :foo => 1, :bar => 2 }]
 db.query('select * from foo where bar = :bar', bar: 42)
 db.query('select * from foo where bar = :bar', 'bar' => 42)
 db.query('select * from foo where bar = :bar', ':bar' => 42)
+
+# insert multiple rows
+db.execute_multi('insert into foo values (?)', ['bar', 'baz'])
+db.execute_multi('insert into foo values (?, ?)', [[1, 2], [3, 4]])
 
 # prepared statements
 stmt = db.prepare('select ? as foo, ? as bar') #=> Extralite::PreparedStatement

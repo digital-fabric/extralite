@@ -225,6 +225,24 @@ end
       { a: '4', b: 5, c: 6 }
     ], @db.query('select * from foo')
   end
+
+  def test_execute_multi_single_values
+    @db.query('create table foo (bar)')
+    assert_equal [], @db.query('select * from foo')
+
+    records = [
+      'hi',
+      'bye'
+    ]
+
+    changes = @db.execute_multi('insert into foo values (?)', records)
+
+    assert_equal 2, changes
+    assert_equal [
+      { bar: 'hi' },
+      { bar: 'bye' }
+    ], @db.query('select * from foo')
+  end
 end
 
 class ScenarioTest < MiniTest::Test

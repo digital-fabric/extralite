@@ -1,3 +1,8 @@
+## 1.19 2022-12-01
+
+- Add `Database#execute_multi`
+- Add `PreparedStatement#execute_multi`
+
 ## 1.18 2022-12-01
 
 - Fix usage with system sqlite3 lib where `load_extension` is disabled
