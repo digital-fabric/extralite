@@ -49,6 +49,12 @@ typedef struct {
   VALUE params;
 } query_ctx;
 
+typedef struct {
+  VALUE dst;
+  VALUE src;
+  sqlite3_backup *p;
+} backup_t;
+
 VALUE safe_query_ary(query_ctx *ctx);
 VALUE safe_query_hash(query_ctx *ctx);
 VALUE safe_query_single_column(query_ctx *ctx);
