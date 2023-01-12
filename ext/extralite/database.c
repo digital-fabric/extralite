@@ -417,7 +417,7 @@ void Init_ExtraliteDatabase() {
 
   rb_define_method(cDatabase, "prepare", Database_prepare, 1);
 
-  cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
+  cError = rb_define_class_under(mExtralite, "Error", rb_eStandardError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
   cBusyError = rb_define_class_under(mExtralite, "BusyError", cError);
   rb_gc_register_mark_object(cError);
