@@ -243,6 +243,29 @@ end
       { bar: 'bye' }
     ], @db.query('select * from foo')
   end
+
+  def test_interrupt
+    t = Thread.new do
+      sleep 0.5
+      @db.interrupt
+    end
+
+    n = 2**31
+    # Extralite::Error: Invalid return code for sqlite3_step: 9
+    assert_raises(Extralite::Error) {
+      @db.query <<-SQL
+        WITH RECURSIVE
+          fibo (curr, next)
+        AS
+        ( SELECT 1,1
+          UNION ALL
+          SELECT next, curr+next FROM fibo
+          LIMIT #{n} )
+        SELECT curr, next FROM fibo LIMIT 1 OFFSET #{n}-1;
+      SQL
+    }
+    t.join
+  end
 end
 
 class ScenarioTest < MiniTest::Test
