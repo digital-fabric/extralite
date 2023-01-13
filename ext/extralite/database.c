@@ -509,8 +509,56 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
 
   backup_ctx ctx = { dst_db, dst_is_fn, backup, rb_block_given_p(), 0 };
   rb_ensure(SAFE(backup_safe_iterate), (VALUE)&ctx, SAFE(backup_cleanup), (VALUE)&ctx);
-  
+
   return self;
+}
+
+/*
+ * Extralite.runtime_status(op, [reset])
+ *
+ * Returns sqlite3 global status in the form of [ op_value, op_highwatermark ]
+ * or throws an exception. All arguments are optional.
+ */
+VALUE Extralite_runtime_status(int argc, VALUE* argv, VALUE self) {
+  VALUE op, reset;
+  sqlite3_int64 cur, hwm;
+
+  rb_scan_args(argc, argv, "02", &op, &reset);
+
+  if (!RTEST(op)) op = INT2FIX(SQLITE_STATUS_MEMORY_USED);
+  int rc = sqlite3_status64(NUM2INT(op), &cur, &hwm, RTEST(reset) ? 1 : 0);
+  if (rc != SQLITE_OK) rb_raise(cError, "%s", sqlite3_errstr(rc));
+
+  VALUE res = rb_ary_new2(2);
+  rb_ary_push(res, LONG2FIX(cur));
+  rb_ary_push(res, LONG2FIX(hwm));
+
+  return res;
+}
+
+/* call-seq:
+ *   db.status(op, [reset])
+ *
+ * Returns database state status in the form of [ op_value, op_highwatermark ]
+ * or throws an exception. Last 2 arguments are optional.
+ */
+VALUE Database_status(int argc, VALUE* argv, VALUE self) {
+  VALUE op, reset;
+  int cur, hwm;
+
+  rb_scan_args(argc, argv, "11", &op, &reset);
+
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  int rc = sqlite3_db_status(db->sqlite3_db, NUM2INT(op), &cur, &hwm, RTEST(reset) ? 1 : 0);
+  if (rc != SQLITE_OK) rb_raise(cError, "%s", sqlite3_errstr(rc));
+
+  VALUE res = rb_ary_new2(2);
+  rb_ary_push(res, INT2NUM(cur));
+  rb_ary_push(res, INT2NUM(hwm));
+
+  return res;
 }
 
 void Init_ExtraliteDatabase(void) {
@@ -538,6 +586,8 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
+  rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
+  rb_define_method(cDatabase, "status", Database_status, -1);
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
