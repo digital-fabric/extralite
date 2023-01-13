@@ -386,6 +386,34 @@ VALUE Database_prepare(VALUE self, VALUE sql) {
   return rb_funcall(cPreparedStatement, ID_NEW, 2, self, sql);
 }
 
+/* call-seq:
+ *   db.interrupt
+ *
+ * This function causes any pending database operation to abort
+ * and return at its earliest opportunity.
+ *
+ * It is safe to call this routine from a thread different from
+ * the thread that is currently running the database operation.
+ * But it is not safe to call this routine with a database connection
+ * that is closed or might close before sqlite3_interrupt() returns.
+ *
+ * If an SQL operation is very nearly finished at the time
+ * when sqlite3_interrupt() is called, then it might not have
+ * an opportunity to be interrupted and might continue to completion.
+ *
+ * An SQL operation that is interrupted will return SQLITE_INTERRUPT.
+ * If the interrupted SQL operation is an INSERT, UPDATE, or DELETE
+ * that is inside an explicit transaction, then the entire transaction
+ * will be rolled back automatically.
+ */
+VALUE Database_interrupt(VALUE self) {
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  sqlite3_interrupt(db->sqlite3_db);
+  return self;
+}
+
 void Init_ExtraliteDatabase() {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "sqlite3_version", Extralite_sqlite3_version, 0);
@@ -416,6 +444,7 @@ void Init_ExtraliteDatabase() {
 #endif
 
   rb_define_method(cDatabase, "prepare", Database_prepare, 1);
+  rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
