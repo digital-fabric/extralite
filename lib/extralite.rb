@@ -3,7 +3,7 @@ require_relative './extralite_ext'
 # Extralite is a Ruby gem for working with SQLite databases
 module Extralite
   # A base class for Extralite exceptions
-  class Error < RuntimeError
+  class Error < ::StandardError
   end
 
   # An exception representing an SQL error emitted by SQLite
