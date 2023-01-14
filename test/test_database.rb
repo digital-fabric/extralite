@@ -251,8 +251,7 @@ end
     end
 
     n = 2**31
-    # Extralite::Error: Query was interrupted
-    assert_raises(Extralite::Error) {
+    assert_raises(Extralite::InterruptError) {
       @db.query <<-SQL
         WITH RECURSIVE
           fibo (curr, next)

@@ -244,7 +244,7 @@ int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
     case SQLITE_BUSY:
       rb_raise(cBusyError, "Database is busy");
     case SQLITE_INTERRUPT:
-      rb_raise(cError, "Query was interrupted");
+      rb_raise(cInterruptError, "Query was interrupted");
     case SQLITE_ERROR:
       rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
     default:

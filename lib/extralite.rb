@@ -2,6 +2,10 @@ require_relative './extralite_ext'
 
 # Extralite is a Ruby gem for working with SQLite databases
 module Extralite
+  # The following class definitions are not really needed, as they're already
+  # defined in the C extension. We put them here for the sake of generating
+  # docs.
+
   # A base class for Extralite exceptions
   class Error < RuntimeError
   end
@@ -13,6 +17,11 @@ module Extralite
   # An exception raised when an SQLite database is busy (locked by another
   # thread or process)
   class BusyError < Error
+  end
+
+  # An exception raised when a query is interrupted by calling
+  # `Database#interrupt` from another thread
+  class InterruptError < Error
   end
 
   # An SQLite database

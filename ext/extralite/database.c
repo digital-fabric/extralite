@@ -5,6 +5,7 @@ VALUE cDatabase;
 VALUE cError;
 VALUE cSQLError;
 VALUE cBusyError;
+VALUE cInterruptError;
 
 ID ID_KEYS;
 ID ID_NEW;
@@ -387,24 +388,14 @@ VALUE Database_prepare(VALUE self, VALUE sql) {
 }
 
 /* call-seq:
- *   db.interrupt
+ *   db.interrupt -> db
  *
- * This function causes any pending database operation to abort
- * and return at its earliest opportunity.
+ * Interrupts a long running query. This method is to be called from a different
+ * thread than the one running the query. Upon calling `#interrupt` the running
+ * query will stop and raise an `Extralite::InterruptError` exception.
  *
- * It is safe to call this routine from a thread different from
- * the thread that is currently running the database operation.
- * But it is not safe to call this routine with a database connection
- * that is closed or might close before sqlite3_interrupt() returns.
- *
- * If an SQL operation is very nearly finished at the time
- * when sqlite3_interrupt() is called, then it might not have
- * an opportunity to be interrupted and might continue to completion.
- *
- * An SQL operation that is interrupted will return SQLITE_INTERRUPT.
- * If the interrupted SQL operation is an INSERT, UPDATE, or DELETE
- * that is inside an explicit transaction, then the entire transaction
- * will be rolled back automatically.
+ * It is not safe to call `#interrupt` on a database that is about to be closed.
+ * For more information, consult the [sqlite3 API docs](https://sqlite.org/c3ref/interrupt.html).
  */
 VALUE Database_interrupt(VALUE self) {
   Database_t *db;
@@ -414,7 +405,7 @@ VALUE Database_interrupt(VALUE self) {
   return self;
 }
 
-void Init_ExtraliteDatabase() {
+void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "sqlite3_version", Extralite_sqlite3_version, 0);
 
@@ -422,36 +413,35 @@ void Init_ExtraliteDatabase() {
   rb_define_alloc_func(cDatabase, Database_allocate);
 
   rb_define_method(cDatabase, "initialize", Database_initialize, 1);
+  rb_define_method(cDatabase, "changes", Database_changes, 0);
   rb_define_method(cDatabase, "close", Database_close, 0);
   rb_define_method(cDatabase, "closed?", Database_closed_p, 0);
-
+  rb_define_method(cDatabase, "columns", Database_columns, 1);
+  rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
+  rb_define_method(cDatabase, "filename", Database_filename, -1);
+  rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
+  rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
+  rb_define_method(cDatabase, "prepare", Database_prepare, 1);
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_hash", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
-  rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
-  rb_define_method(cDatabase, "columns", Database_columns, 1);
-
-  rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
-  rb_define_method(cDatabase, "changes", Database_changes, 0);
-  rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 #endif
 
-  rb_define_method(cDatabase, "prepare", Database_prepare, 1);
-  rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
-
   cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
   cBusyError = rb_define_class_under(mExtralite, "BusyError", cError);
+  cInterruptError = rb_define_class_under(mExtralite, "InterruptError", cError);
   rb_gc_register_mark_object(cError);
   rb_gc_register_mark_object(cSQLError);
   rb_gc_register_mark_object(cBusyError);
+  rb_gc_register_mark_object(cInterruptError);
 
   ID_KEYS   = rb_intern("keys");
   ID_NEW    = rb_intern("new");
