@@ -51,18 +51,4 @@ module Extralite
       query("pragma #{key}")
     end
   end
-
-  # An SQLite backup
-  class Backup
-    # def initialize(dst, dst_name, src, src_name); end
-
-    # def dst; end
-    # def src; end
-
-    # def step(pages); end
-    # def finish; end
-
-    # def pagecount; end
-    # def remaining; end
-  end
 end

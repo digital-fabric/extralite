@@ -405,6 +405,114 @@ VALUE Database_interrupt(VALUE self) {
   return self;
 }
 
+typedef struct {
+  sqlite3 *dst;
+  int close_dst_on_cleanup;
+  sqlite3_backup *backup;
+  int block_given;
+  int rc;
+} backup_ctx;
+
+#define BACKUP_STEP_MAX_PAGES 16
+#define BACKUP_SLEEP_MS       100
+
+void *backup_step_without_gvl(void *ptr) {
+  backup_ctx *ctx = (backup_ctx *)ptr;
+  ctx->rc = sqlite3_backup_step(ctx->backup, BACKUP_STEP_MAX_PAGES);
+  return NULL;
+}
+
+void *backup_sleep_without_gvl(void *) {
+  sqlite3_sleep(BACKUP_SLEEP_MS);
+  return NULL;
+}
+
+VALUE backup_safe_iterate(VALUE ptr) {
+  backup_ctx *ctx = (backup_ctx *)ptr;
+  int done = 0;
+
+  while (!done) {
+    rb_thread_call_without_gvl(backup_step_without_gvl, (void *)ctx, RUBY_UBF_IO, 0);
+    switch(ctx->rc) {
+      case SQLITE_DONE:
+        if (ctx->block_given) {
+          VALUE total     = INT2FIX(sqlite3_backup_pagecount(ctx->backup));
+          rb_yield_values(2, total, total);
+        }
+        done = 1;
+        continue;
+      case SQLITE_OK:
+        if (ctx->block_given) {
+          VALUE remaining = INT2FIX(sqlite3_backup_remaining(ctx->backup));
+          VALUE total     = INT2FIX(sqlite3_backup_pagecount(ctx->backup));
+          rb_yield_values(2, remaining, total);
+        }
+        continue;
+      case SQLITE_BUSY:
+      case SQLITE_LOCKED:
+        rb_thread_call_without_gvl(backup_sleep_without_gvl, NULL, RUBY_UBF_IO, 0);
+        continue;
+      default:
+        rb_raise(cError, "%s", sqlite3_errstr(ctx->rc));
+    }
+  };
+
+  return Qnil;
+}
+
+VALUE backup_cleanup(VALUE ptr) {
+  backup_ctx *ctx = (backup_ctx *)ptr;
+
+  sqlite3_backup_finish(ctx->backup);
+
+  if (ctx->close_dst_on_cleanup)
+    sqlite3_close(ctx->dst);
+  return Qnil;
+}
+
+VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
+  VALUE dst;
+  VALUE src_name;
+  VALUE dst_name;
+  rb_scan_args(argc, argv, "12", &dst, &src_name, &dst_name);
+  if (src_name == Qnil) src_name = rb_str_new_literal("main");
+  if (dst_name == Qnil) dst_name = rb_str_new_literal("main");
+
+  int dst_is_fn = TYPE(dst) == T_STRING;
+
+  Database_t *src;
+  GetOpenDatabase(self, src);
+  sqlite3 *dst_db;
+
+  if (dst_is_fn) {
+    int rc = sqlite3_open(StringValueCStr(dst), &dst_db);
+    if (rc) {
+      sqlite3_close(dst_db);
+      rb_raise(cError, "%s", sqlite3_errmsg(dst_db));
+    }
+  }
+  else {
+    Database_t *dst_struct;
+    GetOpenDatabase(dst, dst_struct);
+    dst_db = dst_struct->sqlite3_db;
+  }
+
+  // TODO: add possibility to use different src and dest db names (main, tmp, or
+  // attached db's).
+  sqlite3_backup *backup;
+  backup = sqlite3_backup_init(dst_db, StringValueCStr(dst_name), src->sqlite3_db, StringValueCStr(src_name));
+  if (!backup) {
+    if (dst_is_fn)
+      sqlite3_close(dst_db);
+    rb_raise(cError, "%s", sqlite3_errmsg(dst_db));
+  }
+
+  backup_ctx ctx = { dst_db, dst_is_fn, backup, rb_block_given_p(), 0 };
+  rb_ensure(SAFE(backup_safe_iterate), (VALUE)&ctx, SAFE(backup_cleanup), (VALUE)&ctx);
+  
+  return self;
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "sqlite3_version", Extralite_sqlite3_version, 0);
@@ -413,6 +521,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_alloc_func(cDatabase, Database_allocate);
 
   rb_define_method(cDatabase, "initialize", Database_initialize, 1);
+  rb_define_method(cDatabase, "backup", Database_backup, -1);
   rb_define_method(cDatabase, "changes", Database_changes, 0);
   rb_define_method(cDatabase, "close", Database_close, 0);
   rb_define_method(cDatabase, "closed?", Database_closed_p, 0);
@@ -423,18 +532,16 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "prepare", Database_prepare, 1);
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
-  rb_define_method(cDatabase, "query_hash", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
-  rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
+  rb_define_method(cDatabase, "query_hash", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
+  rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 #endif
-
-  rb_define_method(cDatabase, "prepare", Database_prepare, 1);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eStandardError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
