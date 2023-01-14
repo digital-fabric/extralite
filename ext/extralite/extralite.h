@@ -25,6 +25,7 @@ extern VALUE cPreparedStatement;
 extern VALUE cError;
 extern VALUE cSQLError;
 extern VALUE cBusyError;
+extern VALUE cInterruptError;
 
 extern ID ID_KEYS;
 extern ID ID_NEW;

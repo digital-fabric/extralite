@@ -283,7 +283,7 @@ VALUE PreparedStatement_closed_p(VALUE self) {
   return stmt->stmt ? Qfalse : Qtrue;
 }
 
-void Init_ExtralitePreparedStatement() {
+void Init_ExtralitePreparedStatement(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
   cPreparedStatement = rb_define_class_under(mExtralite, "PreparedStatement", rb_cObject);
