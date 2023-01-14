@@ -434,7 +434,9 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 #endif
 
-  cError = rb_define_class_under(mExtralite, "Error", rb_eRuntimeError);
+  rb_define_method(cDatabase, "prepare", Database_prepare, 1);
+
+  cError = rb_define_class_under(mExtralite, "Error", rb_eStandardError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
   cBusyError = rb_define_class_under(mExtralite, "BusyError", cError);
   cInterruptError = rb_define_class_under(mExtralite, "InterruptError", cError);

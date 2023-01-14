@@ -7,7 +7,7 @@ module Extralite
   # docs.
 
   # A base class for Extralite exceptions
-  class Error < RuntimeError
+  class Error < ::StandardError
   end
 
   # An exception representing an SQL error emitted by SQLite
