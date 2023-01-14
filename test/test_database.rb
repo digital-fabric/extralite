@@ -333,3 +333,39 @@ class ScenarioTest < MiniTest::Test
     assert_equal [1, 4, 7], result
   end
 end
+
+class BackupTest < MiniTest::Test
+  def setup
+    @src = Extralite::Database.new(':memory:')
+    @dst = Extralite::Database.new(':memory:')
+
+    @src.query('create table t (x,y,z)')
+    @src.query('insert into t values (1, 2, 3)')
+    @src.query('insert into t values (4, 5, 6)')
+  end
+
+  def test_backup
+    @src.backup(@dst)
+    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_ary('select * from t')
+  end
+
+  def test_backup_with_block
+    progress = []
+    @src.backup(@dst) { |r, t| progress << [r, t] }
+    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_ary('select * from t')
+    assert_equal [[2, 2]], progress
+  end
+
+  def test_backup_with_schema_names
+    @src.backup(@dst, 'main', 'temp')
+    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_ary('select * from temp.t')
+  end
+
+  def test_backup_with_fn
+    tmp_fn = "/tmp/#{rand(86400)}.db"
+    @src.backup(tmp_fn)
+
+    db = Extralite::Database.new(tmp_fn)
+    assert_equal [[1, 2, 3], [4, 5, 6]], db.query_ary('select * from t')
+  end
+end
