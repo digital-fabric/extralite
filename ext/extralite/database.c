@@ -422,7 +422,7 @@ void *backup_step_without_gvl(void *ptr) {
   return NULL;
 }
 
-void *backup_sleep_without_gvl(void *) {
+void *backup_sleep_without_gvl(void *unused) {
   sqlite3_sleep(BACKUP_SLEEP_MS);
   return NULL;
 }
