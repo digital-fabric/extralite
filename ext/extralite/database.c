@@ -509,18 +509,59 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
 
   backup_ctx ctx = { dst_db, dst_is_fn, backup, rb_block_given_p(), 0 };
   rb_ensure(SAFE(backup_safe_iterate), (VALUE)&ctx, SAFE(backup_cleanup), (VALUE)&ctx);
-  
+
   return self;
+}
+
+/*
+ * Extralite.runtime_status(op[, reset]) -> [value, highwatermark]
+ *
+ * Returns runtime status values for the given op as an array containing the
+ * current value and the high water mark value. To reset the high water mark,
+ * pass true as reset.
+ */
+VALUE Extralite_runtime_status(int argc, VALUE* argv, VALUE self) {
+  VALUE op, reset;
+  sqlite3_int64 cur, hwm;
+
+  rb_scan_args(argc, argv, "11", &op, &reset);
+
+  int rc = sqlite3_status64(NUM2INT(op), &cur, &hwm, RTEST(reset) ? 1 : 0);
+  if (rc != SQLITE_OK) rb_raise(cError, "%s", sqlite3_errstr(rc));
+
+  return rb_ary_new3(2, LONG2FIX(cur), LONG2FIX(hwm));
+}
+
+/* call-seq:
+ *   db.status(op[, reset]) -> [value, highwatermark]
+ *
+ * Returns database status values for the given op as an array containing the
+ * current value and the high water mark value. To reset the high water mark,
+ * pass true as reset.
+ */
+VALUE Database_status(int argc, VALUE* argv, VALUE self) {
+  VALUE op, reset;
+  int cur, hwm;
+
+  rb_scan_args(argc, argv, "11", &op, &reset);
+
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  int rc = sqlite3_db_status(db->sqlite3_db, NUM2INT(op), &cur, &hwm, RTEST(reset) ? 1 : 0);
+  if (rc != SQLITE_OK) rb_raise(cError, "%s", sqlite3_errstr(rc));
+
+  return rb_ary_new3(2, INT2NUM(cur), INT2NUM(hwm));
 }
 
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
+  rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
   rb_define_singleton_method(mExtralite, "sqlite3_version", Extralite_sqlite3_version, 0);
 
   cDatabase = rb_define_class_under(mExtralite, "Database", rb_cObject);
   rb_define_alloc_func(cDatabase, Database_allocate);
 
-  rb_define_method(cDatabase, "initialize", Database_initialize, 1);
   rb_define_method(cDatabase, "backup", Database_backup, -1);
   rb_define_method(cDatabase, "changes", Database_changes, 0);
   rb_define_method(cDatabase, "close", Database_close, 0);
@@ -528,6 +569,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "columns", Database_columns, 1);
   rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
+  rb_define_method(cDatabase, "initialize", Database_initialize, 1);
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "prepare", Database_prepare, 1);
@@ -537,6 +579,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
+  rb_define_method(cDatabase, "status", Database_status, -1);
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
