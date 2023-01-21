@@ -13,12 +13,19 @@ class ExtraliteTest < MiniTest::Test
     db.query('insert into t values (1, 2, 3)')
 
     begin
-      a = Extralite::runtime_status(Extralite::SQLITE_STATUS_MEMORY_USED, false) # [val, hwm]
-      b = Extralite::runtime_status(Extralite::SQLITE_STATUS_MEMORY_USED) # [val, hwm]
-      c = Extralite::runtime_status # val for Extralite::SQLITE_STATUS_MEMORY_USED
+      a = Extralite::runtime_status(Extralite::SQLITE_STATUS_MEMORY_USED, false)
+      b = Extralite::runtime_status(Extralite::SQLITE_STATUS_MEMORY_USED)
+      c = Extralite::runtime_status(Extralite::SQLITE_STATUS_MEMORY_USED, true)
+      d = Extralite::runtime_status(Extralite::SQLITE_STATUS_MEMORY_USED, true)
+
       assert_operator 0, :<, a[0]
-      assert_operator 0, :<, b[0]
-      assert_operator 0, :<, c[0]
+      assert_operator a[0], :<=, a[1]
+      
+      assert_equal a, b
+      assert_equal a, c
+
+      assert_equal a[0], d[0]
+      assert_equal a[0], d[1]
     ensure
       db.close
     end

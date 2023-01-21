@@ -266,8 +266,8 @@ end
     t.join
   end
 
-  def test_status
-    assert_operator 0, :<, @db.status(Extralite::SQLITE_DBSTATUS_SCHEMA_USED)&.first
+  def test_database_status
+    assert_operator 0, :<, @db.status(Extralite::SQLITE_DBSTATUS_SCHEMA_USED).first
   end
 end
 

@@ -2,10 +2,7 @@ require_relative './extralite_ext'
 
 # Extralite is a Ruby gem for working with SQLite databases
 module Extralite
-  # The following class definitions are not really needed, as they're already
-  # defined in the C extension. We put them here for the sake of generating
-  # docs.
-
+  
   SQLITE_STATUS_MEMORY_USED           =  0
   SQLITE_STATUS_PAGECACHE_USED        =  1
   SQLITE_STATUS_PAGECACHE_OVERFLOW    =  2
@@ -30,6 +27,20 @@ module Extralite
   SQLITE_DBSTATUS_DEFERRED_FKS        = 10
   SQLITE_DBSTATUS_CACHE_USED_SHARED   = 11
   SQLITE_DBSTATUS_CACHE_SPILL         = 12
+
+  SQLITE_STMTSTATUS_FULLSCAN_STEP     =  1
+  SQLITE_STMTSTATUS_SORT              =  2
+  SQLITE_STMTSTATUS_AUTOINDEX         =  3
+  SQLITE_STMTSTATUS_VM_STEP           =  4
+  SQLITE_STMTSTATUS_REPREPARE         =  5
+  SQLITE_STMTSTATUS_RUN               =  6
+  SQLITE_STMTSTATUS_FILTER_MISS       =  7
+  SQLITE_STMTSTATUS_FILTER_HIT        =  8
+  SQLITE_STMTSTATUS_MEMUSED           = 99
+
+  # The following class definitions are not really needed, as they're already
+  # defined in the C extension. We put them here for the sake of generating
+  # docs.
 
   # A base class for Extralite exceptions
   class Error < ::StandardError
