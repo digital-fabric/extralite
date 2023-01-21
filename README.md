@@ -55,6 +55,10 @@ latest features and enhancements.
 - Load extensions (loading of extensions is autmatically enabled. You can find
   some useful extensions here: https://github.com/nalgeon/sqlean.)
 - Includes a [Sequel adapter](#usage-with-sequel).
+- Other features:
+  - Backup databases
+  - Interrupt long-running queries (from another thread)
+  - Get runtime status, database status and prepared statement status values.
 
 ## Installation
 

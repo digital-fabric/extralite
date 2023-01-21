@@ -1,3 +1,11 @@
+# 1.20 2023-01-21
+
+- Fix compilation error (#15 @sitano)
+- Add status methods `Extralite.runtime_status`, `Database#status`, `PreparedStatement#status` (#14 @sitano)
+- Add `Database#interrupt` (#13 @sitano)
+- Add `Database#backup` (#11 @sitano)
+- Derive `Extralite::Error` from `StandardError` (#10 @sitano)
+
 ## 1.19 2022-12-01
 
 - Add `Database#execute_multi`
