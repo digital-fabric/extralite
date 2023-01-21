@@ -535,7 +535,7 @@ VALUE Extralite_runtime_status(int argc, VALUE* argv, VALUE self) {
 /* call-seq:
  *   db.status(op[, reset]) -> [value, highwatermark]
  *
- * Returns runtime status values for the given op as an array containing the
+ * Returns database status values for the given op as an array containing the
  * current value and the high water mark value. To reset the high water mark,
  * pass true as reset.
  */

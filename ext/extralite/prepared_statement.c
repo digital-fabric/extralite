@@ -283,27 +283,43 @@ VALUE PreparedStatement_closed_p(VALUE self) {
   return stmt->stmt ? Qfalse : Qtrue;
 }
 
+/* call-seq:
+ *   stmt.status(op[, reset]) -> value
+ *
+ * Returns the current status value for the given op. To reset the value, pass
+ * true as reset.
+ */
+VALUE PreparedStatement_status(int argc, VALUE* argv, VALUE self) {
+  VALUE op, reset;
+
+  rb_scan_args(argc, argv, "11", &op, &reset);
+
+  PreparedStatement_t *stmt;
+  GetPreparedStatement(self, stmt);
+
+  int value = sqlite3_stmt_status(stmt->stmt, NUM2INT(op), RTEST(reset) ? 1 : 0);
+  return INT2NUM(value);
+}
+
 void Init_ExtralitePreparedStatement(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
   cPreparedStatement = rb_define_class_under(mExtralite, "PreparedStatement", rb_cObject);
   rb_define_alloc_func(cPreparedStatement, PreparedStatement_allocate);
 
-  rb_define_method(cPreparedStatement, "initialize", PreparedStatement_initialize, 2);
+  rb_define_method(cPreparedStatement, "close", PreparedStatement_close, 0);
+  rb_define_method(cPreparedStatement, "closed?", PreparedStatement_closed_p, 0);
+  rb_define_method(cPreparedStatement, "columns", PreparedStatement_columns, 0);
   rb_define_method(cPreparedStatement, "database", PreparedStatement_database, 0);
   rb_define_method(cPreparedStatement, "db", PreparedStatement_database, 0);
-  rb_define_method(cPreparedStatement, "sql", PreparedStatement_sql, 0);
-
+  rb_define_method(cPreparedStatement, "execute_multi", PreparedStatement_execute_multi, 1);
+  rb_define_method(cPreparedStatement, "initialize", PreparedStatement_initialize, 2);
   rb_define_method(cPreparedStatement, "query", PreparedStatement_query_hash, -1);
   rb_define_method(cPreparedStatement, "query_hash", PreparedStatement_query_hash, -1);
   rb_define_method(cPreparedStatement, "query_ary", PreparedStatement_query_ary, -1);
   rb_define_method(cPreparedStatement, "query_single_row", PreparedStatement_query_single_row, -1);
   rb_define_method(cPreparedStatement, "query_single_column", PreparedStatement_query_single_column, -1);
   rb_define_method(cPreparedStatement, "query_single_value", PreparedStatement_query_single_value, -1);
-  rb_define_method(cPreparedStatement, "execute_multi", PreparedStatement_execute_multi, 1);
-
-  rb_define_method(cPreparedStatement, "columns", PreparedStatement_columns, 0);
-
-  rb_define_method(cPreparedStatement, "close", PreparedStatement_close, 0);
-  rb_define_method(cPreparedStatement, "closed?", PreparedStatement_closed_p, 0);
+  rb_define_method(cPreparedStatement, "sql", PreparedStatement_sql, 0);
+  rb_define_method(cPreparedStatement, "status", PreparedStatement_status, -1);
 }
