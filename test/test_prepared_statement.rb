@@ -200,4 +200,15 @@ end
       { a: '4', b: 5, c: 6 }
     ], @db.query('select * from foo')
   end  
+
+  def test_prepared_statement_status
+    assert_equal 0, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
+    @stmt.query
+    assert_equal 1, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
+    @stmt.query
+    assert_equal 2, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
+    @stmt.query
+    assert_equal 3, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN, true)
+    assert_equal 0, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
+  end
 end
