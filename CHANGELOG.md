@@ -1,3 +1,7 @@
+# 1.22 2023-01-23
+
+- Improve documentation (#17)
+
 # 1.21 2023-01-23
 
 - Update bundled sqlite to version 3.40.1 (#18)
