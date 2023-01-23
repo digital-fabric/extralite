@@ -44,3 +44,8 @@ task :release do
   puts "Cleaning up..."
   `rm *.gem`
 end
+
+task :build_bundled do
+  puts 'Building extralite-bundle...'
+  `gem build extralite-bundle.gemspec`
+end
