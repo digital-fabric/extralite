@@ -470,6 +470,17 @@ VALUE backup_cleanup(VALUE ptr) {
   return Qnil;
 }
 
+/* call-seq:
+ *   db.backup(dest) -> db
+ *   db.backup(dest) { |remaining, total| } -> db
+ *
+ * Creates a backup of the database to the given destination, which can be
+ * either a filename or a database instance. In order to monitor the backup
+ * progress you can pass a block that will be called periodically by the backup
+ * method with two arguments: the remaining page count, and the total page
+ * count, which can be used to display the progress to the user or to collect
+ * statistics.
+ */
 VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
   VALUE dst;
   VALUE src_name;
@@ -513,8 +524,8 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
   return self;
 }
 
-/*
- * Extralite.runtime_status(op[, reset]) -> [value, highwatermark]
+/* call-seq:
+ *   Extralite.runtime_status(op[, reset]) -> [value, highwatermark]
  *
  * Returns runtime status values for the given op as an array containing the
  * current value and the high water mark value. To reset the high water mark,

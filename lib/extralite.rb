@@ -70,13 +70,25 @@ module Extralite
         AND name NOT LIKE 'sqlite_%';
     SQL
 
+    # Returns the list of currently defined tables.
+    #
+    # @return [Array] list of tables
     def tables
       query_single_column(TABLES_SQL)
     end
 
+    # Gets or sets one or more pragmas:
+    #
+    #     db.pragma(:cache_size) # get
+    #     db.pragma(cache_size: -2000) # set
+    #
+    # @param value [Symbol, String, Hash] pragma name or hash mapping names to values
+    # @return [Hash] query result
     def pragma(value)
       value.is_a?(Hash) ? pragma_set(value) : pragma_get(value)
     end
+
+    private
 
     def pragma_set(values)
       sql = values.inject(+'') { |s, (k, v)| s += "pragma #{k}=#{v}; " }
@@ -86,19 +98,5 @@ module Extralite
     def pragma_get(key)
       query("pragma #{key}")
     end
-  end
-
-  # An SQLite backup
-  class Backup
-    # def initialize(dst, dst_name, src, src_name); end
-
-    # def dst; end
-    # def src; end
-
-    # def step(pages); end
-    # def finish; end
-
-    # def pagecount; end
-    # def remaining; end
   end
 end
