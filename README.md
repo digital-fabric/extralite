@@ -1,25 +1,9 @@
-<h1 align="center">
-  Extralite
-</h1>
+# Extralite - A fast Ruby gem for working with SQLite3 databases
 
-<h4 align="center">A fast Ruby gem for working with SQLite3 databases</h4>
+* Source code: https://github.com/digital-fabric/extralite
+* Documentation: http://www.rubydoc.info/gems/extralite
 
-<p align="center">
-  <a href="http://rubygems.org/gems/extralite">
-    <img src="https://badge.fury.io/rb/extralite.svg" alt="Ruby gem">
-  </a>
-  <a href="https://github.com/digital-fabric/extralite/actions?query=workflow%3ATests">
-    <img src="https://github.com/digital-fabric/extralite/workflows/Tests/badge.svg" alt="Tests">
-  </a>
-  <a href="https://github.com/digital-fabric/extralite/blob/master/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://www.rubydoc.info/gems/extralite">DOCS</a> |
-  <a href="https://noteflakes.com/articles/2021-12-15-extralite">BLOG POST</a>
-</p>
+[![Ruby gem](https://badge.fury.io/rb/extralite.svg)](https://rubygems.org/gems/extralite) [![Tests](https://github.com/digital-fabric/extralite/workflows/Tests/badge.svg)](https://github.com/digital-fabric/extralite/actions?query=workflow%3ATests) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/digital-fabric/extralite/blob/master/LICENSE)
 
 ## What is Extralite?
 
@@ -40,7 +24,7 @@ latest features and enhancements.
 - Prepared statements.
 - Use system-installed sqlite3, or the [bundled latest version of
   SQLite3](#installing-the-extralite-sqlite3-bundle).
-- Super fast - [up to 12.5x faster](#performance) than the
+- Super fast - [up to 10x faster](#performance) than the
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem (see also
   [comparison](#why-not-just-use-the-sqlite3-gem).)
 - Improved [concurrency](#concurrency) for multithreaded apps: the Ruby GVL is
@@ -49,16 +33,10 @@ latest features and enhancements.
 - Parameter binding.
 - Automatically execute SQL strings containing multiple semicolon-separated
   queries (handy for creating/modifying schemas).
-- Get last insert rowid.
-- Get number of rows changed by last query.
 - Execute the same query with multiple parameter lists (useful for inserting records).
 - Load extensions (loading of extensions is autmatically enabled. You can find
   some useful extensions here: https://github.com/nalgeon/sqlean.)
 - Includes a [Sequel adapter](#usage-with-sequel).
-- Other features:
-  - Backup databases
-  - Interrupt long-running queries (from another thread)
-  - Get runtime status, database status and prepared statement status values.
 
 ## Installation
 
@@ -81,9 +59,9 @@ SQLite3 source code.
 > modest machine it takes about a minute), due to the size of the sqlite3 code.
 
 Usage of the `extralite-bundle` gem is identical to the usage of the normal
-`extralite` gem.
+`extralite` gem, using `require 'extralite'` to load the gem.
 
-## Usage
+## Synopsis
 
 ```ruby
 require 'extralite'
@@ -163,6 +141,8 @@ db.close
 db.closed? #=> true
 ```
 
+## Auxiliary 
+
 ## Usage with Sequel
 
 Extralite includes an adapter for
@@ -179,20 +159,20 @@ p articles.to_a
 
 ## Why not just use the sqlite3 gem?
 
-The [sqlite3-ruby](https://github.com/sparklemotion/sqlite3-ruby) gem is a
+The [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem is a
 popular, solid, well-maintained project, used by thousands of developers. I've
 been doing a lot of work with SQLite3 databases lately, and wanted to have a
 simpler API that gives me query results in a variety of ways. Thus extralite was
 born.
 
-Extralite is quite a bit [faster](#performance) than sqlite3-ruby and is also
+Extralite is quite a bit [faster](#performance) than sqlite3 and is also
 [thread-friendly](#concurrency). On the other hand, Extralite does not have
 support for defining custom functions, aggregates and collations. If you're
-using any of those features, you'll have to stick to sqlite3-ruby.
+using any of those features, you'll have to stick to sqlite3.
 
 Here's a table summarizing the differences between the two gems:
 
-| |sqlite3-ruby|Extralite|
+| |sqlite3 1.6.0|Extralite 1.21|
 |-|-|-|
 |SQLite3 dependency|depends on OS-installed libsqlite3|Use either system sqlite3 or [bundled latest version of SQLite3](#installing-the-extralite-sqlite3-bundle)|
 |API design|multiple classes|single class|
@@ -225,35 +205,36 @@ large number of rows.
 
  [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb)
 
-|Row count|sqlite3-ruby|Extralite|Advantage|
+|Row count|sqlite3 1.6.0|Extralite 1.21|Advantage|
 |-:|-:|-:|-:|
-|10|75.3K rows/s|134.2K rows/s|__1.78x__|
-|1K|286.8K rows/s|2106.4K rows/s|__7.35x__|
-|100K|181.0K rows/s|2275.3K rows/s|__12.53x__|
+|10|63.7K rows/s|94.0K rows/s|__1.48x__|
+|1K|299.2K rows/s|1.983M rows/s|__6.63x__|
+|100K|185.4K rows/s|2.033M rows/s|__10.97x__|
 
 ### Rows as arrays
 
 [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
 
-|Row count|sqlite3-ruby|Extralite|Advantage|
+|Row count|sqlite3 1.6.0|Extralite 1.21|Advantage|
 |-:|-:|-:|-:|
-|10|64.3K rows/s|94.0K rows/s|__1.46x__|
-|1K|498.9K rows/s|2478.2K rows/s|__4.97x__|
-|100K|441.1K rows/s|3023.4K rows/s|__6.85x__|
+|10|71.2K rows/s|92.1K rows/s|__1.29x__|
+|1K|502.1K rows/s|2.065M rows/s|__4.11x__|
+|100K|455.7K rows/s|2.511M rows/s|__5.51x__|
 
 ### Prepared statements
 
 [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_prepared.rb)
 
-|Row count|sqlite3-ruby|Extralite|Advantage|
+|Row count|sqlite3 1.6.0|Extralite 1.21|Advantage|
 |-:|-:|-:|-:|
-|10|241.8K rows/s|888K rows/s|__3.67x__|
-|1K|298.6K rows/s|2606K rows/s|__8.73x__|
-|100K|201.6K rows/s|1934K rows/s|__9.6x__|
+|10|232.2K rows/s|741.6K rows/s|__3.19x__|
+|1K|299.8K rows/s|2386.0M rows/s|__7.96x__|
+|100K|183.1K rows/s|1.893M rows/s|__10.34x__|
 
-As those benchmarks show, Extralite is capabale of reading up to 3M rows/second
-when fetching rows as arrays, and up to 2.6M rows/second when fetching
-rows as hashes.
+As those benchmarks show, Extralite is capabale of reading up to 2.5M
+rows/second when fetching rows as arrays, and up to 2M rows/second when fetching
+rows as hashes. Record fetching with Extralite can be up to 10 times faster than
+with the `sqlite3` gem.
 
 ## License
 
