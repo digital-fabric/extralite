@@ -174,7 +174,7 @@ void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   case SQLITE_ERROR:
     rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
   default:
-    rb_raise(cError, "Invalid return code for prepare_multi_stmt_without_gvl: %d (please open an issue on https://github.com/digital-fabric/extralite)", ctx.rc);
+    rb_raise(cError, "%s", sqlite3_errmsg(db));
   }
 }
 
@@ -216,9 +216,9 @@ void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   case SQLITE_ERROR:
     rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
   case SQLITE_MULTI_STMT:
-    rb_raise(cSQLError, "A prepared statement does not accept SQL strings with multiple queries");
+    rb_raise(cError, "A prepared statement does not accept SQL strings with multiple queries");
   default:
-    rb_raise(cError, "Invalid return code for prepare_multi_stmt_without_gvl: %d (please open an issue on https://github.com/digital-fabric/extralite)", ctx.rc);
+    rb_raise(cError, "%s", sqlite3_errmsg(db));
   }
 }
 
@@ -248,7 +248,7 @@ int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
     case SQLITE_ERROR:
       rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
     default:
-      rb_raise(cError, "Invalid return code for sqlite3_step: %d (please open an issue on https://github.com/digital-fabric/extralite)", ctx.rc);
+      rb_raise(cError, "%s", sqlite3_errmsg(db));
   }
 
   return 0;

@@ -37,6 +37,11 @@ class PreparedStatementTest < MiniTest::Test
     assert_raises(Extralite::SQLError) { @db.prepare('blah') }
   end
 
+  def test_prepared_statement_with_multiple_queries
+    error = begin; @db.prepare('select 1; select 2'); rescue => e; error = e; end
+    assert_equal Extralite::Error, error.class
+  end
+
   def test_prepared_statement_query_hash
     r = @stmt.query_hash(4)
     assert_equal [{x: 4, y: 5, z: 6}], r
