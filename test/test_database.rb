@@ -305,7 +305,7 @@ end
     db1.query('begin exclusive')
     db2.busy_timeout = 0.05
     t0 = Time.now
-    t = Thread.new { sleep 0.1; db1.query('rollback') }
+    t = Thread.new { sleep 0.2; db1.query('rollback') }
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
     t1 = Time.now
     assert t1 - t0 >= 0.05
@@ -317,6 +317,14 @@ end
 
     db2.busy_timeout = nil
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+  end
+
+  def test_database_total_changes
+    assert_equal 2, @db.total_changes
+
+    @db.query('insert into t values (7, 8, 9)')
+
+    assert_equal 3, @db.total_changes
   end
 end
 

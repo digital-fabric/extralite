@@ -606,6 +606,14 @@ VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
   return self;
 }
 
+VALUE Database_total_changes(VALUE self) {
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  int value = sqlite3_total_changes(db->sqlite3_db);
+  return INT2NUM(value);
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -634,6 +642,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
   rb_define_method(cDatabase, "status", Database_status, -1);
+  rb_define_method(cDatabase, "total_changes", Database_total_changes, 0);
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
