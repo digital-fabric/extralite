@@ -240,6 +240,19 @@ timeout is given in seconds:
 db.busy_timeout = 5
 ```
 
+### Tracing SQL Statements
+
+To trace all SQL statements executed on the database, pass a block to
+`Database#trace`. To disable tracing, call `Database#trace` without a block:
+
+```ruby
+# enable tracing
+db.trace { |sql| puts sql: sql }
+
+# disable tracing
+db.trace
+```
+
 ## Usage with Sequel
 
 Extralite includes an adapter for

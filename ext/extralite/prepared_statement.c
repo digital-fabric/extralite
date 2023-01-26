@@ -50,6 +50,7 @@ VALUE PreparedStatement_initialize(VALUE self, VALUE db, VALUE sql) {
     rb_raise(cError, "Cannot prepare an empty SQL query");
 
   stmt->db = db;
+  stmt->db_struct = Database_struct(db);
   stmt->sqlite3_db = Database_sqlite3_db(db);
   stmt->sql = sql;
 
@@ -64,6 +65,8 @@ static inline VALUE PreparedStatement_perform_query(int argc, VALUE *argv, VALUE
 
   if (!stmt->stmt)
     rb_raise(cError, "Prepared statement is closed");
+
+  if (stmt->db_struct->trace_block != Qnil) rb_funcall(stmt->db_struct->trace_block, ID_CALL, 1, stmt->sql);
 
   sqlite3_reset(stmt->stmt);
   sqlite3_clear_bindings(stmt->stmt);

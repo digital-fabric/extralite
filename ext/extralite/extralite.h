@@ -27,6 +27,7 @@ extern VALUE cSQLError;
 extern VALUE cBusyError;
 extern VALUE cInterruptError;
 
+extern ID ID_CALL;
 extern ID ID_KEYS;
 extern ID ID_NEW;
 extern ID ID_STRIP;
@@ -34,11 +35,13 @@ extern ID ID_TO_S;
 
 typedef struct {
   sqlite3 *sqlite3_db;
+  VALUE trace_block;
 } Database_t;
 
 typedef struct {
   VALUE db;
   VALUE sql;
+  Database_t *db_struct;
   sqlite3 *sqlite3_db;
   sqlite3_stmt *stmt;
 } PreparedStatement_t;
@@ -72,5 +75,6 @@ int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db);
 VALUE cleanup_stmt(query_ctx *ctx);
 
 sqlite3 *Database_sqlite3_db(VALUE self);
+Database_t *Database_struct(VALUE self);
 
 #endif /* EXTRALITE_H */

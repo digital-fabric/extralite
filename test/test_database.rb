@@ -303,12 +303,13 @@ end
 
     # try to provoke a timeout
     db1.query('begin exclusive')
-    db2.busy_timeout = 0.05
+    db2.busy_timeout = 0.1
     t0 = Time.now
-    t = Thread.new { sleep 0.2; db1.query('rollback') }
+    t = Thread.new { sleep 0.5; db1.query('rollback') }
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
     t1 = Time.now
-    assert t1 - t0 >= 0.05
+    assert t1 - t0 >= 0.1
+    t.kill
     t.join
 
     db1.query('begin exclusive')
@@ -392,6 +393,30 @@ class ScenarioTest < MiniTest::Test
 
     result = @db.query_single_column('select x from t')
     assert_equal [1, 4, 7], result
+  end
+
+  def test_database_trace
+    sqls = []
+    @db.trace { |sql| sqls << sql }
+
+    @db.query('select 1')
+    assert_equal ['select 1'], sqls
+
+    @db.query('select 2')
+    assert_equal ['select 1', 'select 2'], sqls
+
+    stmt = @db.prepare('select 3')
+    
+    stmt.query
+    assert_equal ['select 1', 'select 2', 'select 3'], sqls
+
+    # turn off
+    @db.trace
+
+    stmt.query
+
+    @db.query('select 4')
+    assert_equal ['select 1', 'select 2', 'select 3'], sqls
   end
 end
 

@@ -7,6 +7,7 @@ VALUE cSQLError;
 VALUE cBusyError;
 VALUE cInterruptError;
 
+ID ID_CALL;
 ID ID_KEYS;
 ID ID_NEW;
 ID ID_STRIP;
@@ -43,6 +44,12 @@ static VALUE Database_allocate(VALUE klass) {
   if (!(database)->sqlite3_db) { \
     rb_raise(cError, "Database is closed"); \
   } \
+}
+
+Database_t *Database_struct(VALUE self) {
+  Database_t *db;
+  GetDatabase(self, db);
+  return db;
 }
 
 sqlite3 *Database_sqlite3_db(VALUE self) {
@@ -85,6 +92,8 @@ VALUE Database_initialize(VALUE self, VALUE path) {
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
 #endif
+
+  db->trace_block = Qnil;
 
   return Qnil;
 }
@@ -134,6 +143,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
 
   // prepare query ctx
   GetOpenDatabase(self, db);
+  if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_CALL, 1, sql);
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   bind_all_parameters(stmt, argc - 1, argv + 1);
   query_ctx ctx = { self, db->sqlite3_db, stmt };
@@ -606,12 +616,32 @@ VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
   return self;
 }
 
+/* call-seq:
+ *   db.total_changes -> value
+ *
+ * Returns the total number of changes made to the database since opening it.
+ */
 VALUE Database_total_changes(VALUE self) {
   Database_t *db;
   GetOpenDatabase(self, db);
 
   int value = sqlite3_total_changes(db->sqlite3_db);
   return INT2NUM(value);
+}
+
+/* call-seq:
+ *   db.trace { |sql| } -> db
+ *   db.trace -> db
+ *
+ * Installs or removes a block that will be invoked for every SQL statement
+ * executed.
+ */
+VALUE Database_trace(VALUE self) {
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  db->trace_block = rb_block_given_p() ? rb_block_proc() : Qnil;
+  return self;
 }
 
 void Init_ExtraliteDatabase(void) {
@@ -643,6 +673,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
   rb_define_method(cDatabase, "status", Database_status, -1);
   rb_define_method(cDatabase, "total_changes", Database_total_changes, 0);
+  rb_define_method(cDatabase, "trace", Database_trace, 0);
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
@@ -658,6 +689,7 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(cBusyError);
   rb_gc_register_mark_object(cInterruptError);
 
+  ID_CALL   = rb_intern("call");
   ID_KEYS   = rb_intern("keys");
   ID_NEW    = rb_intern("new");
   ID_STRIP  = rb_intern("strip");
