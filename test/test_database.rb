@@ -282,6 +282,42 @@ end
 
     assert_raises(Extralite::Error) { @db.limit(-999) }
   end
+
+  def test_database_busy_timeout
+    fn = "/tmp/extralite-#{rand(10000)}.db"
+    db1 = Extralite::Database.new(fn)
+    db2 = Extralite::Database.new(fn)
+    
+    db1.query('begin exclusive')
+    assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+
+    db2.busy_timeout = 0.3
+    t0 = Time.now
+    t = Thread.new { sleep 0.1; db1.query('rollback') }
+    result = db2.query('begin exclusive')
+    t1 = Time.now
+
+    assert_equal [], result
+    assert t1 - t0 >= 0.1
+    db2.query('rollback')
+
+    # try to provoke a timeout
+    db1.query('begin exclusive')
+    db2.busy_timeout = 0.05
+    t0 = Time.now
+    t = Thread.new { sleep 0.1; db1.query('rollback') }
+    assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+    t1 = Time.now
+    assert t1 - t0 >= 0.05
+    t.join
+
+    db1.query('begin exclusive')
+    db2.busy_timeout = 0
+    assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+
+    db2.busy_timeout = nil
+    assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+  end
 end
 
 class ScenarioTest < MiniTest::Test

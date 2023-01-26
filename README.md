@@ -230,6 +230,16 @@ value = db.limit(Extralite::SQLITE_LIMIT_ATTACHED)
 db.limit(Extralite::SQLITE_LIMIT_ATTACHED, new_value)
 ```
 
+### Setting the Busy Timeout
+
+When accessing a database concurrently it can be handy to set a busy timeout, in
+order to not have to deal with rescuing `Extralite::BusyError` exceptions. The
+timeout is given in seconds:
+
+```ruby
+db.busy_timeout = 5
+```
+
 ## Usage with Sequel
 
 Extralite includes an adapter for

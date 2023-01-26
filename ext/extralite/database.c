@@ -587,6 +587,25 @@ VALUE Database_limit(int argc, VALUE *argv, VALUE self) {
   return INT2NUM(value);
 }
 
+/* call-seq:
+ *   db.busy_timeout=(sec) -> db
+ *   db.busy_timeout=nil -> db
+ *
+ * Sets the busy timeout for the database, in seconds or fractions thereof. To
+ * disable the busy timeout, set it to 0 or nil.
+ */
+VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  int ms = (sec == Qnil) ? 0 : (int)(NUM2DBL(sec) * 1000);
+
+  int rc = sqlite3_busy_timeout(db->sqlite3_db, ms);
+  if (rc != SQLITE_OK) rb_raise(cError, "Failed to set busy timeout");
+
+  return self;
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -596,6 +615,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_alloc_func(cDatabase, Database_allocate);
 
   rb_define_method(cDatabase, "backup", Database_backup, -1);
+  rb_define_method(cDatabase, "busy_timeout=", Database_busy_timeout_set, 1);
   rb_define_method(cDatabase, "changes", Database_changes, 0);
   rb_define_method(cDatabase, "close", Database_close, 0);
   rb_define_method(cDatabase, "closed?", Database_closed_p, 0);
