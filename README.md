@@ -1,4 +1,4 @@
-# Extralite - A super fast Ruby gem for working with SQLite3 databases
+# Extralite - a Super Fast Ruby Gem for Working with SQLite3 Databases
 
 * Source code: https://github.com/digital-fabric/extralite
 * Documentation: http://www.rubydoc.info/gems/extralite
@@ -19,7 +19,7 @@ latest features and enhancements.
 
 ## Features
 
-- Super fast - [up to 10x faster](#performance) than the
+- Super fast - [up to 11x faster](#performance) than the
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem (see also
   [comparison](#why-not-just-use-the-sqlite3-gem).)
 - A variety of methods for different data access patterns: rows as hashes, rows
@@ -48,7 +48,7 @@ gem 'extralite'
 
 You can also run `gem install extralite` if you just want to check it out.
 
-### Installing the Extralite-SQLite3 bundle
+### Installing the Extralite-SQLite3 Bundle
 
 If you don't have sqlite3 installed on your system, do not want to use the
 system-installed version of SQLite3, or would like to use the latest version of
@@ -145,9 +145,9 @@ db.close
 db.closed? #=> true
 ```
 
-## More features
+## More Features
 
-### Interrupting long-running queries
+### Interrupting Long-running Queries
 
 When running long-running queries, you can use `Database#interrupt` to interrupt
 the query:
@@ -168,7 +168,7 @@ ensure
 end
 ```
 
-### Creating backups
+### Creating Backups
 
 You can use `Database#backup` to create backup copies of a database. The
 `#backup` method takes either a filename or a database instance:
@@ -191,7 +191,7 @@ db.backup('backup.db') do |remaining, total|
 end
 ```
 
-### Retrieve status information
+### Retrieving Status Information
 
 Extralite provides methods for retrieving status information about the sqlite
 runtime, database-specific status and prepared statement-specific status,
@@ -217,6 +217,19 @@ current, high_watermark = db.status(Extralite::SQLITE_DBSTATUS_CACHE_USED)
 value = stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
 ```
 
+### Working with Database Limits
+
+The `Database#limit` can be used to get and set various database limits, as
+[discussed in the SQLite docs](https://www.sqlite.org/limits.html):
+
+```ruby
+# get limit
+value = db.limit(Extralite::SQLITE_LIMIT_ATTACHED)
+
+# set limit
+db.limit(Extralite::SQLITE_LIMIT_ATTACHED, new_value)
+```
+
 ## Usage with Sequel
 
 Extralite includes an adapter for
@@ -231,35 +244,6 @@ p articles.to_a
 
 (Make sure you include `extralite` as a dependency in your `Gemfile`.)
 
-## Why not just use the sqlite3 gem?
-
-The [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem is a
-popular, solid, well-maintained project, used by thousands of developers. I've
-been doing a lot of work with SQLite3 databases lately, and wanted to have a
-simpler API that gives me query results in a variety of ways. Thus extralite was
-born.
-
-Extralite is significantly [faster](#performance) than the `sqlite3` gem and is
-also [thread-friendly](#concurrency). On the other hand, Extralite does not have
-support for defining custom functions, aggregates and collations. If you're
-using any of those features, you'll have to stick to the `sqlite3` gem.
-
-Here's a table summarizing the differences between the two gems:
-
-| |sqlite3 1.6.0|Extralite 1.21|
-|-|-|-|
-|SQLite3 dependency|depends on OS-installed libsqlite3|Use either system sqlite3 or [bundled latest version of SQLite3](#installing-the-extralite-sqlite3-bundle)|
-|API design|multiple classes|single class|
-|Query results|row as hash, row as array, single row, single value|row as hash, row as array, __single column__, single row, single value|
-|Execute multiple statements|separate API (#execute_batch)|integrated|
-|Prepared statements|yes|yes|
-|custom functions in Ruby|yes|no|
-|custom collations|yes|no|
-|custom aggregate functions|yes|no|
-|Multithread friendly|no|[yes](#concurrency)|
-|Code size|~2650LoC|~1300LoC|
-|Performance|1x|1.5x to 10x (see [below](#performance))|
-
 ## Concurrency
 
 Extralite releases the GVL while making blocking calls to the sqlite3 library,
@@ -272,10 +256,10 @@ performance, as you can see:
 
 A benchmark script is included, creating a table of various row counts, then
 fetching the entire table using either `sqlite3` or `extralite`. This benchmark
-shows Extralite to be up to ~10 times faster than `sqlite3` when fetching a
+shows Extralite to be up to ~11 times faster than `sqlite3` when fetching a
 large number of rows.
 
-### Rows as hashes
+### Rows as Hashes
 
  [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb)
 
@@ -285,7 +269,7 @@ large number of rows.
 |1K|299.2K rows/s|1.983M rows/s|__6.63x__|
 |100K|185.4K rows/s|2.033M rows/s|__10.97x__|
 
-### Rows as arrays
+### Rows as Arrays
 
 [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
 
@@ -295,7 +279,7 @@ large number of rows.
 |1K|502.1K rows/s|2.065M rows/s|__4.11x__|
 |100K|455.7K rows/s|2.511M rows/s|__5.51x__|
 
-### Prepared statements
+### Prepared Statements
 
 [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_prepared.rb)
 

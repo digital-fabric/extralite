@@ -269,6 +269,19 @@ end
   def test_database_status
     assert_operator 0, :<, @db.status(Extralite::SQLITE_DBSTATUS_SCHEMA_USED).first
   end
+
+  def test_database_limit
+    result = @db.limit(Extralite::SQLITE_LIMIT_ATTACHED)
+    assert_equal 10, result
+
+    result = @db.limit(Extralite::SQLITE_LIMIT_ATTACHED, 5)
+    assert_equal 10, result
+
+    result = @db.limit(Extralite::SQLITE_LIMIT_ATTACHED)
+    assert_equal 5, result
+
+    assert_raises(Extralite::Error) { @db.limit(-999) }
+  end
 end
 
 class ScenarioTest < MiniTest::Test

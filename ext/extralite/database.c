@@ -550,7 +550,7 @@ VALUE Extralite_runtime_status(int argc, VALUE* argv, VALUE self) {
  * current value and the high water mark value. To reset the high water mark,
  * pass true as reset.
  */
-VALUE Database_status(int argc, VALUE* argv, VALUE self) {
+VALUE Database_status(int argc, VALUE *argv, VALUE self) {
   VALUE op, reset;
   int cur, hwm;
 
@@ -563,6 +563,28 @@ VALUE Database_status(int argc, VALUE* argv, VALUE self) {
   if (rc != SQLITE_OK) rb_raise(cError, "%s", sqlite3_errstr(rc));
 
   return rb_ary_new3(2, INT2NUM(cur), INT2NUM(hwm));
+}
+
+/* call-seq:
+ *   db.limit(category) -> value
+ *   db.limit(category, new_value) -> prev_value
+ *
+ * Returns the current limit for the given category. If a new value is given,
+ * sets the limit to the new value and returns the previous value.
+ */
+VALUE Database_limit(int argc, VALUE *argv, VALUE self) {
+  VALUE category, new_value;
+
+  rb_scan_args(argc, argv, "11", &category, &new_value);
+
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  int value = sqlite3_limit(db->sqlite3_db, NUM2INT(category), RTEST(new_value) ? NUM2INT(new_value) : -1);
+
+  if (value == -1) rb_raise(cError, "Invalid limit category");
+
+  return INT2NUM(value);
 }
 
 void Init_ExtraliteDatabase(void) {
@@ -583,6 +605,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "initialize", Database_initialize, 1);
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
+  rb_define_method(cDatabase, "limit", Database_limit, -1);
   rb_define_method(cDatabase, "prepare", Database_prepare, 1);
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
