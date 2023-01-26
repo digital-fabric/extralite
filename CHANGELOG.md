@@ -1,3 +1,11 @@
+# 1.23 2023-01-26
+
+- Add `Database#trace` (#21)
+- Add `Database#total_changes` (#20)
+- Add `Database#busy_timeout=` (#19)
+- Add `Database#limit` (#16)
+- Improve error handling
+
 # 1.22 2023-01-23
 
 - Improve documentation (#17)
