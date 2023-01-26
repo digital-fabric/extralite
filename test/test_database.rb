@@ -305,7 +305,11 @@ end
     db1.query('begin exclusive')
     db2.busy_timeout = 0.1
     t0 = Time.now
-    t = Thread.new { sleep 0.5; db1.query('rollback') }
+    t = Thread.new do
+      sleep 0.5
+    ensure
+      db1.query('rollback')
+    end
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
     t1 = Time.now
     assert t1 - t0 >= 0.1
