@@ -85,6 +85,13 @@ VALUE Database_initialize(VALUE self, VALUE path) {
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
 
+  // Enable extended result codes
+  rc = sqlite3_extended_result_codes(db->sqlite3_db, 1);
+  if (rc) {
+    sqlite3_close(db->sqlite3_db);
+    rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+  }
+
 #ifdef HAVE_SQLITE3_ENABLE_LOAD_EXTENSION
   rc = sqlite3_enable_load_extension(db->sqlite3_db, 1);
   if (rc) {
@@ -609,7 +616,6 @@ VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
   GetOpenDatabase(self, db);
 
   int ms = (sec == Qnil) ? 0 : (int)(NUM2DBL(sec) * 1000);
-
   int rc = sqlite3_busy_timeout(db->sqlite3_db, ms);
   if (rc != SQLITE_OK) rb_raise(cError, "Failed to set busy timeout");
 
@@ -644,6 +650,44 @@ VALUE Database_trace(VALUE self) {
   return self;
 }
 
+/* call-seq:
+ *   db.errcode -> errcode
+ *
+ * Returns the last error code for the database.
+ */
+VALUE Database_errcode(VALUE self) {
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  return INT2NUM(sqlite3_errcode(db->sqlite3_db));
+}
+
+/* call-seq:
+ *   db.errmsg -> errmsg
+ *
+ * Returns the last error message for the database.
+ */
+VALUE Database_errmsg(VALUE self) {
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  return rb_str_new2(sqlite3_errmsg(db->sqlite3_db));
+}
+
+#ifdef HAVE_SQLITE3_ERROR_OFFSET
+/* call-seq:
+ *   db.error_offset -> ofs
+ *
+ * Returns the offset for the last error
+ */
+VALUE Database_error_offset(VALUE self) {
+  Database_t *db;
+  GetOpenDatabase(self, db);
+
+  return INT2NUM(sqlite3_error_offset(db->sqlite3_db));
+}
+#endif
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -658,6 +702,13 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "close", Database_close, 0);
   rb_define_method(cDatabase, "closed?", Database_closed_p, 0);
   rb_define_method(cDatabase, "columns", Database_columns, 1);
+  rb_define_method(cDatabase, "errcode", Database_errcode, 0);
+  rb_define_method(cDatabase, "errmsg", Database_errmsg, 0);
+
+  #ifdef HAVE_SQLITE3_ERROR_OFFSET
+  rb_define_method(cDatabase, "error_offset", Database_error_offset, 0);
+  #endif
+
   rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "initialize", Database_initialize, 1);

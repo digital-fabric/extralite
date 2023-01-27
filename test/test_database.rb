@@ -291,7 +291,7 @@ end
     db1.query('begin exclusive')
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
 
-    db2.busy_timeout = 0.3
+    db2.busy_timeout = 3
     t0 = Time.now
     t = Thread.new { sleep 0.1; db1.query('rollback') }
     result = db2.query('begin exclusive')
@@ -300,19 +300,24 @@ end
     assert_equal [], result
     assert t1 - t0 >= 0.1
     db2.query('rollback')
+    t.join
 
     # try to provoke a timeout
     db1.query('begin exclusive')
-    db2.busy_timeout = 0.1
+    db2.busy_timeout = nil
+    assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+
+    db2.busy_timeout = 0.2
     t0 = Time.now
     t = Thread.new do
-      sleep 0.5
+      sleep 3
     ensure
       db1.query('rollback')
     end
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+
     t1 = Time.now
-    assert t1 - t0 >= 0.1
+    assert t1 - t0 >= 0.2
     t.kill
     t.join
 
@@ -330,6 +335,26 @@ end
     @db.query('insert into t values (7, 8, 9)')
 
     assert_equal 3, @db.total_changes
+  end
+
+  def test_database_errcode_errmsg
+    assert_equal 0, @db.errcode
+    assert_equal 'not an error', @db.errmsg
+
+    @db.query('select foo') rescue nil
+
+    assert_equal 1, @db.errcode
+    assert_equal 'no such column: foo', @db.errmsg
+
+    if Extralite.sqlite3_version >= '3.38.5'
+      assert_equal 7, @db.error_offset
+    end
+
+    @db.query('create table t2 (v not null)')
+    
+    assert_raises(Extralite::Error) { @db.query('insert into t2 values (null)') }
+    assert_equal Extralite::SQLITE_CONSTRAINT_NOTNULL, @db.errcode
+    assert_equal 'NOT NULL constraint failed: t2.v', @db.errmsg
   end
 end
 
