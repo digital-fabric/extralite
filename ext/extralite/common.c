@@ -23,7 +23,7 @@ static inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
 void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value);
 
 void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
-  VALUE keys = rb_funcall(hash, ID_KEYS, 0);
+  VALUE keys = rb_funcall(hash, ID_keys, 0);
   long len = RARRAY_LEN(keys);
   for (long i = 0; i < len; i++) {
     VALUE k = RARRAY_AREF(keys, i);
@@ -34,7 +34,7 @@ void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
         bind_parameter_value(stmt, FIX2INT(k), v);
         break;
       case T_SYMBOL:
-        k = rb_funcall(k, ID_TO_S, 0);
+        k = rb_funcall(k, ID_to_s, 0);
       case T_STRING:
         if(RSTRING_PTR(k)[0] != ':') k = rb_str_plus(rb_str_new2(":"), k);
         int pos = sqlite3_bind_parameter_index(stmt, StringValuePtr(k));

@@ -20,7 +20,7 @@ static void PreparedStatement_free(void *ptr) {
 }
 
 static const rb_data_type_t PreparedStatement_type = {
-    "Database",
+    "PreparedStatement",
     {PreparedStatement_mark, PreparedStatement_free, PreparedStatement_size,},
     0, 0, RUBY_TYPED_FREE_IMMEDIATELY
 };
@@ -41,11 +41,10 @@ static VALUE PreparedStatement_allocate(VALUE klass) {
  * Initializes a new SQLite prepared statement with the given path.
  */
 VALUE PreparedStatement_initialize(VALUE self, VALUE db, VALUE sql) {
-  // int rc;
   PreparedStatement_t *stmt;
   GetPreparedStatement(self, stmt);
 
-  sql = rb_funcall(sql, ID_STRIP, 0);
+  sql = rb_funcall(sql, ID_strip, 0);
   if (!RSTRING_LEN(sql))
     rb_raise(cError, "Cannot prepare an empty SQL query");
 
@@ -66,7 +65,7 @@ static inline VALUE PreparedStatement_perform_query(int argc, VALUE *argv, VALUE
   if (!stmt->stmt)
     rb_raise(cError, "Prepared statement is closed");
 
-  if (stmt->db_struct->trace_block != Qnil) rb_funcall(stmt->db_struct->trace_block, ID_CALL, 1, stmt->sql);
+  if (stmt->db_struct->trace_block != Qnil) rb_funcall(stmt->db_struct->trace_block, ID_call, 1, stmt->sql);
 
   sqlite3_reset(stmt->stmt);
   sqlite3_clear_bindings(stmt->stmt);

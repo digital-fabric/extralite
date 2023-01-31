@@ -27,11 +27,11 @@ extern VALUE cSQLError;
 extern VALUE cBusyError;
 extern VALUE cInterruptError;
 
-extern ID ID_CALL;
-extern ID ID_KEYS;
-extern ID ID_NEW;
-extern ID ID_STRIP;
-extern ID ID_TO_S;
+extern ID ID_call;
+extern ID ID_keys;
+extern ID ID_new;
+extern ID ID_strip;
+extern ID ID_to_s;
 
 typedef struct {
   sqlite3 *sqlite3_db;
@@ -59,13 +59,13 @@ typedef struct {
   sqlite3_backup *p;
 } backup_t;
 
+VALUE safe_execute_multi(query_ctx *ctx);
 VALUE safe_query_ary(query_ctx *ctx);
+VALUE safe_query_columns(query_ctx *ctx);
 VALUE safe_query_hash(query_ctx *ctx);
 VALUE safe_query_single_column(query_ctx *ctx);
 VALUE safe_query_single_row(query_ctx *ctx);
 VALUE safe_query_single_value(query_ctx *ctx);
-VALUE safe_execute_multi(query_ctx *ctx);
-VALUE safe_query_columns(query_ctx *ctx);
 
 void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
 void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);

@@ -7,11 +7,11 @@ VALUE cSQLError;
 VALUE cBusyError;
 VALUE cInterruptError;
 
-ID ID_CALL;
-ID ID_KEYS;
-ID ID_NEW;
-ID ID_STRIP;
-ID ID_TO_S;
+ID ID_call;
+ID ID_keys;
+ID ID_new;
+ID ID_strip;
+ID ID_to_s;
 
 static size_t Database_size(const void *ptr) {
   return sizeof(Database_t);
@@ -145,13 +145,15 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
 
   // extract query from args
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  sql = rb_funcall(argv[0], ID_STRIP, 0);
+  sql = rb_funcall(argv[0], ID_strip, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   // prepare query ctx
   GetOpenDatabase(self, db);
-  if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_CALL, 1, sql);
+  if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_call, 1, sql);
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
+  RB_GC_GUARD(sql);
+
   bind_all_parameters(stmt, argc - 1, argv + 1);
   query_ctx ctx = { self, db->sqlite3_db, stmt };
 
@@ -401,7 +403,7 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
  * Creates a prepared statement with the given SQL query.
  */
 VALUE Database_prepare(VALUE self, VALUE sql) {
-  return rb_funcall(cPreparedStatement, ID_NEW, 2, self, sql);
+  return rb_funcall(cPreparedStatement, ID_new, 2, self, sql);
 }
 
 /* call-seq:
@@ -740,9 +742,9 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(cBusyError);
   rb_gc_register_mark_object(cInterruptError);
 
-  ID_CALL   = rb_intern("call");
-  ID_KEYS   = rb_intern("keys");
-  ID_NEW    = rb_intern("new");
-  ID_STRIP  = rb_intern("strip");
-  ID_TO_S   = rb_intern("to_s");
+  ID_call   = rb_intern("call");
+  ID_keys   = rb_intern("keys");
+  ID_new    = rb_intern("new");
+  ID_strip  = rb_intern("strip");
+  ID_to_s   = rb_intern("to_s");
 }
