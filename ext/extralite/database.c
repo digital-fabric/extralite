@@ -82,7 +82,7 @@ VALUE Database_initialize(VALUE self, VALUE path) {
   rc = sqlite3_open(StringValueCStr(path), &db->sqlite3_db);
   if (rc) {
     sqlite3_close(db->sqlite3_db);
-    rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
+    rb_raise(cError, "%s", sqlite3_errstr(rc));
   }
 
   // Enable extended result codes
