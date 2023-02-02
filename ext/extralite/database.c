@@ -19,7 +19,7 @@ static size_t Database_size(const void *ptr) {
 
 static void Database_free(void *ptr) {
   Database_t *db = ptr;
-  if (db->sqlite3_db) sqlite3_close(db->sqlite3_db);
+  if (db->sqlite3_db) sqlite3_close_v2(db->sqlite3_db);
   free(ptr);
 }
 
@@ -81,21 +81,21 @@ VALUE Database_initialize(VALUE self, VALUE path) {
 
   rc = sqlite3_open(StringValueCStr(path), &db->sqlite3_db);
   if (rc) {
-    sqlite3_close(db->sqlite3_db);
+    sqlite3_close_v2(db->sqlite3_db);
     rb_raise(cError, "%s", sqlite3_errstr(rc));
   }
 
   // Enable extended result codes
   rc = sqlite3_extended_result_codes(db->sqlite3_db, 1);
   if (rc) {
-    sqlite3_close(db->sqlite3_db);
+    sqlite3_close_v2(db->sqlite3_db);
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
 
 #ifdef HAVE_SQLITE3_ENABLE_LOAD_EXTENSION
   rc = sqlite3_enable_load_extension(db->sqlite3_db, 1);
   if (rc) {
-    sqlite3_close(db->sqlite3_db);
+    sqlite3_close_v2(db->sqlite3_db);
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
 #endif
@@ -115,7 +115,7 @@ VALUE Database_close(VALUE self) {
   Database_t *db;
   GetDatabase(self, db);
 
-  rc = sqlite3_close(db->sqlite3_db);
+  rc = sqlite3_close_v2(db->sqlite3_db);
   if (rc) {
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
@@ -485,7 +485,7 @@ VALUE backup_cleanup(VALUE ptr) {
   sqlite3_backup_finish(ctx->backup);
 
   if (ctx->close_dst_on_cleanup)
-    sqlite3_close(ctx->dst);
+    sqlite3_close_v2(ctx->dst);
   return Qnil;
 }
 
@@ -517,7 +517,7 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
   if (dst_is_fn) {
     int rc = sqlite3_open(StringValueCStr(dst), &dst_db);
     if (rc) {
-      sqlite3_close(dst_db);
+      sqlite3_close_v2(dst_db);
       rb_raise(cError, "%s", sqlite3_errmsg(dst_db));
     }
   }
@@ -533,7 +533,7 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
   backup = sqlite3_backup_init(dst_db, StringValueCStr(dst_name), src->sqlite3_db, StringValueCStr(src_name));
   if (!backup) {
     if (dst_is_fn)
-      sqlite3_close(dst_db);
+      sqlite3_close_v2(dst_db);
     rb_raise(cError, "%s", sqlite3_errmsg(dst_db));
   }
 

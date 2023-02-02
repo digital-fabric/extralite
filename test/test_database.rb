@@ -169,8 +169,6 @@ end
     assert_nil r
   end
 
-
-
   def test_extension_loading
     case RUBY_PLATFORM
     when /linux/
@@ -355,6 +353,13 @@ end
     assert_raises(Extralite::Error) { @db.query('insert into t2 values (null)') }
     assert_equal Extralite::SQLITE_CONSTRAINT_NOTNULL, @db.errcode
     assert_equal 'NOT NULL constraint failed: t2.v', @db.errmsg
+  end
+
+
+  def test_close_with_open_prepared_statement
+    stmt = @db.prepare('select * from t')
+    stmt.query
+    @db.close
   end
 end
 
