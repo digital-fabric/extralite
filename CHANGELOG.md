@@ -1,3 +1,14 @@
+# 1.24 2023-02-02
+
+- Fix closing database with open statements
+- Improve error reporting in  `Database#initialize`
+- Fix `extralite-bundle` gem compilation
+- Improve error handling, add methods for error information
+  - Use extended result codes
+  - Add `Database#errcode`
+  - Add `Database#errmsg`
+  - Add `Database#error_offset`
+
 # 1.23 2023-01-26
 
 - Add `Database#trace` (#21)
