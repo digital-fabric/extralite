@@ -216,4 +216,10 @@ end
     assert_equal 3, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN, true)
     assert_equal 0, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
   end
+
+  def test_query_after_db_close
+    assert_equal [{ x: 4, y: 5, z: 6}], @stmt.query(4)
+    @db.close
+    assert_equal [{ x: 4, y: 5, z: 6}], @stmt.query(4)
+  end
 end
