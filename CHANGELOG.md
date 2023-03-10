@@ -1,3 +1,8 @@
+# 1.25 2023-03-10
+
+- Remove bundled sqlite3 source files from extralite.gemspec
+- Restore testing on Ruby 2.7
+
 # 1.24 2023-02-02
 
 - Fix closing database with open statements
