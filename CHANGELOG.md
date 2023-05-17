@@ -1,3 +1,7 @@
+# 1.26 2023-05-17
+
+- Improve documentation
+
 # 1.25 2023-03-10
 
 - Remove bundled sqlite3 source files from extralite.gemspec
