@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include "extralite.h"
 
+/*
+ * Document-class: Extralite::PreparedStatement
+ *
+ * This class represents a prepared statement.
+ */
+
 VALUE cPreparedStatement;
 
 static size_t PreparedStatement_size(const void *ptr) {

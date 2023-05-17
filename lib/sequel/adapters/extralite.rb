@@ -7,22 +7,28 @@
 require 'extralite'
 require 'sequel/adapters/shared/sqlite'
 
+# @!visibility private
 module Sequel
+  # Extralite Sequel adapter
   module Extralite
+    # @!visibility private
     FALSE_VALUES = (%w'0 false f no n'.each(&:freeze) + [0]).freeze
 
     blob = Object.new
+    # @!visibility private
     def blob.call(s)
       Sequel::SQL::Blob.new(s.to_s)
     end
 
     boolean = Object.new
+    # @!visibility private
     def boolean.call(s)
       s = s.downcase if s.is_a?(String)
       !FALSE_VALUES.include?(s)
     end
 
     date = Object.new
+    # @!visibility private
     def date.call(s)
       case s
       when String
@@ -37,22 +43,26 @@ module Sequel
     end
 
     integer = Object.new
+    # @!visibility private
     def integer.call(s)
       s.to_i
     end
 
     float = Object.new
+    # @!visibility private
     def float.call(s)
       s.to_f
     end
 
     numeric = Object.new
+    # @!visibility private
     def numeric.call(s)
       s = s.to_s unless s.is_a?(String)
       BigDecimal(s) rescue s
     end
 
     time = Object.new
+    # @!visibility private
     def time.call(s)
       case s
       when String
@@ -82,8 +92,10 @@ module Sequel
     end
     SQLITE_TYPES.freeze
 
+    # @!visibility private
     USE_EXTENDED_RESULT_CODES = false
     
+    # Database adapter for Sequel
     class Database < Sequel::Database
       include ::Sequel::SQLite::DatabaseMethods
       
@@ -157,10 +169,12 @@ module Sequel
         end
       end
       
+      # @!visibility private
       def execute_insert(sql, opts=OPTS)
         _execute(:insert, sql, opts)
       end
       
+      # @!visibility private
       def freeze
         @conversion_procs.freeze
         super
@@ -298,9 +312,11 @@ module Sequel
       end
     end
     
+    # Dataset adapter for Sequel
     class Dataset < Sequel::Dataset
       include ::Sequel::SQLite::DatasetMethods
 
+      # @!visibility private
       module ArgumentMapper
         include Sequel::Dataset::ArgumentMapper
         
@@ -323,9 +339,12 @@ module Sequel
         end
       end
       
+      # @!visibility private
       BindArgumentMethods = prepared_statements_module(:bind, ArgumentMapper)
+      # @!visibility private
       PreparedStatementMethods = prepared_statements_module(:prepare, BindArgumentMethods)
 
+      # @!visibility private
       def fetch_rows(sql, &block)
         execute(sql, &block)
         # execute(sql) do |result|

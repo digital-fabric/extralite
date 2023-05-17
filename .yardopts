@@ -1,0 +1,8 @@
+-o ./_yardoc
+-m markdown -M redcarpet
+--verbose
+--protected
+--no-private
+--exclude sqlite3_constants.rb
+./lib
+./ext/extralite

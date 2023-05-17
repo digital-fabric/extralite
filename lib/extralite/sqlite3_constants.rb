@@ -1,5 +1,4 @@
 module Extralite
-
   SQLITE_STATUS_MEMORY_USED           =  0
   SQLITE_STATUS_PAGECACHE_USED        =  1
   SQLITE_STATUS_PAGECACHE_OVERFLOW    =  2

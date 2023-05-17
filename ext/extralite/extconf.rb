@@ -56,6 +56,7 @@ else
     $CFLAGS << ' -DTAINTING_SUPPORT'
   end
   
+  # @!visibility private
   def asplode missing
     if RUBY_PLATFORM =~ /mingw|mswin/
       abort "#{missing} is missing. Install SQLite3 from " +
