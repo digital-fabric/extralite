@@ -14,7 +14,7 @@ with an SQLite3 database, as well as prepared statements.
 Extralite comes in two flavors: the `extralite` gem which uses the
 system-installed sqlite3 library, and the `extralite-bundle` gem which bundles
 the latest version of SQLite
-([3.40.1](https://sqlite.org/releaselog/3_40_1.html)), offering access to the
+([3.42.0](https://sqlite.org/releaselog/3_42_0.html)), offering access to the
 latest features and enhancements.
 
 ## Features
