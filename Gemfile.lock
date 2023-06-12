@@ -1,13 +1,13 @@
 PATH
   remote: .
   specs:
-    extralite (1.26)
+    extralite (1.27)
 
 GEM
   remote: https://rubygems.org/
   specs:
     docile (1.4.0)
-    json (2.6.1)
+    json (2.6.3)
     minitest (5.15.0)
     rake (13.0.6)
     rake-compiler (1.1.6)

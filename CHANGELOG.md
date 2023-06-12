@@ -1,3 +1,8 @@
+# 1.27 2023-06-12
+
+- Fix execution of prepared statements in Sequel adapter (#23 @gschlager)
+- Update bundled sqlite code to version 3.42.0 (#22 @gschlager)
+
 # 1.26 2023-05-17
 
 - Improve documentation
