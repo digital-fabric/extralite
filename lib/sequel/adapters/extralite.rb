@@ -94,19 +94,19 @@ module Sequel
 
     # @!visibility private
     USE_EXTENDED_RESULT_CODES = false
-    
+
     # Database adapter for Sequel
     class Database < Sequel::Database
       include ::Sequel::SQLite::DatabaseMethods
-      
+
       set_adapter_scheme :extralite
-      
+
       # Mimic the file:// uri, by having 2 preceding slashes specify a relative
       # path, and 3 preceding slashes specify an absolute path.
       def self.uri_to_options(uri) # :nodoc:
         { :database => (uri.host.nil? && uri.path == '/') ? nil : "#{uri.host}#{uri.path}" }
       end
-      
+
       private_class_method :uri_to_options
 
       # The conversion procs to use for this database
@@ -131,14 +131,14 @@ module Sequel
         # if USE_EXTENDED_RESULT_CODES
         #   db.extended_result_codes = true
         # end
-        
+
         connection_pragmas.each{|s| log_connection_yield(s, db){db.query(s)}}
-        
+
         class << db
           attr_reader :prepared_statements
         end
         db.instance_variable_set(:@prepared_statements, {})
-        
+
         db
       end
 
@@ -147,7 +147,7 @@ module Sequel
         c.prepared_statements.each_value{|v| v.first.close }
         c.close
       end
-      
+
       # Run the given SQL with the given arguments and yield each row.
       def execute(sql, opts=OPTS, &block)
         _execute(:select, sql, opts, &block)
@@ -157,7 +157,7 @@ module Sequel
       def execute_dui(sql, opts=OPTS)
         _execute(:update, sql, opts)
       end
-      
+
       # Drop any prepared statements on the connection when executing DDL.  This is because
       # prepared statements lock the table in such a way that you can't drop or alter the
       # table while a prepared statement that references it still exists.
@@ -168,12 +168,12 @@ module Sequel
           super
         end
       end
-      
+
       # @!visibility private
       def execute_insert(sql, opts=OPTS)
         _execute(:insert, sql, opts)
       end
-      
+
       # @!visibility private
       def freeze
         @conversion_procs.freeze
@@ -195,13 +195,13 @@ module Sequel
       end
 
       private
-      
+
       def adapter_initialize
         @conversion_procs = SQLITE_TYPES.dup
         @conversion_procs['datetime'] = @conversion_procs['timestamp'] = method(:to_application_timestamp)
         set_integer_booleans
       end
-      
+
       # Yield an available connection. Rescue any Extralite::Error and turn
       # them into DatabaseErrors.
       def _execute(type, sql, opts, &block)
@@ -226,7 +226,7 @@ module Sequel
           raise_error(e)
         end
       end
-      
+
       # The SQLite adapter does not need the pool to convert exceptions.
       # Also, force the max connections to 1 if a memory database is being
       # used, as otherwise each connection gets a separate database.
@@ -237,7 +237,7 @@ module Sequel
         o[:max_connections] = 1 if @opts[:database] == ':memory:' || blank_object?(@opts[:database])
         o
       end
-      
+
       def prepared_statement_argument(arg)
         case arg
         when Date, DateTime, Time
@@ -281,9 +281,9 @@ module Sequel
           log_sql << ")"
         end
         if block
-          log_connection_yield(log_sql, conn, args){cps.execute(ps_args, &block)}
+          log_connection_yield(log_sql, conn, args){cps.query(ps_args, &block)}
         else
-          log_connection_yield(log_sql, conn, args){cps.execute!(ps_args){|r|}}
+          log_connection_yield(log_sql, conn, args){cps.query(ps_args){|r|}}
           case type
           when :insert
             conn.last_insert_rowid
@@ -292,7 +292,7 @@ module Sequel
           end
         end
       end
-      
+
       # # SQLite3 raises ArgumentError in addition to SQLite3::Exception in
       # # some cases, such as operations on a closed database.
       def database_error_classes
@@ -311,7 +311,7 @@ module Sequel
         end
       end
     end
-    
+
     # Dataset adapter for Sequel
     class Dataset < Sequel::Dataset
       include ::Sequel::SQLite::DatasetMethods
@@ -319,9 +319,9 @@ module Sequel
       # @!visibility private
       module ArgumentMapper
         include Sequel::Dataset::ArgumentMapper
-        
+
         protected
-        
+
         # Return a hash with the same values as the given hash,
         # but with the keys converted to strings.
         def map_to_prepared_args(hash)
@@ -329,16 +329,16 @@ module Sequel
           hash.each{|k,v| args[k.to_s.gsub('.', '__')] = v}
           args
         end
-        
+
         private
-        
+
         # SQLite uses a : before the name of the argument for named
         # arguments.
         def prepared_arg(k)
           LiteralString.new("#{prepared_arg_placeholder}#{k.to_s.gsub('.', '__')}")
         end
       end
-      
+
       # @!visibility private
       BindArgumentMethods = prepared_statements_module(:bind, ArgumentMapper)
       # @!visibility private
@@ -369,9 +369,9 @@ module Sequel
         #   end
         # end
       end
-      
+
       private
-      
+
       # The base type name for a given type, without any parenthetical part.
       def base_type_name(t)
         (t =~ /^(.*?)\(/ ? $1 : t).downcase if t
