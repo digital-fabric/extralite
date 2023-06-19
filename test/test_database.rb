@@ -176,7 +176,7 @@ end
     when /darwin/
       @db.load_extension(File.join(__dir__, 'extensions/text.dylib'))
     end
-    
+
     r = @db.query_single_value("select reverse('abcd')")
     assert_equal 'dcba', r
   end
@@ -285,7 +285,7 @@ end
     fn = "/tmp/extralite-#{rand(10000)}.db"
     db1 = Extralite::Database.new(fn)
     db2 = Extralite::Database.new(fn)
-    
+
     db1.query('begin exclusive')
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
 
@@ -349,7 +349,7 @@ end
     end
 
     @db.query('create table t2 (v not null)')
-    
+
     assert_raises(Extralite::Error) { @db.query('insert into t2 values (null)') }
     assert_equal Extralite::SQLITE_CONSTRAINT_NOTNULL, @db.errcode
     assert_equal 'NOT NULL constraint failed: t2.v', @db.errmsg
@@ -440,7 +440,7 @@ class ScenarioTest < MiniTest::Test
     assert_equal ['select 1', 'select 2'], sqls
 
     stmt = @db.prepare('select 3')
-    
+
     stmt.query
     assert_equal ['select 1', 'select 2', 'select 3'], sqls
 

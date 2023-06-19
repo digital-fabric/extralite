@@ -46,7 +46,7 @@ module Extralite
   SQLITE_LIMIT_VARIABLE_NUMBER        =  9
   SQLITE_LIMIT_TRIGGER_DEPTH          = 10
   SQLITE_LIMIT_WORKER_THREADS         = 11
-  
+
   SQLITE_OK                           =   0
   SQLITE_ERROR                        =   1
   SQLITE_INTERNAL                     =   2

@@ -20,7 +20,7 @@ class ExtraliteTest < MiniTest::Test
 
       assert_operator 0, :<, a[0]
       assert_operator a[0], :<=, a[1]
-      
+
       assert_equal a, b
       assert_equal a, c
 

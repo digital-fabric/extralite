@@ -4,13 +4,13 @@ if ENV['EXTRALITE_BUNDLE']
   require_relative('extconf-bundle')
 else
   ENV['RC_ARCHS'] = '' if RUBY_PLATFORM =~ /darwin/
-  
+
   require 'mkmf'
-  
+
   # :stopdoc:
-  
+
   RbConfig::MAKEFILE_CONFIG['CC'] = ENV['CC'] if ENV['CC']
-  
+
   ldflags = cppflags = nil
   if RbConfig::CONFIG["host_os"] =~ /darwin/
     begin
@@ -25,7 +25,7 @@ else
         cppflags  = "#{brew_prefix}/include"
         pkg_conf  = "#{brew_prefix}/lib/pkgconfig"
       end
-      
+
       # pkg_config should be less error prone than parsing compiler
       # commandline options, but we need to set default ldflags and cpp flags
       # in case the user doesn't have pkg-config installed
@@ -33,13 +33,13 @@ else
     rescue
     end
   end
-  
+
   if with_config('sqlcipher')
     pkg_config("sqlcipher")
   else
     pkg_config("sqlite3")
   end
-  
+
   # --with-sqlite3-{dir,include,lib}
   if with_config('sqlcipher')
     $CFLAGS << ' -DUSING_SQLCIPHER'
@@ -47,15 +47,15 @@ else
   else
     dir_config("sqlite3", cppflags, ldflags)
   end
-  
+
   if RbConfig::CONFIG["host_os"] =~ /mswin/
     $CFLAGS << ' -W3'
   end
-  
+
   if RUBY_VERSION < '2.7'
     $CFLAGS << ' -DTAINTING_SUPPORT'
   end
-  
+
   # @!visibility private
   def asplode missing
     if RUBY_PLATFORM =~ /mingw|mswin/
@@ -70,25 +70,25 @@ else
         error
       end
     end
-    
+
     asplode('sqlite3.h')  unless find_header  'sqlite3.h'
     find_library 'pthread', 'pthread_create' # 1.8 support. *shrug*
-    
+
     have_library 'dl' # for static builds
-    
+
     if with_config('sqlcipher')
       asplode('sqlcipher') unless find_library 'sqlcipher', 'sqlite3_libversion_number'
     else
       asplode('sqlite3') unless find_library 'sqlite3', 'sqlite3_libversion_number'
     end
-    
+
     have_func('sqlite3_enable_load_extension')
     have_func('sqlite3_load_extension')
     have_func('sqlite3_prepare_v2')
     have_func('sqlite3_error_offset')
-    
+
     $defs << "-DEXTRALITE_NO_BUNDLE"
-    
+
     dir_config('extralite_ext')
     create_makefile('extralite_ext')
   end
