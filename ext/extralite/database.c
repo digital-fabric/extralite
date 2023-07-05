@@ -398,12 +398,12 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
 #endif
 
 /* call-seq:
- *   db.prepare(sql) -> Extralite::PreparedStatement
+ *   db.prepare(sql) -> Extralite::Query
  *
  * Creates a prepared statement with the given SQL query.
  */
 VALUE Database_prepare(VALUE self, VALUE sql) {
-  return rb_funcall(cPreparedStatement, ID_new, 2, self, sql);
+  return rb_funcall(cQuery, ID_new, 2, self, sql);
 }
 
 /* call-seq:

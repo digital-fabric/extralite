@@ -20,7 +20,7 @@
 #define SAFE(f) (VALUE (*)(VALUE))(f)
 
 extern VALUE cDatabase;
-extern VALUE cPreparedStatement;
+extern VALUE cQuery;
 
 extern VALUE cError;
 extern VALUE cSQLError;
@@ -35,29 +35,32 @@ extern ID ID_to_s;
 
 typedef struct {
   sqlite3 *sqlite3_db;
-  VALUE trace_block;
+  VALUE   trace_block;
 } Database_t;
 
 typedef struct {
-  VALUE db;
-  VALUE sql;
-  Database_t *db_struct;
-  sqlite3 *sqlite3_db;
-  sqlite3_stmt *stmt;
-} PreparedStatement_t;
+  VALUE         db;
+  VALUE         sql;
+  Database_t    *db_struct;
+  sqlite3       *sqlite3_db;
+  sqlite3_stmt  *stmt;
+  int           closed;
+} Query_t;
 
 typedef struct {
-  VALUE self;
-  sqlite3 *sqlite3_db;
-  sqlite3_stmt *stmt;
-  VALUE params;
+  VALUE         self;
+  sqlite3       *sqlite3_db;
+  sqlite3_stmt  *stmt;
+  VALUE         params;
 } query_ctx;
 
 typedef struct {
-  VALUE dst;
-  VALUE src;
-  sqlite3_backup *p;
+  VALUE           dst;
+  VALUE           src;
+  sqlite3_backup  *p;
 } backup_t;
+
+#define TUPLE_MAX_EMBEDDED_VALUES 20
 
 VALUE safe_execute_multi(query_ctx *ctx);
 VALUE safe_query_ary(query_ctx *ctx);

@@ -2,7 +2,7 @@
 
 require_relative 'helper'
 
-class PreparedStatementTest < MiniTest::Test
+class QueryTest < MiniTest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table if not exists t (x,y,z)')
@@ -10,7 +10,7 @@ class PreparedStatementTest < MiniTest::Test
     @db.query('insert into t values (1, 2, 3)')
     @db.query('insert into t values (4, 5, 6)')
 
-    @stmt = @db.prepare('select * from t where x = ?')
+    @query = @db.prepare('select * from t where x = ?')
   end
 
   # def test_foo
@@ -18,55 +18,55 @@ class PreparedStatementTest < MiniTest::Test
   #   assert_equal 1, stmt.query_single_value
   # end
 
-  def test_prepared_statement_props
-    assert_kind_of Extralite::PreparedStatement, @stmt
-    assert_equal @db, @stmt.database
-    assert_equal @db, @stmt.db
-    assert_equal 'select * from t where x = ?', @stmt.sql
+  def test_query_props
+    assert_kind_of Extralite::Query, @query
+    assert_equal @db, @query.database
+    assert_equal @db, @query.db
+    assert_equal 'select * from t where x = ?', @query.sql
   end
 
-  def test_prepared_statement_query
-    assert_equal [{ x: 1, y: 2, z: 3 }], @stmt.query(1)
+  def test_query_query
+    assert_equal [{ x: 1, y: 2, z: 3 }], @query.query(1)
 
     buf = []
-    @stmt.query(1) { |r| buf << r }
+    @query.query(1) { |r| buf << r }
     assert_equal [{ x: 1, y: 2, z: 3 }], buf
   end
 
-  def test_prepared_statement_with_invalid_sql
-    assert_raises(Extralite::SQLError) { @db.prepare('blah') }
+  def test_query_with_invalid_sql
+    assert_raises(Extralite::SQLError) { @db.prepare('blah').query }
   end
 
-  def test_prepared_statement_with_multiple_queries
-    error = begin; @db.prepare('select 1; select 2'); rescue => e; error = e; end
+  def test_query_with_multiple_queries
+    error = begin; @db.prepare('select 1; select 2').query; rescue => e; error = e; end
     assert_equal Extralite::Error, error.class
   end
 
-  def test_prepared_statement_query_hash
-    r = @stmt.query_hash(4)
+  def test_query_query_hash
+    r = @query.query_hash(4)
     assert_equal [{x: 4, y: 5, z: 6}], r
 
-    r = @stmt.query_hash(5)
+    r = @query.query_hash(5)
     assert_equal [], r
   end
 
-  def test_prepared_statement_query_ary
-    r = @stmt.query_ary(1)
+  def test_query_query_ary
+    r = @query.query_ary(1)
     assert_equal [[1, 2, 3]], r
 
-    r = @stmt.query_ary(2)
+    r = @query.query_ary(2)
     assert_equal [], r
   end
 
-  def test_prepared_statement_query_single_row
-    r = @stmt.query_single_row(4)
+  def test_query_query_single_row
+    r = @query.query_single_row(4)
     assert_equal({ x: 4, y: 5, z: 6 }, r)
 
-    r = @stmt.query_single_row(5)
+    r = @query.query_single_row(5)
     assert_nil r
   end
 
-  def test_prepared_statement_query_single_column
+  def test_query_query_single_column
     stmt = 
     r = @db.prepare('select y from t').query_single_column
     assert_equal [2, 5], r
@@ -75,7 +75,7 @@ class PreparedStatementTest < MiniTest::Test
     assert_equal [], r
 end
 
-  def test_prepared_statement_query_single_value
+  def test_query_query_single_value
     r = @db.prepare('select z from t order by Z desc limit 1').query_single_value
     assert_equal 6, r
 
@@ -83,13 +83,13 @@ end
     assert_nil r
   end
 
-  def test_prepared_statement_multiple_statements
+  def test_query_multiple_statements
     assert_raises(Extralite::Error) {
-      @db.prepare("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');")
+      @db.prepare("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');").query
     }
   end
 
-  def test_prepared_statement_multiple_statements_with_bad_sql
+  def test_query_multiple_statements_with_bad_sql
     error = nil
     begin
       stmt =@db.prepare("insert into t values foo; insert into t values ('d', 'e', 'f');")
@@ -101,22 +101,22 @@ end
     assert_equal 'near "foo": syntax error', error.message
   end
 
-  def test_prepared_statement_repeated_execution_missing_param
-    r = @stmt.query_hash(4)
+  def test_query_repeated_execution_missing_param
+    r = @query.query_hash(4)
     assert_equal [{x: 4, y: 5, z: 6}], r
 
-    r = @stmt.query_hash
+    r = @query.query_hash
     assert_equal [], r
   end
 
-  def test_prepared_statement_empty_sql
+  def test_query_empty_sql
     assert_raises(Extralite::Error) { @db.prepare(' ') }
 
     r = @db.prepare('select 1 as foo;  ').query
     assert_equal [{ foo: 1 }], r
   end
 
-  def test_prepared_statement_parameter_binding_simple
+  def test_query_parameter_binding_simple
     r = @db.prepare('select x, y, z from t where x = ?').query(1)
     assert_equal [{ x: 1, y: 2, z: 3 }], r
 
@@ -124,7 +124,7 @@ end
     assert_equal [{ x: 4, y: 5, z: 6 }], r
   end
 
-  def test_prepared_statement_parameter_binding_with_index
+  def test_query_parameter_binding_with_index
     r = @db.prepare('select x, y, z from t where x = ?2').query(0, 1)
     assert_equal [{ x: 1, y: 2, z: 3 }], r
 
@@ -132,7 +132,7 @@ end
     assert_equal [{ x: 4, y: 5, z: 6 }], r
   end
 
-  def test_prepared_statement_parameter_binding_with_name
+  def test_query_parameter_binding_with_name
     r = @db.prepare('select x, y, z from t where x = :x').query(x: 1, y: 2)
     assert_equal [{ x: 1, y: 2, z: 3 }], r
 
@@ -143,7 +143,7 @@ end
     assert_equal [{ x: 4, y: 5, z: 6 }], r
   end
 
-  def test_prepared_statement_parameter_binding_with_index_key
+  def test_query_parameter_binding_with_index_key
     r = @db.prepare('select x, y, z from t where z = ?').query(1 => 3)
     assert_equal [{ x: 1, y: 2, z: 3 }], r
 
@@ -151,7 +151,7 @@ end
     assert_equal [{ x: 4, y: 5, z: 6 }], r
   end
 
-  def test_prepared_statement_value_casting
+  def test_query_value_casting
     r = @db.prepare("select 'abc'").query_single_value
     assert_equal 'abc', r
 
@@ -168,12 +168,12 @@ end
     assert_nil r
   end
 
-  def test_prepared_statement_columns
+  def test_query_columns
     r = @db.prepare("select 'abc' as a, 'def' as b").columns
     assert_equal [:a, :b], r
   end
 
-  def test_prepared_statement_close
+  def test_query_close
     p = @db.prepare("select 'abc'")
 
     assert_equal false, p.closed?
@@ -184,10 +184,10 @@ end
     p.close
     assert_equal true, p.closed?
 
-    assert_raises { p.query_single_value }
+    assert_raises(Extralite::Error) { p.query_single_value }
   end
 
-  def test_prepared_statement_execute_multi
+  def test_query_execute_multi
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')
 
@@ -206,20 +206,28 @@ end
     ], @db.query('select * from foo')
   end  
 
-  def test_prepared_statement_status
-    assert_equal 0, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
-    @stmt.query
-    assert_equal 1, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
-    @stmt.query
-    assert_equal 2, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
-    @stmt.query
-    assert_equal 3, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN, true)
-    assert_equal 0, @stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
+  def test_query_status
+    assert_equal 0, @query.status(Extralite::SQLITE_STMTSTATUS_RUN)
+    @query.query
+    assert_equal 1, @query.status(Extralite::SQLITE_STMTSTATUS_RUN)
+    @query.query
+    assert_equal 2, @query.status(Extralite::SQLITE_STMTSTATUS_RUN)
+    @query.query
+    assert_equal 3, @query.status(Extralite::SQLITE_STMTSTATUS_RUN, true)
+    assert_equal 0, @query.status(Extralite::SQLITE_STMTSTATUS_RUN)
+  end
+
+  def test_query_status_after_close
+    assert_equal 0, @query.status(Extralite::SQLITE_STMTSTATUS_RUN)
+    @query.query
+    assert_equal 1, @query.status(Extralite::SQLITE_STMTSTATUS_RUN)
+    @query.close
+    assert_raises(Extralite::Error) { @query.status(Extralite::SQLITE_STMTSTATUS_RUN) }
   end
 
   def test_query_after_db_close
-    assert_equal [{ x: 4, y: 5, z: 6}], @stmt.query(4)
+    assert_equal [{ x: 4, y: 5, z: 6}], @query.query(4)
     @db.close
-    assert_equal [{ x: 4, y: 5, z: 6}], @stmt.query(4)
+    assert_equal [{ x: 4, y: 5, z: 6}], @query.query(4)
   end
 end

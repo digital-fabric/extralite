@@ -1,0 +1,5 @@
+- [ ] Rename PreparedStatement to Query
+- [ ] Add `next_xxx`, `each_xxx` methods
+- [ ] Include `Enumerable`
+- [ ] Add `reset(bind_params)` method
+- [ ] Add optional bind params to `Database#prepare`
