@@ -9,7 +9,7 @@
 
 Extralite is a super fast, extra-lightweight (about 1300 lines of C-code)
 SQLite3 wrapper for Ruby. It provides a minimal set of methods for interacting
-with an SQLite3 database, as well as prepared statements.
+with an SQLite3 database, as well as prepared queries (prepared statements).
 
 Extralite comes in two flavors: the `extralite` gem which uses the
 system-installed sqlite3 library, and the `extralite-bundle` gem which bundles
@@ -26,11 +26,11 @@ latest features and enhancements.
   as arrays, single row, single column, single value.
 - Prepared statements.
 - Parameter binding.
+- External iteration - get single records or batches of records.
 - Use system-installed sqlite3, or the [bundled latest version of
   SQLite3](#installing-the-extralite-sqlite3-bundle).
 - Improved [concurrency](#concurrency) for multithreaded apps: the Ruby GVL is
   released while preparing SQL statements and while iterating over results.
-- Iterate over records with a block, or collect records into an array.
 - Automatically execute SQL strings containing multiple semicolon-separated
   queries (handy for creating/modifying schemas).
 - Execute the same query with multiple parameter lists (useful for inserting records).
@@ -111,11 +111,37 @@ db.query('select * from foo where bar = :bar', ':bar' => 42)
 db.execute_multi('insert into foo values (?)', ['bar', 'baz'])
 db.execute_multi('insert into foo values (?, ?)', [[1, 2], [3, 4]])
 
-# prepared statements
-stmt = db.prepare('select ? as foo, ? as bar') #=> Extralite::PreparedStatement
-stmt.query(1, 2) #=> [{ :foo => 1, :bar => 2 }]
-# PreparedStatement offers the same data access methods as the Database class,
-# but without the sql parameter.
+# prepared queries
+query = db.prepare('select ? as foo, ? as bar') #=> Extralite::Query
+query.bind(1, 2) #=> [{ :foo => 1, :bar => 2 }]
+
+query.next #=> next row in result_set (as hash)
+query.next_hash #=> next row in result_set (as hash)
+query.next_ary #=> next row in result_set (as array)
+query.next_single_column #=> next row in result_set (as single value)
+
+query.next(10) #=> next 10 rows in result_set (as hash)
+query.next_hash(10) #=> next 10 rows in result_set (as hash)
+query.next_ary(10) #=> next 10 rows in result_set (as array)
+query.next_single_column(10) #=> next 10 rows in result_set (as single value)
+
+query.to_a #=> all rows as array of hashes
+query.to_a_hash #=> all rows as array of hashes
+query.to_a_ary #=> all rows as array of arrays
+query.to_a_single_column #=> all rows as array of single values
+
+query.each { |r| ... } #=> iterate over all rows as hashes
+query.each_hash { |r| ... } #=> iterate over all rows as hashes
+query.each_ary { |r| ... } #=> iterate over all rows as arrays
+query.each_single_column { |r| ... } #=> iterate over all rows as single columns
+
+iterator = query.each #=> create enumerable iterator
+iterator.next #=> next row
+iterator.each { |r| ... } #=> iterate over all rows
+values = iterator.map { |r| r[:foo] * 10 } #=> map all rows
+
+iterator = query.each_ary #=> create enumerable iterator with rows as arrays
+iterator = query.each_single_column #=> create enumerable iterator with single values
 
 # get last insert rowid
 rowid = db.last_insert_rowid
@@ -195,10 +221,10 @@ end
 
 Extralite provides methods for retrieving status information about the sqlite
 runtime, database-specific status and prepared statement-specific status,
-`Extralite.runtime_status`, `Database#status` and `PreparedStatement#status`
-respectively. You can also reset the high water mark for the specific status
-code by providing true as the reset argument. The status codes mirror those
-defined by the SQLite API. Some examples:
+`Extralite.runtime_status`, `Database#status` and `Query#status` respectively.
+You can also reset the high water mark for the specific status code by providing
+true as the reset argument. The status codes mirror those defined by the SQLite
+API. Some examples:
 
 ```ruby
 # The Extralite.runtime_status returns a tuple consisting of the current value
@@ -212,9 +238,9 @@ current, high_watermark = Extralite.runtime_status(Extralite::SQLITE_STATUS_MEMO
 # argument in order to reset the high watermark):
 current, high_watermark = db.status(Extralite::SQLITE_DBSTATUS_CACHE_USED)
 
-# The PreparedStatement#status method returns a single value (pass true as a
+# The Query#status method returns a single value (pass true as a
 # second argument in order to reset the high watermark):
-value = stmt.status(Extralite::SQLITE_STMTSTATUS_RUN)
+value = query.status(Extralite::SQLITE_STMTSTATUS_RUN)
 ```
 
 ### Working with Database Limits
@@ -302,7 +328,7 @@ large number of rows.
 |1K|502.1K rows/s|2.065M rows/s|__4.11x__|
 |100K|455.7K rows/s|2.511M rows/s|__5.51x__|
 
-### Prepared Statements
+### Prepared Queries (Prepared Statements)
 
 [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_prepared.rb)
 

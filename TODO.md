@@ -1,2 +1,0 @@
-- [ ] Test tracing on Query & Iterator, fix tracing to trace only on first iteration (instead of on reset)
-- [ ] Update README (include link to docs)
