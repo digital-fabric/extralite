@@ -281,9 +281,9 @@ module Sequel
           log_sql << ")"
         end
         if block
-          log_connection_yield(log_sql, conn, args){cps.query(ps_args, &block)}
+          log_connection_yield(log_sql, conn, args){cps.bind(ps_args).each(&block)}
         else
-          log_connection_yield(log_sql, conn, args){cps.query(ps_args){|r|}}
+          log_connection_yield(log_sql, conn, args){cps.bind(ps_args).each {|r|}}
           case type
           when :insert
             conn.last_insert_rowid

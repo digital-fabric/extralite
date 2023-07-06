@@ -171,7 +171,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
  * 
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
+ * parameters are given as an array, the query should specify parameters using
  * `?`:
  * 
  *     db.query('select * from foo where x = ?', 42)
@@ -196,7 +196,7 @@ VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
  *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
+ * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
  *     db.query_ary('select * from foo where x = ?', 42)
@@ -220,7 +220,7 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
  *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
+ * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
  *     db.query_single_row('select * from foo where x = ?', 42)
@@ -245,7 +245,7 @@ VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
  *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
+ * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
  *     db.query_single_column('select x from foo where x = ?', 42)
@@ -269,7 +269,7 @@ VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
  *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
+ * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
  *     db.query_single_value('select x from foo where x = ?', 42)
@@ -297,7 +297,7 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
  *       [1, 2, 3],
  *       [4, 5, 6]
  *     ]
- *     db.execute_multi_query('insert into foo values (?, ?, ?)', records)
+ *     db.execute_multi('insert into foo values (?, ?, ?)', records)
  *
  */
 VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
