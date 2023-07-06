@@ -457,4 +457,30 @@ class QueryTest < MiniTest::Test
     @db.close
     assert_equal [{ x: 4, y: 5, z: 6}], @query.bind(4).to_a
   end
+
+  def test_query_eof
+    query = @db.prepare('select x from t')
+    assert_equal false, query.eof?
+
+    query.next
+    assert_equal false, query.eof?
+
+    query.next(2)
+    assert_equal false, query.eof?
+
+    query.next
+    assert_equal true, query.eof?
+
+    query.next
+    assert_equal true, query.eof?
+
+    query.reset
+    assert_equal false, query.eof?
+
+    query.next
+    assert_equal false, query.eof?
+
+    assert_equal [1, 4, 7], query.to_a_single_column
+    assert_equal true, query.eof?
+  end
 end

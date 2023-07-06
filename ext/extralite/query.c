@@ -97,6 +97,13 @@ VALUE Query_reset(int argc, VALUE *argv, VALUE self) {
   return self;
 }
 
+VALUE Query_eof_p(VALUE self) {
+  Query_t *query = value_to_query(self);
+  if (query->closed) rb_raise(cError, "Query is closed");
+
+  return query->eof ? Qtrue : Qfalse;
+}
+
 #define MAX_ROWS(max_rows) (max_rows == SINGLE_ROW ? 1 : max_rows)
 
 static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(query_ctx *)) {
@@ -310,6 +317,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "columns", Query_columns, 0);
   rb_define_method(cQuery, "database", Query_database, 0);
   rb_define_method(cQuery, "db", Query_database, 0);
+  rb_define_method(cQuery, "eof?", Query_eof_p, 0);
   rb_define_method(cQuery, "execute_multi", Query_execute_multi, 1);
   rb_define_method(cQuery, "initialize", Query_initialize, 2);
 
