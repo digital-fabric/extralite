@@ -108,6 +108,10 @@ VALUE Query_next_hash(int argc, VALUE *argv, VALUE self);
 VALUE Query_next_ary(int argc, VALUE *argv, VALUE self);
 VALUE Query_next_single_column(int argc, VALUE *argv, VALUE self);
 
+VALUE Query_to_a_hash(VALUE self);
+VALUE Query_to_a_ary(VALUE self);
+VALUE Query_to_a_single_column(VALUE self);
+
 void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
 void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
 void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);

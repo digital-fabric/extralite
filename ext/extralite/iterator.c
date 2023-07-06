@@ -105,6 +105,25 @@ VALUE Iterator_next(int argc, VALUE *argv, VALUE self) {
   return rb_block_given_p() ? self : result;
 }
 
+typedef VALUE (*to_a_method)(VALUE);
+
+inline to_a_method mode_to_to_a_method(enum iterator_mode mode) {
+  switch (mode) {
+    case ITERATOR_ARY:
+      return Query_to_a_ary;
+    case ITERATOR_SINGLE_COLUMN:
+      return Query_to_a_single_column;
+    default:
+      return Query_to_a_hash;
+  }
+}
+
+VALUE Iterator_to_a(VALUE self) {
+  Iterator_t *iterator = value_to_iterator(self);
+  to_a_method method = mode_to_to_a_method(iterator->mode);
+  return method(iterator->query);
+}
+
 void Init_ExtraliteIterator(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -116,6 +135,7 @@ void Init_ExtraliteIterator(void) {
   rb_define_method(cIterator, "initialize", Iterator_initialize, 2);
   rb_define_method(cIterator, "each", Iterator_each, 0);
   rb_define_method(cIterator, "next", Iterator_next, -1);
+  rb_define_method(cIterator, "to_a", Iterator_to_a, 0);
 
   SYM_hash          = ID2SYM(rb_intern("hash"));
   SYM_ary           = ID2SYM(rb_intern("ary"));

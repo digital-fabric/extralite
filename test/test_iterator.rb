@@ -74,6 +74,17 @@ class IteratorTest < MiniTest::Test
     assert_nil iter.next
   end
 
+  def test_iterator_to_a
+    iter = @query.each
+    assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], iter.to_a
+
+    iter = @query.each_ary
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], iter.to_a
+
+    iter = @db.prepare('select x from t').each_single_column
+    assert_equal [1, 4, 7], iter.to_a
+  end
+
   def test_iterator_enumerable_methods
     mapped = @query.each.map { |row| row[:x] * 10 }
     assert_equal [10, 40, 70], mapped
