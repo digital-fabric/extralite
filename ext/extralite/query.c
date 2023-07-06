@@ -71,6 +71,10 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
 void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
     prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+
+  if (query->db_struct->trace_block != Qnil)
+    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
+
   sqlite3_reset(query->stmt);
   query->eof = 0;
   if (argc > 0) {
@@ -79,6 +83,12 @@ void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
   }
 }
 
+/* call-seq:
+ *    query.reset(*parameters) -> query
+ *    query.bind(*parameters) -> query
+ *
+ * Resets the underlying prepared statement and rebinds the given parameters.
+ */
 VALUE Query_reset(int argc, VALUE *argv, VALUE self) {
   Query_t *query = value_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
@@ -95,9 +105,6 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
   
   if (!query->stmt) query_reset_and_bind(query, 0, NULL);
   if (query->eof) return rb_block_given_p() ? self : Qnil;
-
-  if (query->db_struct->trace_block != Qnil)
-    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
 
   query_ctx ctx = {
     self,
@@ -186,131 +193,6 @@ static inline VALUE Query_perform_query(int argc, VALUE *argv, VALUE self, VALUE
   bind_all_parameters(query->stmt, argc, argv);
   query_ctx ctx = { self, query->sqlite3_db, query->stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
   return call(&ctx);
-}
-
-/* call-seq:
- *    query(sql, *parameters, &block) -> [...]
- *    query_hash(sql, *parameters, &block) -> [...]
- *
- * Runs a query returning rows as hashes (with symbol keys). If a block is
- * given, it will be called for each row. Otherwise, an array containing all
- * rows is returned.
- * 
- * Query parameters to be bound to placeholders in the query can be specified as
- * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
- * `?`:
- * 
- *     db.query('select * from foo where x = ?', 42)
- *
- * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
- * 
- *     db.query('select * from foo where x = :bar', bar: 42)
- *     db.query('select * from foo where x = :bar', 'bar' => 42)
- *     db.query('select * from foo where x = :bar', ':bar' => 42)
- */
-VALUE Query_query_hash(int argc, VALUE *argv, VALUE self) {
-  return Query_perform_query(argc, argv, self, safe_query_hash);
-}
-
-/* call-seq:
- *   stmt.query_ary(sql, *parameters, &block) -> [...]
- *
- * Runs a query returning rows as arrays. If a block is given, it will be called
- * for each row. Otherwise, an array containing all rows is returned.
- *
- * Query parameters to be bound to placeholders in the query can be specified as
- * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
- * `?`:
- *
- *     db.query_ary('select * from foo where x = ?', 42)
- *
- * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
- *
- *     db.query_ary('select * from foo where x = :bar', bar: 42)
- *     db.query_ary('select * from foo where x = :bar', 'bar' => 42)
- *     db.query_ary('select * from foo where x = :bar', ':bar' => 42)
- */
-VALUE Query_query_ary(int argc, VALUE *argv, VALUE self) {
-  return Query_perform_query(argc, argv, self, safe_query_ary);
-}
-
-/* call-seq:
- *   stmt.query_single_row(sql, *parameters) -> {...}
- *
- * Runs a query returning a single row as a hash.
- *
- * Query parameters to be bound to placeholders in the query can be specified as
- * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
- * `?`:
- *
- *     db.query_single_row('select * from foo where x = ?', 42)
- *
- * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
- *
- *     db.query_single_row('select * from foo where x = :bar', bar: 42)
- *     db.query_single_row('select * from foo where x = :bar', 'bar' => 42)
- *     db.query_single_row('select * from foo where x = :bar', ':bar' => 42)
- */
-VALUE Query_query_single_row(int argc, VALUE *argv, VALUE self) {
-  return Query_perform_query(argc, argv, self, safe_query_single_row);
-}
-
-/* call-seq:
- *   stmt.query_single_column(sql, *parameters, &block) -> [...]
- *
- * Runs a query returning single column values. If a block is given, it will be called
- * for each value. Otherwise, an array containing all values is returned.
- *
- * Query parameters to be bound to placeholders in the query can be specified as
- * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
- * `?`:
- *
- *     db.query_single_column('select x from foo where x = ?', 42)
- *
- * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
- *
- *     db.query_single_column('select x from foo where x = :bar', bar: 42)
- *     db.query_single_column('select x from foo where x = :bar', 'bar' => 42)
- *     db.query_single_column('select x from foo where x = :bar', ':bar' => 42)
- */
-VALUE Query_query_single_column(int argc, VALUE *argv, VALUE self) {
-  return Query_perform_query(argc, argv, self, safe_query_single_column);
-}
-
-/* call-seq:
- *   stmt.query_single_value(sql, *parameters) -> value
- *
- * Runs a query returning a single value from the first row.
- *
- * Query parameters to be bound to placeholders in the query can be specified as
- * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as a least, the query should specify parameters using
- * `?`:
- *
- *     db.query_single_value('select x from foo where x = ?', 42)
- *
- * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
- *
- *     db.query_single_value('select x from foo where x = :bar', bar: 42)
- *     db.query_single_value('select x from foo where x = :bar', 'bar' => 42)
- *     db.query_single_value('select x from foo where x = :bar', ':bar' => 42)
- */
-VALUE Query_query_single_value(int argc, VALUE *argv, VALUE self) {
-  return Query_perform_query(argc, argv, self, safe_query_single_value);
 }
 
 /* call-seq:

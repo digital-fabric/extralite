@@ -357,8 +357,8 @@ end
 
 
   def test_close_with_open_prepared_statement
-    stmt = @db.prepare('select * from t')
-    stmt.query
+    query = @db.prepare('select * from t')
+    query.next
     @db.close
   end
 end
@@ -439,15 +439,15 @@ class ScenarioTest < MiniTest::Test
     @db.query('select 2')
     assert_equal ['select 1', 'select 2'], sqls
 
-    stmt = @db.prepare('select 3')
+    query = @db.prepare('select 3')
 
-    stmt.query
+    query.to_a
     assert_equal ['select 1', 'select 2', 'select 3'], sqls
 
     # turn off
     @db.trace
 
-    stmt.query
+    query.to_a
 
     @db.query('select 4')
     assert_equal ['select 1', 'select 2', 'select 3'], sqls
