@@ -7,6 +7,7 @@ VALUE cSQLError;
 VALUE cBusyError;
 VALUE cInterruptError;
 
+ID ID_bind;
 ID ID_call;
 ID ID_keys;
 ID ID_new;
@@ -155,7 +156,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   RB_GC_GUARD(sql);
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
-  query_ctx ctx = { self, db->sqlite3_db, stmt };
+  query_ctx ctx = { self, db->sqlite3_db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
 
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -308,7 +309,7 @@ VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
   // prepare query ctx
   GetOpenDatabase(self, db);
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, params_array };
+  query_ctx ctx = { self, db->sqlite3_db, stmt, params_array, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
 
   return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -402,8 +403,12 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
  *
  * Creates a prepared statement with the given SQL query.
  */
-VALUE Database_prepare(VALUE self, VALUE sql) {
-  return rb_funcall(cQuery, ID_new, 2, self, sql);
+VALUE Database_prepare(int argc, VALUE *argv, VALUE self) {
+  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
+  VALUE query = rb_funcall(cQuery, ID_new, 2, self, argv[0]);
+  if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
+  RB_GC_GUARD(query);
+  return query;
 }
 
 /* call-seq:
@@ -717,7 +722,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "limit", Database_limit, -1);
-  rb_define_method(cDatabase, "prepare", Database_prepare, 1);
+  rb_define_method(cDatabase, "prepare", Database_prepare, -1);
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
   rb_define_method(cDatabase, "query_hash", Database_query_hash, -1);
@@ -742,6 +747,7 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(cBusyError);
   rb_gc_register_mark_object(cInterruptError);
 
+  ID_bind   = rb_intern("bind");
   ID_call   = rb_intern("call");
   ID_keys   = rb_intern("keys");
   ID_new    = rb_intern("new");

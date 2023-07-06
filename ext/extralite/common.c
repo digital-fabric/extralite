@@ -233,22 +233,23 @@ void *stmt_iterate_without_gvl(void *ptr) {
   return NULL;
 }
 
-int stmt_iterate(sqlite3_stmt *stmt, sqlite3 *db) {
-  struct step_ctx ctx = {stmt, 0};
-  rb_thread_call_without_gvl(stmt_iterate_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
-  switch (ctx.rc) {
+inline int stmt_iterate(query_ctx *ctx) {
+  struct step_ctx step_ctx = {ctx->stmt, 0};
+  rb_thread_call_without_gvl(stmt_iterate_without_gvl, (void *)&step_ctx, RUBY_UBF_IO, 0);
+  switch (step_ctx.rc) {
     case SQLITE_ROW:
       return 1;
     case SQLITE_DONE:
+      ctx->eof = 1;
       return 0;
     case SQLITE_BUSY:
       rb_raise(cBusyError, "Database is busy");
     case SQLITE_INTERRUPT:
       rb_raise(cInterruptError, "Query was interrupted");
     case SQLITE_ERROR:
-      rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+      rb_raise(cSQLError, "%s", sqlite3_errmsg(ctx->sqlite3_db));
     default:
-      rb_raise(cError, "%s", sqlite3_errmsg(db));
+      rb_raise(cError, "%s", sqlite3_errmsg(ctx->sqlite3_db));
   }
 
   return 0;
@@ -260,50 +261,61 @@ VALUE cleanup_stmt(query_ctx *ctx) {
 }
 
 VALUE safe_query_hash(query_ctx *ctx) {
-  VALUE result = ctx->self;
-  int yield_to_block = rb_block_given_p();
-  VALUE row;
-  int column_count;
-  VALUE column_names;
+  VALUE array = MULTI_ROW_P(ctx->mode) ? rb_ary_new() : Qnil;
+  VALUE row = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+  VALUE column_names = get_column_names(ctx->stmt, column_count);
+  int row_count = 0;
 
-  column_count = sqlite3_column_count(ctx->stmt);
-  column_names = get_column_names(ctx->stmt, column_count);
-
-  // block not given, so prepare the array of records to be returned
-  if (!yield_to_block) result = rb_ary_new();
-
-  while (stmt_iterate(ctx->stmt, ctx->sqlite3_db)) {
+  while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
-    if (yield_to_block) rb_yield(row);
-    else                rb_ary_push(result, row);
+    row_count++;
+    switch (ctx->mode) {
+      case QUERY_YIELD:
+        rb_yield(row);
+        break;
+      case QUERY_MULTI_ROW:
+        rb_ary_push(array, row);
+        break;
+      case QUERY_SINGLE_ROW:
+        return row;
+    }
+    if (ctx->max_rows != ALL_ROWS && row_count >= ctx->max_rows)
+      return MULTI_ROW_P(ctx->mode) ? array : ctx->self;
   }
 
   RB_GC_GUARD(column_names);
   RB_GC_GUARD(row);
-  RB_GC_GUARD(result);
-  return result;
+  RB_GC_GUARD(array);
+  return MULTI_ROW_P(ctx->mode) ? array : Qnil;
 }
 
 VALUE safe_query_ary(query_ctx *ctx) {
-  int column_count;
-  VALUE result = ctx->self;
-  int yield_to_block = rb_block_given_p();
-  VALUE row;
+  VALUE array = MULTI_ROW_P(ctx->mode) ? rb_ary_new() : Qnil;
+  VALUE row = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+  int row_count = 0;
 
-  column_count = sqlite3_column_count(ctx->stmt);
-
-  // block not given, so prepare the array of records to be returned
-  if (!yield_to_block) result = rb_ary_new();
-
-  while (stmt_iterate(ctx->stmt, ctx->sqlite3_db)) {
+  while (stmt_iterate(ctx)) {
     row = row_to_ary(ctx->stmt, column_count);
-    if (yield_to_block) rb_yield(row);
-    else                rb_ary_push(result, row);
+    row_count++;
+    switch (ctx->mode) {
+      case QUERY_YIELD:
+        rb_yield(row);
+        break;
+      case QUERY_MULTI_ROW:
+        rb_ary_push(array, row);
+        break;
+      case QUERY_SINGLE_ROW:
+        return row;
+    }
+    if (ctx->max_rows != ALL_ROWS && row_count >= ctx->max_rows)
+      return MULTI_ROW_P(ctx->mode) ? array : ctx->self;
   }
 
   RB_GC_GUARD(row);
-  RB_GC_GUARD(result);
-  return result;
+  RB_GC_GUARD(array);
+  return MULTI_ROW_P(ctx->mode) ? array : Qnil;
 }
 
 VALUE safe_query_single_row(query_ctx *ctx) {
@@ -314,7 +326,7 @@ VALUE safe_query_single_row(query_ctx *ctx) {
   column_count = sqlite3_column_count(ctx->stmt);
   column_names = get_column_names(ctx->stmt, column_count);
 
-  if (stmt_iterate(ctx->stmt, ctx->sqlite3_db))
+  if (stmt_iterate(ctx))
     row = row_to_hash(ctx->stmt, column_count, column_names);
 
   RB_GC_GUARD(row);
@@ -323,26 +335,33 @@ VALUE safe_query_single_row(query_ctx *ctx) {
 }
 
 VALUE safe_query_single_column(query_ctx *ctx) {
-  int column_count;
-  VALUE result = ctx->self;
-  int yield_to_block = rb_block_given_p();
-  VALUE value;
+  VALUE array = MULTI_ROW_P(ctx->mode) ? rb_ary_new() : Qnil;
+  VALUE value = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+  int row_count = 0;
 
-  column_count = sqlite3_column_count(ctx->stmt);
-  if (column_count != 1)
-    rb_raise(cError, "Expected query result to have 1 column");
+  if (column_count != 1) rb_raise(cError, "Expected query result to have 1 column");
 
-  // block not given, so prepare the array of records to be returned
-  if (!yield_to_block) result = rb_ary_new();
-
-  while (stmt_iterate(ctx->stmt, ctx->sqlite3_db)) {
+  while (stmt_iterate(ctx)) {
     value = get_column_value(ctx->stmt, 0, sqlite3_column_type(ctx->stmt, 0));
-    if (yield_to_block) rb_yield(value); else rb_ary_push(result, value);
+    row_count++;
+    switch (ctx->mode) {
+      case QUERY_YIELD:
+        rb_yield(value);
+        break;
+      case QUERY_MULTI_ROW:
+        rb_ary_push(array, value);
+        break;
+      case QUERY_SINGLE_ROW:
+        return value;
+    }
+    if (ctx->max_rows != ALL_ROWS && row_count >= ctx->max_rows)
+      return MULTI_ROW_P(ctx->mode) ? array : ctx->self;
   }
 
   RB_GC_GUARD(value);
-  RB_GC_GUARD(result);
-  return result;
+  RB_GC_GUARD(array);
+  return MULTI_ROW_P(ctx->mode) ? array : Qnil;
 }
 
 VALUE safe_query_single_value(query_ctx *ctx) {
@@ -353,7 +372,7 @@ VALUE safe_query_single_value(query_ctx *ctx) {
   if (column_count != 1)
     rb_raise(cError, "Expected query result to have 1 column");
 
-  if (stmt_iterate(ctx->stmt, ctx->sqlite3_db))
+  if (stmt_iterate(ctx))
     value = get_column_value(ctx->stmt, 0, sqlite3_column_type(ctx->stmt, 0));
 
   RB_GC_GUARD(value);
@@ -369,7 +388,7 @@ VALUE safe_execute_multi(query_ctx *ctx) {
     sqlite3_clear_bindings(ctx->stmt);
     bind_all_parameters_from_object(ctx->stmt, RARRAY_AREF(ctx->params, i));
 
-    while (stmt_iterate(ctx->stmt, ctx->sqlite3_db));
+    while (stmt_iterate(ctx));
     changes += sqlite3_changes(ctx->sqlite3_db);
   }
 

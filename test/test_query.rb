@@ -9,14 +9,18 @@ class QueryTest < MiniTest::Test
     @db.query('delete from t')
     @db.query('insert into t values (1, 2, 3)')
     @db.query('insert into t values (4, 5, 6)')
+    @db.query('insert into t values (7, 8, 9)')
 
     @query = @db.prepare('select * from t where x = ?')
   end
 
-  # def test_foo
-  #   stmt = @db.prepare('select 1')
-  #   assert_equal 1, stmt.query_single_value
-  # end
+  def test_prepare
+    query = @db.prepare('select 1')
+    assert_equal 1, query.next_single_column
+
+    query = @db.prepare('select x from t where y = ?', 5)
+    assert_equal 4, query.next_single_column
+  end
 
   def test_query_props
     assert_kind_of Extralite::Query, @query
@@ -25,12 +29,298 @@ class QueryTest < MiniTest::Test
     assert_equal 'select * from t where x = ?', @query.sql
   end
 
-  def test_query_query
-    assert_equal [{ x: 1, y: 2, z: 3 }], @query.query(1)
+  def test_query_next
+    query = @db.prepare('select * from t')
+    v = query.next
+    assert_equal({ x: 1, y: 2, z: 3}, v)
+
+    v = query.next
+    assert_equal({ x: 4, y: 5, z: 6}, v)
+
+    v = query.next
+    assert_equal({ x: 7, y: 8, z: 9}, v)
+
+    v = query.next
+    assert_nil v
+
+    # EOF should repeat
+    v = query.next
+    assert_nil v
+
+    query = @db.prepare('select * from t')
+    v = query.next_hash
+    assert_equal({ x: 1, y: 2, z: 3}, v)
+
+    v = query.next_hash
+    assert_equal({ x: 4, y: 5, z: 6}, v)
+
+    v = query.next_hash
+    assert_equal({ x: 7, y: 8, z: 9}, v)
+
+    v = query.next_hash
+    assert_nil v
+  end
+
+  def test_query_next_with_row_count
+    query = @db.prepare('select * from t')
+    v = query.next(1)
+    assert_equal([{ x: 1, y: 2, z: 3}], v)
+
+    v = query.next(2)
+    assert_equal([{ x: 4, y: 5, z: 6}, { x: 7, y: 8, z: 9}], v)
+
+    v = query.next
+    assert_nil v
+
+    query = @db.prepare('select * from t')
+    v = query.next(-1)
+    assert_equal([{ x: 1, y: 2, z: 3}, { x: 4, y: 5, z: 6}, { x: 7, y: 8, z: 9}], v)
+  end
+
+  def test_query_next_with_block
+    query = @db.prepare('select * from t')
+    buf = []
+    v = query.next { |r| buf << r }
+    assert_equal query, v
+    assert_equal [{x: 1, y: 2, z: 3}], buf
 
     buf = []
-    @query.query(1) { |r| buf << r }
-    assert_equal [{ x: 1, y: 2, z: 3 }], buf
+    v = query.next(2) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [{ x: 4, y: 5, z: 6}, { x: 7, y: 8, z: 9}], buf
+
+    buf = []
+    v = query.next(2) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [], buf
+
+    buf = []
+    v = query.next(2) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [], buf
+  end
+
+  def test_query_next_with_block_with_break
+    query = @db.prepare('select * from t')
+    buf = []
+    v = query.next(-1) { |r| buf << r; break }
+    assert_nil v
+    assert_equal [{x: 1, y: 2, z: 3}], buf
+
+    buf = []
+    v = query.next(-1) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [{x: 4, y: 5, z: 6}, {x: 7, y: 8, z: 9}], buf
+
+    buf = []
+    v = query.next(2) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [], buf
+  end
+
+  def test_query_next_ary
+    query = @db.prepare('select * from t')
+    v = query.next_ary
+    assert_equal([1, 2, 3], v)
+
+    v = query.next_ary
+    assert_equal([4, 5, 6], v)
+
+    v = query.next_ary
+    assert_equal([7, 8, 9], v)
+
+    v = query.next_ary
+    assert_nil v
+
+    v = query.next_ary
+    assert_nil v
+  end
+
+  def test_query_next_ary_with_row_count
+    query = @db.prepare('select * from t')
+    v = query.next_ary(1)
+    assert_equal([[1, 2, 3]], v)
+
+    v = query.next_ary(2)
+    assert_equal([[4, 5, 6], [7, 8, 9]], v)
+
+    v = query.next_ary(2)
+    assert_equal([], v)
+
+    v = query.next_ary(2)
+    assert_nil v
+  end
+
+  def test_query_next_ary_with_block
+    query = @db.prepare('select * from t')
+    buf = []
+    v = query.next_ary { |r| buf << r }
+    assert_equal query, v
+    assert_equal [[1, 2, 3]], buf
+
+    buf = []
+    v = query.next_ary(2) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [[4, 5, 6], [7, 8, 9]], buf
+
+    buf = []
+    v = query.next_ary(2) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [], buf
+  end
+
+  def test_query_next_single_column
+    query = @db.prepare('select x from t')
+    v = query.next_single_column
+    assert_equal(1, v)
+
+    v = query.next_single_column
+    assert_equal(4, v)
+
+    v = query.next_single_column
+    assert_equal(7, v)
+
+    v = query.next_single_column
+    assert_nil v
+  end
+
+  def test_query_next_single_column_with_row_count
+    query = @db.prepare('select x from t')
+    v = query.next_single_column(1)
+    assert_equal([1], v)
+
+    v = query.next_single_column(3)
+    assert_equal([4, 7], v)
+
+    v = query.next_single_column(2)
+    assert_nil v
+  end
+
+  def test_query_next_single_column_with_block
+    query = @db.prepare('select x from t')
+    buf = []
+    v = query.next_single_column { |r| buf << r }
+    assert_equal query, v
+    assert_equal [1], buf
+
+    buf = []
+    v = query.next_single_column(2) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [4, 7], buf
+
+    buf = []
+    v = query.next_single_column(2) { |r| buf << r }
+    assert_equal query, v
+    assert_equal [], buf
+  end
+
+  def test_query_to_a
+    assert_equal [{ x: 1, y: 2, z: 3 }], @query.bind(1).to_a
+    assert_equal [{ x: 4, y: 5, z: 6 }], @query.bind(4).to_a
+
+    assert_equal [{ x: 1, y: 2, z: 3 }], @query.bind(1).to_a_hash
+    assert_equal [{ x: 4, y: 5, z: 6 }], @query.bind(4).to_a_hash
+
+    assert_equal [[1, 2, 3]], @query.bind(1).to_a_ary
+    assert_equal [[4, 5, 6]], @query.bind(4).to_a_ary
+
+    query = @db.prepare('select y from t')
+    assert_equal [2, 5, 8], query.to_a_single_column
+  end
+
+  def test_query_each
+    buf = []
+    @query.bind(1).each { |r| buf << r }
+    assert_equal [{x: 1, y: 2, z: 3}], buf
+
+    # each should reset the stmt
+    buf = []
+    @query.each { |r| buf << r }
+    assert_equal [{x: 1, y: 2, z: 3}], buf
+
+    query = @db.prepare('select * from t')
+    buf = []
+    query.each { |r| buf << r }
+    assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], buf
+  end
+
+  def test_query_each_with_break
+    query = @db.prepare('select * from t')
+
+    buf = []
+    query.each { |r| buf << r; break }
+    assert_equal [{x: 1, y: 2, z: 3}], buf
+
+    # each should reset the stmt
+    buf = []
+    query.each { |r| buf << r }
+    assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], buf
+  end
+
+  def test_query_each_without_block
+    query = @db.prepare('select * from t') 
+    iter = query.each
+    assert_kind_of Extralite::Iterator, iter
+
+    buf = []
+    v = iter.each { |r| buf << r }
+    assert_equal iter, v
+    assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], buf
+  end
+
+  def test_query_each_ary
+    buf = []
+    @query.bind(1).each_ary { |r| buf << r }
+    assert_equal [[1, 2, 3]], buf
+
+    # each should reset the stmt
+    buf = []
+    @query.each_ary { |r| buf << r }
+    assert_equal [[1, 2, 3]], buf
+
+    query = @db.prepare('select * from t')
+    buf = []
+    query.each_ary { |r| buf << r }
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
+  end
+
+  def test_query_each_ary_without_block
+    query = @db.prepare('select * from t') 
+    iter = query.each_ary
+    assert_kind_of Extralite::Iterator, iter
+
+    buf = []
+    v = iter.each { |r| buf << r }
+    assert_equal iter, v
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
+  end
+
+  def test_query_each_single_column
+    query = @db.prepare('select x from t where x = ?')
+    buf = []
+    query.bind(1).each_single_column { |r| buf << r }
+    assert_equal [1], buf
+
+    # each should reset the stmt
+    buf = []
+    query.each_single_column { |r| buf << r }
+    assert_equal [1], buf
+
+    query = @db.prepare('select x from t')
+    buf = []
+    query.each_single_column { |r| buf << r }
+    assert_equal [1, 4, 7], buf
+  end
+
+  def test_query_each_single_column_without_block
+    query = @db.prepare('select x from t') 
+    iter = query.each_single_column
+    assert_kind_of Extralite::Iterator, iter
+
+    buf = []
+    v = iter.each { |r| buf << r }
+    assert_equal iter, v
+    assert_equal [1, 4, 7], buf
   end
 
   def test_query_with_invalid_sql
@@ -38,8 +328,7 @@ class QueryTest < MiniTest::Test
   end
 
   def test_query_with_multiple_queries
-    error = begin; @db.prepare('select 1; select 2').query; rescue => e; error = e; end
-    assert_equal Extralite::Error, error.class
+    assert_raises(Extralite::Error) { @db.prepare('select 1; select 2').to_a }
   end
 
   def test_query_query_hash
@@ -67,9 +356,9 @@ class QueryTest < MiniTest::Test
   end
 
   def test_query_query_single_column
-    stmt = 
+    query = 
     r = @db.prepare('select y from t').query_single_column
-    assert_equal [2, 5], r
+    assert_equal [2, 5, 8], r
 
     r = @db.prepare('select y from t where x = 2').query_single_column
     assert_equal [], r
@@ -77,7 +366,7 @@ end
 
   def test_query_query_single_value
     r = @db.prepare('select z from t order by Z desc limit 1').query_single_value
-    assert_equal 6, r
+    assert_equal 9, r
 
     r = @db.prepare('select z from t where x = 2').query_single_value
     assert_nil r
@@ -92,8 +381,8 @@ end
   def test_query_multiple_statements_with_bad_sql
     error = nil
     begin
-      stmt =@db.prepare("insert into t values foo; insert into t values ('d', 'e', 'f');")
-      stmt.query
+      query =@db.prepare("insert into t values foo; insert into t values ('d', 'e', 'f');")
+      query.query
     rescue => error
     end
 
