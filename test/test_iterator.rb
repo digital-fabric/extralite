@@ -58,6 +58,20 @@ class IteratorTest < MiniTest::Test
     assert_equal({x: 7, y: 8, z: 9}, iter.next)
     assert_nil iter.next
     assert_nil iter.next
+
+    iter = @query.reset.each_ary
+    assert_equal([1, 2, 3], iter.next)
+    assert_equal([4, 5, 6], iter.next)
+    assert_equal([7, 8, 9], iter.next)
+    assert_nil iter.next
+    assert_nil iter.next
+
+    iter = @db.prepare('select y from t').each_single_column
+    assert_equal(2, iter.next)
+    assert_equal(5, iter.next)
+    assert_equal(8, iter.next)
+    assert_nil iter.next
+    assert_nil iter.next
   end
 
   def test_iterator_enumerable_methods
