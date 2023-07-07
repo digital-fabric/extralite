@@ -43,4 +43,23 @@ class SequelExtraliteTest < MiniTest::Test
     id = @db.call(:insert_with_name_and_price, name: 'mno', price: 555)
     assert_equal items[id: id], { id: id, name: 'mno', price: 555 }
   end
+
+  def test_migration
+    # Adapted from https://github.com/digital-fabric/extralite/issues/8
+    Dir.mktmpdir("extralite-migration") do |dir|
+      File.write(dir + "/001_migrate.rb", <<~RUBY)
+        Sequel.migration do 
+          change do
+            create_table(:foobars) { primary_key :id } 
+          end
+        end
+      RUBY
+    
+      Sequel.extension :migration
+      db = Sequel.connect("extralite://")
+      Sequel::Migrator.run(db, dir)
+
+      assert_equal [:id], db[:foobars].columns
+    end
+  end
 end
