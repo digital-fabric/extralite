@@ -123,14 +123,7 @@ module Sequel
       def connect(server)
         opts = server_opts(server)
         opts[:database] = ':memory:' if blank_object?(opts[:database])
-        # sqlite3_opts = {}
-        # sqlite3_opts[:readonly] = typecast_value_boolean(opts[:readonly]) if opts.has_key?(:readonly)
-        db = ::Extralite::Database.new(opts[:database].to_s)#, sqlite3_opts)
-        # db.busy_timeout(typecast_value_integer(opts.fetch(:timeout, 5000)))
-
-        # if USE_EXTENDED_RESULT_CODES
-        #   db.extended_result_codes = true
-        # end
+        db = ::Extralite::Database.new(opts[:database].to_s)
 
         connection_pragmas.each{|s| log_connection_yield(s, db){db.query(s)}}
 
@@ -163,7 +156,7 @@ module Sequel
       # table while a prepared statement that references it still exists.
       def execute_ddl(sql, opts=OPTS)
         synchronize(opts[:server]) do |conn|
-          conn.prepared_statements.values.each{|cps, s| cps.close}
+          conn.prepared_statements.values.each {|cps, s| cps.close }
           conn.prepared_statements.clear
           super
         end
@@ -281,9 +274,9 @@ module Sequel
           log_sql << ")"
         end
         if block
-          log_connection_yield(log_sql, conn, args){cps.query(ps_args, &block)}
+          log_connection_yield(log_sql, conn, args){cps.bind(ps_args).each(&block)}
         else
-          log_connection_yield(log_sql, conn, args){cps.query(ps_args){|r|}}
+          log_connection_yield(log_sql, conn, args){cps.bind(ps_args).each {|r|}}
           case type
           when :insert
             conn.last_insert_rowid
@@ -347,27 +340,6 @@ module Sequel
       # @!visibility private
       def fetch_rows(sql, &block)
         execute(sql, &block)
-        # execute(sql) do |result|
-        #   cps = db.conversion_procs
-        #   type_procs = result.types.map{|t| cps[base_type_name(t)]}
-        #   j = -1
-        #   cols = result.columns.map{|c| [output_identifier(c), type_procs[(j+=1)]]}
-        #   self.columns = cols.map(&:first)
-        #   max = cols.length
-        #   result.each do |values|
-        #     row = {}
-        #     i = -1
-        #     while (i += 1) < max
-        #       name, type_proc = cols[i]
-        #       v = values[i]
-        #       if type_proc && v
-        #         v = type_proc.call(v)
-        #       end
-        #       row[name] = v
-        #     end
-        #     yield row
-        #   end
-        # end
       end
 
       private

@@ -39,9 +39,9 @@ def extralite_prepare
   db.prepare('select * from foo')
 end
 
-def extralite_run(stmt, count)
+def extralite_run(query, count)
   # db = Extralite::Database.new(DB_PATH)
-  results = stmt.query
+  results = query.to_a
   raise unless results.size == count
 end
 
