@@ -75,13 +75,11 @@ inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
   }
 }
 
-void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv) {
-  for (int i = 0; i < argc; i++) {
-    bind_parameter_value(stmt, i + 1, argv[i]);
-  }
+inline void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv) {
+  for (int i = 0; i < argc; i++) bind_parameter_value(stmt, i + 1, argv[i]);
 }
 
-void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj) {
+inline void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj) {
   if (TYPE(obj) == T_ARRAY) {
     int count = RARRAY_LEN(obj);
     for (int i = 0; i < count; i++)

@@ -34,13 +34,32 @@ class SequelExtraliteTest < MiniTest::Test
     prepared_query = items.where(name: :$name).prepare(:select, :select_by_name)
     prepared_insert = items.prepare(:insert, :insert_with_name_and_price, name: :$name, price: :$price)
 
-    assert_equal prepared_query.call(name: 'def'), [{ id: 2, name: 'def', price: 456 }]
-    assert_equal @db.call(:select_by_name, name: 'def'), [{ id: 2, name: 'def', price: 456 }]
+    assert_equal [{ id: 2, name: 'def', price: 456 }], prepared_query.call(name: 'def')
+    assert_equal [{ id: 2, name: 'def', price: 456 }], @db.call(:select_by_name, name: 'def')
 
     id = prepared_insert.call(name: 'jkl', price: 444)
-    assert_equal items[id: id], { id: id, name: 'jkl', price: 444 }
+    assert_equal({ id: id, name: 'jkl', price: 444 }, items[id: id])
 
     id = @db.call(:insert_with_name_and_price, name: 'mno', price: 555)
-    assert_equal items[id: id], { id: id, name: 'mno', price: 555 }
+    assert_equal({ id: id, name: 'mno', price: 555 }, items[id: id])
+  end
+
+  def test_migration
+    # Adapted from https://github.com/digital-fabric/extralite/issues/8
+    Dir.mktmpdir("extralite-migration") do |dir|
+      File.write(dir + "/001_migrate.rb", <<~RUBY)
+        Sequel.migration do 
+          change do
+            create_table(:foobars) { primary_key :id } 
+          end
+        end
+      RUBY
+    
+      Sequel.extension :migration
+      db = Sequel.connect("extralite://")
+      Sequel::Migrator.run(db, dir)
+
+      assert_equal [:id], db[:foobars].columns
+    end
   end
 end

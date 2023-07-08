@@ -545,6 +545,9 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
   backup_ctx ctx = { dst_db, dst_is_fn, backup, rb_block_given_p(), 0 };
   rb_ensure(SAFE(backup_safe_iterate), (VALUE)&ctx, SAFE(backup_cleanup), (VALUE)&ctx);
 
+  RB_GC_GUARD(src_name);
+  RB_GC_GUARD(dst_name);
+
   return self;
 }
 
