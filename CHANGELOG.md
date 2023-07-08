@@ -1,3 +1,12 @@
+# 2.0 2023-07-08
+
+- Fix Sequel migrations (#8)
+- Redesign prepared statement functionality (#24)
+  - Rewrite `Extralite::PreparedStatement` into `Extralite::Query` with breaking API changes
+  - Add `Extralite::Iterator` class for external iteration
+  - Add `Query#each_xxx`, `Query#to_a_xxx` method
+  - Add `Query#eof?` method
+
 # 1.27 2023-06-12
 
 - Fix execution of prepared statements in Sequel adapter (#23 @gschlager)
