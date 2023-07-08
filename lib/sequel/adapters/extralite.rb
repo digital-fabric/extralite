@@ -11,24 +11,20 @@ require 'sequel/adapters/shared/sqlite'
 module Sequel
   # Extralite Sequel adapter
   module Extralite
-    # @!visibility private
     FALSE_VALUES = (%w'0 false f no n'.each(&:freeze) + [0]).freeze
 
     blob = Object.new
-    # @!visibility private
     def blob.call(s)
       Sequel::SQL::Blob.new(s.to_s)
     end
 
     boolean = Object.new
-    # @!visibility private
     def boolean.call(s)
       s = s.downcase if s.is_a?(String)
       !FALSE_VALUES.include?(s)
     end
 
     date = Object.new
-    # @!visibility private
     def date.call(s)
       case s
       when String
@@ -43,26 +39,22 @@ module Sequel
     end
 
     integer = Object.new
-    # @!visibility private
     def integer.call(s)
       s.to_i
     end
 
     float = Object.new
-    # @!visibility private
     def float.call(s)
       s.to_f
     end
 
     numeric = Object.new
-    # @!visibility private
     def numeric.call(s)
       s = s.to_s unless s.is_a?(String)
       BigDecimal(s) rescue s
     end
 
     time = Object.new
-    # @!visibility private
     def time.call(s)
       case s
       when String
@@ -77,7 +69,7 @@ module Sequel
       end
     end
 
-    # Hash with string keys and callable values for converting SQLite types.
+    # Hash with string keys and callable values for converting SQLITE types.
     SQLITE_TYPES = {}
     {
       %w'date' => date,
@@ -92,27 +84,28 @@ module Sequel
     end
     SQLITE_TYPES.freeze
 
-    # @!visibility private
-    USE_EXTENDED_RESULT_CODES = false
-
-    # Database adapter for Sequel
     class Database < Sequel::Database
       include ::Sequel::SQLite::DatabaseMethods
-
+      
       set_adapter_scheme :extralite
-
+      
       # Mimic the file:// uri, by having 2 preceding slashes specify a relative
       # path, and 3 preceding slashes specify an absolute path.
       def self.uri_to_options(uri) # :nodoc:
         { :database => (uri.host.nil? && uri.path == '/') ? nil : "#{uri.host}#{uri.path}" }
       end
-
+      
       private_class_method :uri_to_options
 
       # The conversion procs to use for this database
       attr_reader :conversion_procs
 
-      # Connect to the database. Since SQLite is a file based database,
+      def initialize(opts = OPTS)
+        super
+        @allow_regexp = typecast_value_boolean(opts[:setup_regexp_function])
+      end
+
+      # Connect to the database. Since Extralite is a file based database,
       # available options are limited:
       #
       # :database :: database name (filename or ':memory:' or file: URI)
@@ -123,24 +116,39 @@ module Sequel
       def connect(server)
         opts = server_opts(server)
         opts[:database] = ':memory:' if blank_object?(opts[:database])
+        # db opts may be used in a future version of Extralite
+        db_opts = {}
+        db_opts[:readonly] = typecast_value_boolean(opts[:readonly]) if opts.has_key?(:readonly)
         db = ::Extralite::Database.new(opts[:database].to_s)
+        # db.busy_timeout(typecast_value_integer(opts.fetch(:timeout, 5000)))
 
         connection_pragmas.each{|s| log_connection_yield(s, db){db.query(s)}}
 
+        if typecast_value_boolean(opts[:setup_regexp_function])
+          db.create_function("regexp", 2) do |func, regexp_str, string|
+            func.result = Regexp.new(regexp_str).match(string) ? 1 : 0
+          end
+        end
+        
         class << db
           attr_reader :prepared_statements
         end
         db.instance_variable_set(:@prepared_statements, {})
-
+        
         db
+      end
+
+      # Whether this Database instance is setup to allow regexp matching.
+      # True if the :setup_regexp_function option was passed when creating the Database.
+      def allow_regexp?
+        @allow_regexp
       end
 
       # Disconnect given connections from the database.
       def disconnect_connection(c)
-        c.prepared_statements.each_value{|v| v.first.close }
         c.close
       end
-
+      
       # Run the given SQL with the given arguments and yield each row.
       def execute(sql, opts=OPTS, &block)
         _execute(:select, sql, opts, &block)
@@ -150,30 +158,28 @@ module Sequel
       def execute_dui(sql, opts=OPTS)
         _execute(:update, sql, opts)
       end
-
+      
       # Drop any prepared statements on the connection when executing DDL.  This is because
       # prepared statements lock the table in such a way that you can't drop or alter the
       # table while a prepared statement that references it still exists.
       def execute_ddl(sql, opts=OPTS)
         synchronize(opts[:server]) do |conn|
-          conn.prepared_statements.values.each {|cps, s| cps.close }
-          conn.prepared_statements.clear
+          # conn.prepared_statements.values.each{|cps, s| cps.close}
+          # conn.prepared_statements.clear
           super
         end
       end
-
-      # @!visibility private
+      
       def execute_insert(sql, opts=OPTS)
         _execute(:insert, sql, opts)
       end
-
-      # @!visibility private
+      
       def freeze
         @conversion_procs.freeze
         super
       end
 
-      # Handle Integer and Float arguments, since SQLite can store timestamps as integers and floats.
+      # Handle Integer and Float arguments, since Extralite can store timestamps as integers and floats.
       def to_application_timestamp(s)
         case s
         when String
@@ -188,39 +194,38 @@ module Sequel
       end
 
       private
-
+      
       def adapter_initialize
         @conversion_procs = SQLITE_TYPES.dup
         @conversion_procs['datetime'] = @conversion_procs['timestamp'] = method(:to_application_timestamp)
         set_integer_booleans
       end
-
-      # Yield an available connection. Rescue any Extralite::Error and turn
-      # them into DatabaseErrors.
+      
+      # Yield an available connection.  Rescue
+      # any Extralite::Errors and turn them into DatabaseErrors.
       def _execute(type, sql, opts, &block)
-        begin
-          synchronize(opts[:server]) do |conn|
-            return execute_prepared_statement(conn, type, sql, opts, &block) if sql.is_a?(Symbol)
-            log_args = opts[:arguments]
-            args = {}
-            opts.fetch(:arguments, OPTS).each{|k, v| args[k] = prepared_statement_argument(v) }
-            case type
-            when :select
-              log_connection_yield(sql, conn, log_args){conn.query(sql, args, &block)}
-            when :insert
-              log_connection_yield(sql, conn, log_args){conn.query(sql, args)}
-              conn.last_insert_rowid
-            when :update
-              log_connection_yield(sql, conn, log_args){conn.query(sql, args)}
-              conn.changes
-            end
+        synchronize(opts[:server]) do |conn|
+          return execute_prepared_statement(conn, type, sql, opts, &block) if sql.is_a?(Symbol)
+          log_args = opts[:arguments]
+          args = {}
+          opts.fetch(:arguments, OPTS).each{|k, v| args[k] = prepared_statement_argument(v)}
+          case type
+          when :select
+            query = conn.prepare(sql, args)
+            log_connection_yield(sql, conn, log_args){block.call(query.each, query.columns)}
+          when :insert
+            log_connection_yield(sql, conn, log_args){conn.query(sql, args)}
+            conn.last_insert_rowid
+          when :update
+            log_connection_yield(sql, conn, log_args){conn.query(sql, args)}
+            conn.changes
           end
-        rescue ::Extralite::Error => e
-          raise_error(e)
         end
+      rescue ::Extralite::Error => e
+        raise_error(e)
       end
-
-      # The SQLite adapter does not need the pool to convert exceptions.
+      
+      # The Extralite adapter does not need the pool to convert exceptions.
       # Also, force the max connections to 1 if a memory database is being
       # used, as otherwise each connection gets a separate database.
       def connection_pool_default_options
@@ -230,7 +235,7 @@ module Sequel
         o[:max_connections] = 1 if @opts[:database] == ':memory:' || blank_object?(@opts[:database])
         o
       end
-
+      
       def prepared_statement_argument(arg)
         case arg
         when Date, DateTime, Time
@@ -274,9 +279,10 @@ module Sequel
           log_sql << ")"
         end
         if block
-          log_connection_yield(log_sql, conn, args){cps.bind(ps_args).each(&block)}
+          cps.bind(ps_args)
+          log_connection_yield(log_sql, conn, args){block.call(cps.each, cps.columns)}
         else
-          log_connection_yield(log_sql, conn, args){cps.bind(ps_args).each {|r|}}
+          log_connection_yield(log_sql, conn, args){cps.bind(ps_args).to_a}
           case type
           when :insert
             conn.last_insert_rowid
@@ -285,11 +291,8 @@ module Sequel
           end
         end
       end
-
-      # # SQLite3 raises ArgumentError in addition to SQLite3::Exception in
-      # # some cases, such as operations on a closed database.
+      
       def database_error_classes
-        #[Extralite::Error, ArgumentError]
         [::Extralite::Error]
       end
 
@@ -297,24 +300,19 @@ module Sequel
         Dataset
       end
 
-      if USE_EXTENDED_RESULT_CODES
-        # Support SQLite exception codes if ruby-sqlite3 supports them.
-        def sqlite_error_code(exception)
-          exception.code if exception.respond_to?(:code)
-        end
+      def extralite_error_code(exception)
+        exception.code if exception.respond_to?(:code)
       end
     end
-
-    # Dataset adapter for Sequel
+    
     class Dataset < Sequel::Dataset
       include ::Sequel::SQLite::DatasetMethods
 
-      # @!visibility private
       module ArgumentMapper
         include Sequel::Dataset::ArgumentMapper
-
+        
         protected
-
+        
         # Return a hash with the same values as the given hash,
         # but with the keys converted to strings.
         def map_to_prepared_args(hash)
@@ -322,28 +320,75 @@ module Sequel
           hash.each{|k,v| args[k.to_s.gsub('.', '__')] = v}
           args
         end
-
+        
         private
-
-        # SQLite uses a : before the name of the argument for named
+        
+        # Extralite uses a : before the name of the argument for named
         # arguments.
         def prepared_arg(k)
           LiteralString.new("#{prepared_arg_placeholder}#{k.to_s.gsub('.', '__')}")
         end
       end
-
-      # @!visibility private
+      
       BindArgumentMethods = prepared_statements_module(:bind, ArgumentMapper)
-      # @!visibility private
       PreparedStatementMethods = prepared_statements_module(:prepare, BindArgumentMethods)
 
-      # @!visibility private
-      def fetch_rows(sql, &block)
-        execute(sql, &block)
+      # Support regexp functions if using :setup_regexp_function Database option.
+      def complex_expression_sql_append(sql, op, args)
+        case op
+        when :~, :'!~', :'~*', :'!~*'
+          return super unless supports_regexp?
+
+          case_insensitive = [:'~*', :'!~*'].include?(op)
+          sql << 'NOT ' if [:'!~', :'!~*'].include?(op)
+          sql << '('
+          sql << 'LOWER(' if case_insensitive
+          literal_append(sql, args[0])
+          sql << ')' if case_insensitive
+          sql << ' REGEXP '
+          sql << 'LOWER(' if case_insensitive
+          literal_append(sql, args[1])
+          sql << ')' if case_insensitive
+          sql << ')'
+        else
+          super
+        end
       end
 
-      private
+      def fetch_rows(sql, &block)
+        execute(sql) do |result, columns|
+          cps = db.conversion_procs
+          # type_procs = result.types.map{|t| cps[base_type_name(t)]}
+          # p type_procs: type_procs
+          j = -1
+          # cols = result.columns.map{|c| [output_identifier(c), type_procs[(j+=1)]]}
+          # p cols: cols
+          self.columns = columns#cols.map(&:first)
+          max = columns.size#cols.length
+          result.each(&block)
+          # result.each(&block) #do |values|
+            # row = {}
+            # i = -1
+            # while (i += 1) < max
+            #   name, type_proc = cols[i]
+            #   v = values[i]
+            #   if type_proc && v
+            #     v = type_proc.call(v)
+            #   end
+            #   row[name] = v
+            # end
+            # yield row
+          # end
+        end
+      end
 
+      # Support regexp if using :setup_regexp_function Database option.
+      def supports_regexp?
+        db.allow_regexp?
+      end
+      
+      private
+      
       # The base type name for a given type, without any parenthetical part.
       def base_type_name(t)
         (t =~ /^(.*?)\(/ ? $1 : t).downcase if t

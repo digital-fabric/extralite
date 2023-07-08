@@ -75,6 +75,30 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
   return Qnil;
 }
 
+inline void query_reset(Query_t *query) {
+  if (!query->stmt)
+    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+  if (query->db_struct->trace_block != Qnil)
+    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
+  sqlite3_reset(query->stmt);
+  query->eof = 0;
+}
+
+inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
+  if (!query->stmt)
+    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+
+  if (query->db_struct->trace_block != Qnil)
+    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
+
+  sqlite3_reset(query->stmt);
+  query->eof = 0;
+  if (argc > 0) {
+    sqlite3_clear_bindings(query->stmt);
+    bind_all_parameters(query->stmt, argc, argv);
+  }
+}
+
 /* Resets the underlying prepared statement. After calling this method the
  * underlying prepared statement is reset to its initial state, and any call to
  * one of the `#next_xxx` methods will return the first row in the query's
@@ -92,30 +116,11 @@ VALUE Query_reset(VALUE self) {
   Query_t *query = value_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
-  if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
-
+  query_reset(query);
   if (query->db_struct->trace_block != Qnil)
     rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
 
-  sqlite3_reset(query->stmt);
-  query->eof = 0;
   return self;
-}
-
-void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
-  if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
-
-  if (query->db_struct->trace_block != Qnil)
-    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
-
-  sqlite3_reset(query->stmt);
-  query->eof = 0;
-  if (argc > 0) {
-    sqlite3_clear_bindings(query->stmt);
-    bind_all_parameters(query->stmt, argc, argv);
-  }
 }
 
 /* Resets the underlying prepared statement and rebinds parameters if any are
@@ -164,7 +169,7 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
   Query_t *query = value_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
   
-  if (!query->stmt) query_reset_and_bind(query, 0, NULL);
+  if (!query->stmt) query_reset(query);
   if (query->eof) return rb_block_given_p() ? self : Qnil;
 
   query_ctx ctx = {
@@ -261,7 +266,7 @@ VALUE Query_next_single_column(int argc, VALUE *argv, VALUE self) {
  */
 VALUE Query_to_a_hash(VALUE self) {
   Query_t *query = value_to_query(self);
-  query_reset_and_bind(query, 0, NULL);
+  query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_hash);
 }
 
@@ -271,7 +276,7 @@ VALUE Query_to_a_hash(VALUE self) {
  */
 VALUE Query_to_a_ary(VALUE self) {
   Query_t *query = value_to_query(self);
-  query_reset_and_bind(query, 0, NULL);
+  query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_ary);
 }
 
@@ -282,7 +287,7 @@ VALUE Query_to_a_ary(VALUE self) {
  */
 VALUE Query_to_a_single_column(VALUE self) {
   Query_t *query = value_to_query(self);
-  query_reset_and_bind(query, 0, NULL);
+  query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_single_column);
 }
 
@@ -296,7 +301,7 @@ VALUE Query_each_hash(VALUE self) {
   if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_hash);
 
   Query_t *query = value_to_query(self);
-  query_reset_and_bind(query, 0, NULL);
+  query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_hash);
 }
 
@@ -310,7 +315,7 @@ VALUE Query_each_ary(VALUE self) {
   if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_ary);
 
   Query_t *query = value_to_query(self);
-  query_reset_and_bind(query, 0, NULL);
+  query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_ary);
 }
 
@@ -325,24 +330,8 @@ VALUE Query_each_single_column(VALUE self) {
   if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_single_column);
 
   Query_t *query = value_to_query(self);
-  query_reset_and_bind(query, 0, NULL);
+  query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_single_column);
-}
-
-static inline VALUE Query_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *)) {
-  Query_t *query = value_to_query(self);
-  if (query->closed) rb_raise(cError, "Query is closed");
-
-  if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
-  if (query->db_struct->trace_block != Qnil)
-    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
-
-  sqlite3_reset(query->stmt);
-  sqlite3_clear_bindings(query->stmt);
-  bind_all_parameters(query->stmt, argc, argv);
-  query_ctx ctx = { self, query->sqlite3_db, query->stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
-  return call(&ctx);
 }
 
 /* Executes the query for each set of parameters in the given array. Parameters
@@ -397,7 +386,9 @@ VALUE Query_sql(VALUE self) {
  * @return [Array<Symbol>] column names
  */
 VALUE Query_columns(VALUE self) {
-  return Query_perform_query(0, NULL, self, safe_query_columns);
+  Query_t *query = value_to_query(self);
+  query_reset(query);
+  return Query_perform_next(self, ALL_ROWS, safe_query_columns);
 }
 
 /* Closes the query. Attempting to run a closed query will raise an error.

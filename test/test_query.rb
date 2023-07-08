@@ -29,6 +29,15 @@ class QueryTest < MiniTest::Test
     assert_equal 'select * from t where x = ?', @query.sql
   end
 
+  def test_bind
+    @db.query("insert into t values ('a', 'b', 'c')")
+
+    q = @db.prepare('select * from t where `z` = :foo')
+    results = q.bind(foo: 'c').to_a_ary
+
+    assert_equal [['a', 'b', 'c']], results
+  end
+
   def test_query_next
     query = @db.prepare('select * from t')
     v = query.next
@@ -398,6 +407,13 @@ class QueryTest < MiniTest::Test
   def test_query_columns
     r = @db.prepare("select 'abc' as a, 'def' as b").columns
     assert_equal [:a, :b], r
+  end
+
+  def test_query_columns_with_parameterized_sql
+    q = @db.prepare('select * from t where z = :z')
+    q.bind(z: 9)
+    assert_equal [:x, :y, :z], q.columns
+    assert_equal [[7, 8, 9]], q.to_a_ary
   end
 
   def test_query_close
