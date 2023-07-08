@@ -357,28 +357,9 @@ module Sequel
 
       def fetch_rows(sql, &block)
         execute(sql) do |result, columns|
-          cps = db.conversion_procs
-          # type_procs = result.types.map{|t| cps[base_type_name(t)]}
-          # p type_procs: type_procs
-          j = -1
-          # cols = result.columns.map{|c| [output_identifier(c), type_procs[(j+=1)]]}
-          # p cols: cols
-          self.columns = columns#cols.map(&:first)
-          max = columns.size#cols.length
+          self.columns = columns
+          max = columns.size
           result.each(&block)
-          # result.each(&block) #do |values|
-            # row = {}
-            # i = -1
-            # while (i += 1) < max
-            #   name, type_proc = cols[i]
-            #   v = values[i]
-            #   if type_proc && v
-            #     v = type_proc.call(v)
-            #   end
-            #   row[name] = v
-            # end
-            # yield row
-          # end
         end
       end
 
