@@ -75,7 +75,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
   return Qnil;
 }
 
-inline void query_reset(Query_t *query) {
+static inline void query_reset(Query_t *query) {
   if (!query->stmt)
     prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
   if (query->db_struct->trace_block != Qnil)
@@ -84,7 +84,7 @@ inline void query_reset(Query_t *query) {
   query->eof = 0;
 }
 
-inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
+static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
     prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
 
