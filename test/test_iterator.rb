@@ -96,4 +96,9 @@ class IteratorTest < MiniTest::Test
     mapped = query.each_single_column.map { |v| v * 10 }
     assert_equal [30, 60, 90], mapped
   end
+
+  def test_iterator_inspect
+    i = @query.each_ary
+    assert_match /^\#\<Extralite::Iterator:0x[0-9a-f]+ ary\>$/, i.inspect
+  end
 end

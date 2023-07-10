@@ -371,6 +371,11 @@ end
     assert_raises(Extralite::Error) { db.query('create table foo (bar)') }
     assert_equal true, db.read_only?
   end
+
+  def test_database_inspect
+    db = Extralite::Database.new(':memory:')
+    assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect
+  end
 end
 
 class ScenarioTest < MiniTest::Test

@@ -11,6 +11,9 @@
 
 VALUE cQuery;
 
+ID ID_inspect;
+ID ID_slice;
+
 static size_t Query_size(const void *ptr) {
   return sizeof(Query_t);
 }
@@ -441,6 +444,24 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
   return INT2NUM(value);
 }
 
+/* Returns a short string representation of the query instance, including the
+ * SQL string.
+ *
+ * @return [String] string representation
+ */
+VALUE Query_inspect(VALUE self) {
+  VALUE cname = rb_class_name(CLASS_OF(self));
+  VALUE sql = self_to_query(self)->sql;
+  if (RSTRING_LEN(sql) > 48) {
+    sql = rb_funcall(sql, ID_slice, 2, INT2FIX(0), INT2FIX(45));
+    rb_str_cat2(sql, "...");
+  }
+  sql = rb_funcall(sql, ID_inspect, 0);
+    
+  RB_GC_GUARD(sql);
+  return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, sql);
+}
+
 void Init_ExtraliteQuery(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -462,6 +483,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "eof?", Query_eof_p, 0);
   rb_define_method(cQuery, "execute_multi", Query_execute_multi, 1);
   rb_define_method(cQuery, "initialize", Query_initialize, 2);
+  rb_define_method(cQuery, "inspect", Query_inspect, 0);
 
   rb_define_method(cQuery, "next", Query_next_hash, -1);
   rb_define_method(cQuery, "next_ary", Query_next_ary, -1);
@@ -476,4 +498,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "to_a_ary", Query_to_a_ary, 0);
   rb_define_method(cQuery, "to_a_hash", Query_to_a_hash, 0);
   rb_define_method(cQuery, "to_a_single_column", Query_to_a_single_column, 0);
+
+  ID_inspect  = rb_intern("inspect");
+  ID_slice    = rb_intern("slice");
 }

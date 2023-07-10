@@ -499,4 +499,9 @@ class QueryTest < MiniTest::Test
     assert_equal [1, 4, 7], query.to_a_single_column
     assert_equal true, query.eof?
   end
+
+  def test_query_inspect
+    q = @db.prepare('select x from t')
+    assert_match /^\#\<Extralite::Query:0x[0-9a-f]+ #{q.sql.inspect}\>$/, q.inspect
+  end
 end

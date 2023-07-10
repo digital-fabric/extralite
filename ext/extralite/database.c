@@ -703,6 +703,19 @@ VALUE Database_error_offset(VALUE self) {
 }
 #endif
 
+/* Returns a short string representation of the database instance, including the
+ * database filename.
+ *
+ * @return [String] string representation
+ */
+VALUE Database_inspect(VALUE self) {
+  VALUE cname = rb_class_name(CLASS_OF(self));
+  VALUE filename = Database_filename(0, NULL, self);
+  if (RSTRING_LEN(filename) == 0) filename = rb_str_new_literal(":memory:");
+
+  return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, filename);
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -727,6 +740,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "initialize", Database_initialize, -1);
+  rb_define_method(cDatabase, "inspect", Database_inspect, 0);
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "limit", Database_limit, -1);

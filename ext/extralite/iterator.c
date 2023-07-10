@@ -161,6 +161,29 @@ VALUE Iterator_to_a(VALUE self) {
   return method(iterator->query);
 }
 
+inline VALUE mode_to_symbol(Iterator_t *iterator) {
+  switch (iterator->mode) {
+    case ITERATOR_ARY:
+      return SYM_ary;
+    case ITERATOR_SINGLE_COLUMN:
+      return SYM_single_column;
+    default:
+      return SYM_hash;
+  }
+}
+
+/* Returns a short string representation of the iterator instance, including the
+ * SQL string.
+ *
+ * @return [String] string representation
+ */
+VALUE Iterator_inspect(VALUE self) {
+  VALUE cname = rb_class_name(CLASS_OF(self));
+  VALUE sym = mode_to_symbol(self_to_iterator(self));
+  
+  return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, sym);
+}
+
 void Init_ExtraliteIterator(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -171,6 +194,7 @@ void Init_ExtraliteIterator(void) {
 
   rb_define_method(cIterator, "initialize", Iterator_initialize, 2);
   rb_define_method(cIterator, "each", Iterator_each, 0);
+  rb_define_method(cIterator, "inspect", Iterator_inspect, 0);
   rb_define_method(cIterator, "next", Iterator_next, -1);
   rb_define_method(cIterator, "to_a", Iterator_to_a, 0);
 
