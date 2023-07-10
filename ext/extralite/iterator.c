@@ -34,7 +34,7 @@ static VALUE Iterator_allocate(VALUE klass) {
   return TypedData_Wrap_Struct(klass, &Iterator_type, iterator);
 }
 
-static inline Iterator_t *value_to_iterator(VALUE obj) {
+static inline Iterator_t *self_to_iterator(VALUE obj) {
   Iterator_t *iterator;
   TypedData_Get_Struct((obj), Iterator_t, &Iterator_type, (iterator));
   return iterator;
@@ -61,7 +61,7 @@ static inline enum iterator_mode symbol_to_mode(VALUE sym) {
  * @return [void]
  */
 VALUE Iterator_initialize(VALUE self, VALUE query, VALUE mode) {
-  Iterator_t *iterator = value_to_iterator(self);
+  Iterator_t *iterator = self_to_iterator(self);
 
   iterator->query = query;
   iterator->mode = symbol_to_mode(mode);
@@ -92,7 +92,7 @@ inline each_method mode_to_each_method(enum iterator_mode mode) {
  */
 VALUE Iterator_each(VALUE self) {
   if (rb_block_given_p()) {
-    Iterator_t *iterator = value_to_iterator(self);
+    Iterator_t *iterator = self_to_iterator(self);
     each_method method = mode_to_each_method(iterator->mode);
     method(iterator->query);
   }
@@ -130,7 +130,7 @@ inline next_method mode_to_next_method(enum iterator_mode mode) {
  *   @return [Array, Extralite::Iterator] next rows or self if block is given
  */
 VALUE Iterator_next(int argc, VALUE *argv, VALUE self) {
-  Iterator_t *iterator = value_to_iterator(self);
+  Iterator_t *iterator = self_to_iterator(self);
   next_method method = mode_to_next_method(iterator->mode);
   VALUE result = method(argc, argv, iterator->query);
 
@@ -156,7 +156,7 @@ inline to_a_method mode_to_to_a_method(enum iterator_mode mode) {
  * @return [Array] array of query result set rows
  */
 VALUE Iterator_to_a(VALUE self) {
-  Iterator_t *iterator = value_to_iterator(self);
+  Iterator_t *iterator = self_to_iterator(self);
   to_a_method method = mode_to_to_a_method(iterator->mode);
   return method(iterator->query);
 }
@@ -177,4 +177,8 @@ void Init_ExtraliteIterator(void) {
   SYM_hash          = ID2SYM(rb_intern("hash"));
   SYM_ary           = ID2SYM(rb_intern("ary"));
   SYM_single_column = ID2SYM(rb_intern("single_column"));
+
+  rb_gc_register_mark_object(SYM_hash);
+  rb_gc_register_mark_object(SYM_ary);
+  rb_gc_register_mark_object(SYM_single_column);
 }

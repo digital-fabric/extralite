@@ -42,7 +42,7 @@ static VALUE Query_allocate(VALUE klass) {
   return TypedData_Wrap_Struct(klass, &Query_type, query);
 }
 
-static inline Query_t *value_to_query(VALUE obj) {
+static inline Query_t *self_to_query(VALUE obj) {
   Query_t *query;
   TypedData_Get_Struct((obj), Query_t, &Query_type, (query));
   return query;
@@ -58,14 +58,14 @@ static inline Query_t *value_to_query(VALUE obj) {
  * @return [void]
  */
 VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
 
   sql = rb_funcall(sql, ID_strip, 0);
   if (!RSTRING_LEN(sql))
     rb_raise(cError, "Cannot prepare an empty SQL query");
 
   query->db = db;
-  query->db_struct = Database_struct(db);
+  query->db_struct = self_to_database(db);
   query->sqlite3_db = Database_sqlite3_db(db);
   query->sql = sql;
   query->stmt = NULL;
@@ -113,7 +113,7 @@ static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) 
  * @return [Extralite::Query] self
  */
 VALUE Query_reset(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
   query_reset(query);
@@ -145,7 +145,7 @@ VALUE Query_reset(VALUE self) {
  * @return [Extralite::Query] self
  */
 VALUE Query_bind(int argc, VALUE *argv, VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
   query_reset_and_bind(query, argc, argv);
@@ -157,7 +157,7 @@ VALUE Query_bind(int argc, VALUE *argv, VALUE self) {
  * @return [boolean] true if iteration has reached the end of the result set
  */
 VALUE Query_eof_p(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
   return query->eof ? Qtrue : Qfalse;
@@ -166,7 +166,7 @@ VALUE Query_eof_p(VALUE self) {
 #define MAX_ROWS(max_rows) (max_rows == SINGLE_ROW ? 1 : max_rows)
 
 static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(query_ctx *)) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
   
   if (!query->stmt) query_reset(query);
@@ -265,7 +265,7 @@ VALUE Query_next_single_column(int argc, VALUE *argv, VALUE self) {
  *   @return [Array<Hash>] all rows
  */
 VALUE Query_to_a_hash(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_hash);
 }
@@ -275,7 +275,7 @@ VALUE Query_to_a_hash(VALUE self) {
  * @return [Array<Array>] all rows
  */
 VALUE Query_to_a_ary(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_ary);
 }
@@ -286,7 +286,7 @@ VALUE Query_to_a_ary(VALUE self) {
  * @return [Array<Object>] all rows
  */
 VALUE Query_to_a_single_column(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_single_column);
 }
@@ -300,7 +300,7 @@ VALUE Query_to_a_single_column(VALUE self) {
 VALUE Query_each_hash(VALUE self) {
   if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_hash);
 
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_hash);
 }
@@ -314,7 +314,7 @@ VALUE Query_each_hash(VALUE self) {
 VALUE Query_each_ary(VALUE self) {
   if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_ary);
 
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_ary);
 }
@@ -329,7 +329,7 @@ VALUE Query_each_ary(VALUE self) {
 VALUE Query_each_single_column(VALUE self) {
   if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_single_column);
 
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_single_column);
 }
@@ -350,7 +350,7 @@ VALUE Query_each_single_column(VALUE self) {
  * @return [Integer] number of changes effected
  */
 VALUE Query_execute_multi(VALUE self, VALUE parameters) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
@@ -368,7 +368,7 @@ VALUE Query_execute_multi(VALUE self, VALUE parameters) {
  *   @return [Extralite::Database] associated database
  */
 VALUE Query_database(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   return query->db;
 }
 
@@ -377,7 +377,7 @@ VALUE Query_database(VALUE self) {
  * @return [String] SQL string
  */
 VALUE Query_sql(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   return query->sql;
 }
 
@@ -386,7 +386,7 @@ VALUE Query_sql(VALUE self) {
  * @return [Array<Symbol>] column names
  */
 VALUE Query_columns(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_columns);
 }
@@ -396,7 +396,7 @@ VALUE Query_columns(VALUE self) {
  * @return [Extralite::Query] self
  */
 VALUE Query_close(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   if (query->stmt) {
     sqlite3_finalize(query->stmt);
     query->stmt = NULL;
@@ -410,7 +410,7 @@ VALUE Query_close(VALUE self) {
  * @return [boolean] true if query is closed
  */
 VALUE Query_closed_p(VALUE self) {
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   return query->closed ? Qtrue : Qfalse;
 }
 
@@ -431,7 +431,7 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
 
   rb_scan_args(argc, argv, "11", &op, &reset);
 
-  Query_t *query = value_to_query(self);
+  Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)

@@ -361,6 +361,16 @@ end
     query.next
     @db.close
   end
+
+  def test_read_only_database
+    db = Extralite::Database.new(':memory:')
+    db.query('create table foo (bar)')
+    assert_equal false, db.read_only?
+
+    db = Extralite::Database.new(':memory:', read_only: true)
+    assert_raises(Extralite::Error) { db.query('create table foo (bar)') }
+    assert_equal true, db.read_only?
+  end
 end
 
 class ScenarioTest < MiniTest::Test

@@ -6,6 +6,7 @@ VALUE cError;
 VALUE cSQLError;
 VALUE cBusyError;
 VALUE cInterruptError;
+VALUE eArgumentError;
 
 ID ID_bind;
 ID ID_call;
@@ -13,6 +14,8 @@ ID ID_keys;
 ID ID_new;
 ID ID_strip;
 ID ID_to_s;
+
+VALUE SYM_read_only;
 
 static size_t Database_size(const void *ptr) {
   return sizeof(Database_t);
@@ -36,27 +39,21 @@ static VALUE Database_allocate(VALUE klass) {
   return TypedData_Wrap_Struct(klass, &Database_type, db);
 }
 
-#define GetDatabase(obj, database) \
-  TypedData_Get_Struct((obj), Database_t, &Database_type, (database))
-
-// make sure the database is open
-#define GetOpenDatabase(obj, database) { \
-  TypedData_Get_Struct((obj), Database_t, &Database_type, (database)); \
-  if (!(database)->sqlite3_db) { \
-    rb_raise(cError, "Database is closed"); \
-  } \
-}
-
-Database_t *Database_struct(VALUE self) {
+inline Database_t *self_to_database(VALUE self) {
   Database_t *db;
-  GetDatabase(self, db);
+  TypedData_Get_Struct(self, Database_t, &Database_type, db);
   return db;
 }
 
-sqlite3 *Database_sqlite3_db(VALUE self) {
-  Database_t *db;
-  GetDatabase(self, db);
-  return db->sqlite3_db;
+inline Database_t *self_to_open_database(VALUE self) {
+  Database_t *db = self_to_database(self);
+  if (!(db)->sqlite3_db) rb_raise(cError, "Database is closed");
+  
+  return db;
+}
+
+inline sqlite3 *Database_sqlite3_db(VALUE self) {
+  return self_to_database(self)->sqlite3_db;
 }
 
 /* call-seq:
@@ -69,18 +66,37 @@ VALUE Extralite_sqlite3_version(VALUE self) {
   return rb_str_new_cstr(sqlite3_version);
 }
 
-/* call-seq:
- *   db.initialize(path)
+static inline int db_open_flags_from_opts(VALUE opts) {
+  if (opts == Qnil) goto default_flags;
+
+  if (TYPE(opts) != T_HASH)
+    rb_raise(eArgumentError, "Expected hash as database initialization options");
+
+  VALUE read_only = rb_hash_aref(opts, SYM_read_only);
+  if (RTEST(read_only)) return SQLITE_OPEN_READONLY;
+default_flags:
+  return SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+}
+
+/* Initializes a new SQLite database with the given path and options.
  *
- * Initializes a new SQLite database with the given path.
+ * @overload initialize(path)
+ *   @param path [String] file path (or ':memory:' for memory database)
+ *   @return [void]
+ * @overload initialize(path, read_only: false)
+ *   @param path [String] file path (or ':memory:' for memory database)
+ *   @param read_only [boolean] true for opening the database for reading only
+ *   @return [void]
  */
+VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
+  Database_t *db = self_to_database(self);
+  VALUE path;
+  VALUE opts = Qnil;
 
-VALUE Database_initialize(VALUE self, VALUE path) {
-  int rc;
-  Database_t *db;
-  GetDatabase(self, db);
+  rb_scan_args(argc, argv, "11", &path, &opts);
+  int flags = db_open_flags_from_opts(opts);
 
-  rc = sqlite3_open(StringValueCStr(path), &db->sqlite3_db);
+  int rc = sqlite3_open_v2(StringValueCStr(path), &db->sqlite3_db, flags, NULL);
   if (rc) {
     sqlite3_close_v2(db->sqlite3_db);
     rb_raise(cError, "%s", sqlite3_errstr(rc));
@@ -106,6 +122,16 @@ VALUE Database_initialize(VALUE self, VALUE path) {
   return Qnil;
 }
 
+/* Returns true if the database was open for read only access.
+ *
+ * @return [boolean] true if database is open for read only access
+ */
+VALUE Database_read_only_p(VALUE self) {
+  Database_t *db = self_to_database(self);
+  int open = sqlite3_db_readonly(db->sqlite3_db, "main");
+  return (open == 1) ? Qtrue : Qfalse;
+}
+
 /* call-seq:
  *   db.close -> db
  *
@@ -113,8 +139,7 @@ VALUE Database_initialize(VALUE self, VALUE path) {
  */
 VALUE Database_close(VALUE self) {
   int rc;
-  Database_t *db;
-  GetDatabase(self, db);
+  Database_t *db = self_to_database(self);
 
   rc = sqlite3_close_v2(db->sqlite3_db);
   if (rc) {
@@ -133,14 +158,12 @@ VALUE Database_close(VALUE self) {
  * @return [bool] is database closed
  */
 VALUE Database_closed_p(VALUE self) {
-  Database_t *db;
-  GetDatabase(self, db);
-
+  Database_t *db = self_to_database(self);
   return db->sqlite3_db ? Qfalse : Qtrue;
 }
 
 static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *)) {
-  Database_t *db;
+  Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
   VALUE sql;
 
@@ -150,7 +173,6 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   // prepare query ctx
-  GetOpenDatabase(self, db);
   if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_call, 1, sql);
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
@@ -301,13 +323,12 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
  *
  */
 VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
-  Database_t *db;
+  Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   // prepare query ctx
-  GetOpenDatabase(self, db);
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
   query_ctx ctx = { self, db->sqlite3_db, stmt, params_array, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
 
@@ -329,8 +350,7 @@ VALUE Database_columns(VALUE self, VALUE sql) {
  * Returns the rowid of the last inserted row.
  */
 VALUE Database_last_insert_rowid(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   return INT2FIX(sqlite3_last_insert_rowid(db->sqlite3_db));
 }
@@ -341,8 +361,7 @@ VALUE Database_last_insert_rowid(VALUE self) {
  * Returns the number of changes made to the database by the last operation.
  */
 VALUE Database_changes(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   return INT2FIX(sqlite3_changes(db->sqlite3_db));
 }
@@ -355,8 +374,7 @@ VALUE Database_changes(VALUE self) {
 VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
   const char *db_name;
   const char *filename;
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   rb_check_arity(argc, 0, 1);
   db_name = (argc == 1) ? StringValueCStr(argv[0]) : "main";
@@ -370,8 +388,7 @@ VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
  * Returns true if a transaction is currently in progress.
  */
 VALUE Database_transaction_active_p(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   return sqlite3_get_autocommit(db->sqlite3_db) ? Qfalse : Qtrue;
 }
@@ -383,8 +400,7 @@ VALUE Database_transaction_active_p(VALUE self) {
  * Loads an extension with the given path.
  */
 VALUE Database_load_extension(VALUE self, VALUE path) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
   char *err_msg;
 
   int rc = sqlite3_load_extension(db->sqlite3_db, RSTRING_PTR(path), 0, &err_msg);
@@ -422,8 +438,7 @@ VALUE Database_prepare(int argc, VALUE *argv, VALUE self) {
  * For more information, consult the [sqlite3 API docs](https://sqlite.org/c3ref/interrupt.html).
  */
 VALUE Database_interrupt(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   sqlite3_interrupt(db->sqlite3_db);
   return self;
@@ -515,8 +530,7 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
 
   int dst_is_fn = TYPE(dst) == T_STRING;
 
-  Database_t *src;
-  GetOpenDatabase(self, src);
+  Database_t *src = self_to_open_database(self);
   sqlite3 *dst_db;
 
   if (dst_is_fn) {
@@ -527,8 +541,7 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
     }
   }
   else {
-    Database_t *dst_struct;
-    GetOpenDatabase(dst, dst_struct);
+    Database_t *dst_struct = self_to_open_database(dst);
     dst_db = dst_struct->sqlite3_db;
   }
 
@@ -583,8 +596,7 @@ VALUE Database_status(int argc, VALUE *argv, VALUE self) {
 
   rb_scan_args(argc, argv, "11", &op, &reset);
 
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   int rc = sqlite3_db_status(db->sqlite3_db, NUM2INT(op), &cur, &hwm, RTEST(reset) ? 1 : 0);
   if (rc != SQLITE_OK) rb_raise(cError, "%s", sqlite3_errstr(rc));
@@ -604,8 +616,7 @@ VALUE Database_limit(int argc, VALUE *argv, VALUE self) {
 
   rb_scan_args(argc, argv, "11", &category, &new_value);
 
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   int value = sqlite3_limit(db->sqlite3_db, NUM2INT(category), RTEST(new_value) ? NUM2INT(new_value) : -1);
 
@@ -622,8 +633,7 @@ VALUE Database_limit(int argc, VALUE *argv, VALUE self) {
  * disable the busy timeout, set it to 0 or nil.
  */
 VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   int ms = (sec == Qnil) ? 0 : (int)(NUM2DBL(sec) * 1000);
   int rc = sqlite3_busy_timeout(db->sqlite3_db, ms);
@@ -638,8 +648,7 @@ VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
  * Returns the total number of changes made to the database since opening it.
  */
 VALUE Database_total_changes(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   int value = sqlite3_total_changes(db->sqlite3_db);
   return INT2NUM(value);
@@ -653,8 +662,7 @@ VALUE Database_total_changes(VALUE self) {
  * executed.
  */
 VALUE Database_trace(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   db->trace_block = rb_block_given_p() ? rb_block_proc() : Qnil;
   return self;
@@ -666,8 +674,7 @@ VALUE Database_trace(VALUE self) {
  * Returns the last error code for the database.
  */
 VALUE Database_errcode(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   return INT2NUM(sqlite3_errcode(db->sqlite3_db));
 }
@@ -678,8 +685,7 @@ VALUE Database_errcode(VALUE self) {
  * Returns the last error message for the database.
  */
 VALUE Database_errmsg(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   return rb_str_new2(sqlite3_errmsg(db->sqlite3_db));
 }
@@ -691,8 +697,7 @@ VALUE Database_errmsg(VALUE self) {
  * Returns the offset for the last error
  */
 VALUE Database_error_offset(VALUE self) {
-  Database_t *db;
-  GetOpenDatabase(self, db);
+  Database_t *db = self_to_open_database(self);
 
   return INT2NUM(sqlite3_error_offset(db->sqlite3_db));
 }
@@ -721,7 +726,7 @@ void Init_ExtraliteDatabase(void) {
 
   rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
-  rb_define_method(cDatabase, "initialize", Database_initialize, 1);
+  rb_define_method(cDatabase, "initialize", Database_initialize, -1);
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "limit", Database_limit, -1);
@@ -732,6 +737,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
+  rb_define_method(cDatabase, "read_only?", Database_read_only_p, 0);
   rb_define_method(cDatabase, "status", Database_status, -1);
   rb_define_method(cDatabase, "total_changes", Database_total_changes, 0);
   rb_define_method(cDatabase, "trace", Database_trace, 0);
@@ -750,10 +756,15 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(cBusyError);
   rb_gc_register_mark_object(cInterruptError);
 
+  eArgumentError = rb_const_get(rb_cObject, rb_intern("ArgumentError"));
+
   ID_bind   = rb_intern("bind");
   ID_call   = rb_intern("call");
   ID_keys   = rb_intern("keys");
   ID_new    = rb_intern("new");
   ID_strip  = rb_intern("strip");
   ID_to_s   = rb_intern("to_s");
+
+  SYM_read_only = ID2SYM(rb_intern("read_only"));
+  rb_gc_register_mark_object(SYM_read_only);
 }

@@ -120,6 +120,6 @@ int stmt_iterate(query_ctx *ctx);
 VALUE cleanup_stmt(query_ctx *ctx);
 
 sqlite3 *Database_sqlite3_db(VALUE self);
-Database_t *Database_struct(VALUE self);
+Database_t *self_to_database(VALUE self);
 
 #endif /* EXTRALITE_H */
