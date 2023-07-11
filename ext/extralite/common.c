@@ -396,3 +396,8 @@ VALUE safe_execute_multi(query_ctx *ctx) {
 VALUE safe_query_columns(query_ctx *ctx) {
   return get_column_names(ctx->stmt, sqlite3_column_count(ctx->stmt));
 }
+
+VALUE safe_query_changes(query_ctx *ctx) {
+  while (stmt_iterate(ctx));
+  return INT2FIX(sqlite3_changes(ctx->sqlite3_db));
+}

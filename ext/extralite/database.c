@@ -309,6 +309,31 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
+ *   db.execute(sql, *parameters) -> changes
+ *
+ * Runs a query returning the total changes effected. This method should be used
+ * for data- or schema-manipulation queries.
+ *
+ * Query parameters to be bound to placeholders in the query can be specified as
+ * a list of values or as a hash mapping parameter names to values. When
+ * parameters are given as an array, the query should specify parameters using
+ * `?`:
+ *
+ *     db.execute('update foo set x = ? where y = ?', 42, 43)
+ *
+ * Named placeholders are specified using `:`. The placeholder values are
+ * specified using a hash, where keys are either strings are symbols. String
+ * keys can include or omit the `:` prefix. The following are equivalent:
+ *
+ *     db.execute('update foo set x = :bar', bar: 42)
+ *     db.execute('update foo set x = :bar', 'bar' => 42)
+ *     db.execute('update foo set x = :bar', ':bar' => 42)
+ */
+VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
+  return Database_perform_query(argc, argv, self, safe_query_changes);
+}
+
+/* call-seq:
  *   db.execute_multi(sql, params_array) -> changes
  *
  * Executes the given query for each list of parameters in params_array. Returns
@@ -737,6 +762,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "error_offset", Database_error_offset, 0);
   #endif
 
+  rb_define_method(cDatabase, "execute", Database_execute, -1);
   rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "initialize", Database_initialize, -1);

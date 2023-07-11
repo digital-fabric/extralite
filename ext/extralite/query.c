@@ -337,6 +337,35 @@ VALUE Query_each_single_column(VALUE self) {
   return Query_perform_next(self, ALL_ROWS, safe_query_single_column);
 }
 
+/* call-seq:
+ *   query.execute(*parameters) -> changes
+ *
+ * Runs a query returning the total changes effected. This method should be used
+ * for data- or schema-manipulation queries.
+ *
+ * Query parameters to be bound to placeholders in the query can be specified as
+ * a list of values or as a hash mapping parameter names to values. When
+ * parameters are given as an array, the query should specify parameters using
+ * `?`:
+ *
+ *     query = db.prepare('update foo set x = ? where y = ?')
+ *     query.execute(42, 43)
+ *
+ * Named placeholders are specified using `:`. The placeholder values are
+ * specified using a hash, where keys are either strings are symbols. String
+ * keys can include or omit the `:` prefix. The following are equivalent:
+ *
+ *     query = db.prepare('update foo set x = :bar')
+ *     query.execute(bar: 42)
+ *     query.execute('bar' => 42)
+ *     query.execute(':bar' => 42)
+ */
+VALUE Query_execute(int argc, VALUE *argv, VALUE self) {
+  Query_t *query = self_to_query(self);
+  query_reset_and_bind(query, argc, argv);
+  return Query_perform_next(self, ALL_ROWS, safe_query_changes);
+}
+
 /* Executes the query for each set of parameters in the given array. Parameters
  * can be specified as either an array (for unnamed parameters) or a hash (for
  * named parameters). Returns the number of changes effected. This method is
@@ -481,6 +510,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "each_single_column", Query_each_single_column, 0);
 
   rb_define_method(cQuery, "eof?", Query_eof_p, 0);
+  rb_define_method(cQuery, "execute", Query_execute, -1);
   rb_define_method(cQuery, "execute_multi", Query_execute_multi, 1);
   rb_define_method(cQuery, "initialize", Query_initialize, 2);
   rb_define_method(cQuery, "inspect", Query_inspect, 0);

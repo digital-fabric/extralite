@@ -27,8 +27,6 @@ module Extralite
 
   # An SQLite database
   class Database
-    alias_method :execute, :query
-
     # @!visibility private
     TABLES_SQL = <<~SQL
       SELECT name FROM sqlite_master

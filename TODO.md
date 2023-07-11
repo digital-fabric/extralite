@@ -1,9 +1,4 @@
-- Add `#inspect` method for `Database`, `Query`, `Iterator` classes
 - Improve tracing
-
-- Add `Database#execute(sql, bind_params)`, `Query#execute(bind_params)` method for executing a query
-  - Should return number of changes
-
 - Transactions and savepoints:
 
   - `DB#transaction {}` - does a `BEGIN..COMMIT` - non-reentrant!
@@ -17,7 +12,6 @@
   - `Database#quote`
   - `Database#busy_timeout=` https://sqlite.org/c3ref/busy_timeout.html
   - `Database#cache_flush` https://sqlite.org/c3ref/db_cacheflush.html
-  - `Database#readonly?` https://sqlite.org/c3ref/db_readonly.html
   - `Database#release_memory` https://sqlite.org/c3ref/db_release_memory.html
 
 - Security

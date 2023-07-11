@@ -206,6 +206,17 @@ end
     assert_equal [{recursive_triggers: 1}], @db.pragma(:recursive_triggers)
   end
 
+  def test_execute
+    changes = @db.execute('update t set x = 42')
+    assert_equal 2, changes
+  end
+
+  def test_execute_with_params
+    changes = @db.execute('update t set x = ? where z = ?', 42, 6)
+    assert_equal 1, changes
+    assert_equal [[1, 2, 3], [42, 5, 6]], @db.query_ary('select * from t order by x')
+  end
+
   def test_execute_multi
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')

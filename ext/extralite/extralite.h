@@ -94,6 +94,7 @@ typedef struct {
 
 VALUE safe_execute_multi(query_ctx *ctx);
 VALUE safe_query_ary(query_ctx *ctx);
+VALUE safe_query_changes(query_ctx *ctx);
 VALUE safe_query_columns(query_ctx *ctx);
 VALUE safe_query_hash(query_ctx *ctx);
 VALUE safe_query_single_column(query_ctx *ctx);

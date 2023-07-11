@@ -430,6 +430,18 @@ class QueryTest < MiniTest::Test
     assert_raises(Extralite::Error) { p.next }
   end
 
+  def test_query_execute
+    q = @db.prepare('update t set x = 42')
+    assert_equal 3, q.execute
+    assert_equal [[42, 2, 3], [42, 5, 6], [42, 8, 9]], @db.query_ary('select * from t order by z')
+  end
+
+  def test_query_execute_with_params
+    q = @db.prepare('update t set x = ? where z = ?')
+    assert_equal 1, q.execute(42, 9)
+    assert_equal [[1, 2, 3], [4, 5, 6], [42, 8, 9]], @db.query_ary('select * from t order by z')
+  end
+
   def test_query_execute_multi
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')
