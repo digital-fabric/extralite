@@ -1,3 +1,8 @@
+# 2.1 2023-07-11
+
+- Implement `Database#execute`, `Query#execute` for data-manipulation queries
+- Add option for opening databases for read only access
+
 # 2.0 2023-07-08
 
 - Fix Sequel migrations (#8)
