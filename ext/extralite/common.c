@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include "extralite.h"
 
+rb_encoding *UTF8_ENCODING;
+
 static inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
   switch (type) {
     case SQLITE_NULL:
@@ -10,7 +12,7 @@ static inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
     case SQLITE_FLOAT:
       return DBL2NUM(sqlite3_column_double(stmt, col));
     case SQLITE_TEXT:
-      return rb_str_new_cstr((char *)sqlite3_column_text(stmt, col));
+      return rb_enc_str_new((char *)sqlite3_column_text(stmt, col), (long)sqlite3_column_bytes(stmt, col), UTF8_ENCODING);
     case SQLITE_BLOB:
       return rb_str_new((const char *)sqlite3_column_blob(stmt, col), (long)sqlite3_column_bytes(stmt, col));
     default:

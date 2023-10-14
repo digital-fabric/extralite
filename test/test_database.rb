@@ -387,6 +387,13 @@ end
     db = Extralite::Database.new(':memory:')
     assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect
   end
+
+  def test_string_encoding
+    db = Extralite::Database.new(':memory:')
+    v = db.query_single_value("select 'foo'")
+    assert_equal 'foo', v
+    assert_equal 'UTF-8', v.encoding.name
+  end
 end
 
 class ScenarioTest < MiniTest::Test

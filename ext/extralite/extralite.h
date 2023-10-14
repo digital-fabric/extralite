@@ -3,6 +3,7 @@
 
 #include "ruby.h"
 #include "ruby/thread.h"
+#include "ruby/encoding.h"
 
 #ifdef EXTRALITE_NO_BUNDLE
 #include <sqlite3.h>
@@ -91,6 +92,8 @@ typedef struct {
 #define SINGLE_ROW -2
 #define QUERY_MODE(default) (rb_block_given_p() ? QUERY_YIELD : default)
 #define MULTI_ROW_P(mode) (mode == QUERY_MULTI_ROW)
+
+extern rb_encoding *UTF8_ENCODING;
 
 VALUE safe_execute_multi(query_ctx *ctx);
 VALUE safe_query_ary(query_ctx *ctx);

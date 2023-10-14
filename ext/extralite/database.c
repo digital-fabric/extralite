@@ -807,4 +807,6 @@ void Init_ExtraliteDatabase(void) {
 
   SYM_read_only = ID2SYM(rb_intern("read_only"));
   rb_gc_register_mark_object(SYM_read_only);
+
+  UTF8_ENCODING = rb_utf8_encoding();
 }
