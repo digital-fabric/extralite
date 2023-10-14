@@ -1,3 +1,8 @@
+# 2.2 2023-10-14
+
+- Set correct encoding for strings values in query results (#27)
+- Reset query after running it in Sequel adapter (#26)
+
 # 2.1 2023-07-11
 
 - Implement `Database#execute`, `Query#execute` for data-manipulation queries
