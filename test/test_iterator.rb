@@ -101,4 +101,17 @@ class IteratorTest < MiniTest::Test
     i = @query.each_ary
     assert_match /^\#\<Extralite::Iterator:0x[0-9a-f]+ ary\>$/, i.inspect
   end
+
+  def test_return_from_block_issue_26
+    db = Extralite::Database.new('/tmp/locked.db')
+
+    λ = ->(sql) {
+      db.prepare(sql).each { |r| r.each { |_, v| return v } }
+    }
+
+    20.times do |i|
+      λ.('DROP TABLE IF EXISTS `test1`')
+      λ.('CREATE TABLE `test1` (`_id` integer NOT NULL PRIMARY KEY AUTOINCREMENT) STRICT')
+    end
+  end
 end

@@ -212,7 +212,11 @@ module Sequel
           case type
           when :select
             query = conn.prepare(sql, args)
-            log_connection_yield(sql, conn, log_args){block.call(query.each, query.columns)}
+            begin
+              log_connection_yield(sql, conn, log_args){block.call(query.each, query.columns)}
+            ensure
+              query.reset
+            end
           when :insert
             log_connection_yield(sql, conn, log_args){conn.query(sql, args)}
             conn.last_insert_rowid
