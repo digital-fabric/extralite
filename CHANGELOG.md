@@ -1,3 +1,7 @@
+# 2.3 2023-11-12
+
+- Update bundled SQLite to version 3.44.0 (#29)
+
 # 2.2 2023-10-14
 
 - Set correct encoding for strings values in query results (#27)
