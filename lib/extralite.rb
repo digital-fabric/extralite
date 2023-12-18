@@ -25,6 +25,10 @@ module Extralite
   class InterruptError < Error
   end
 
+  # An exception raised when an Extralite doesn't know how to bind a parameter to a query
+  class ParameterError < Error
+  end
+
   # An SQLite database
   class Database
     # @!visibility private

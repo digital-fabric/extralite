@@ -24,29 +24,43 @@ static inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
 
 void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value);
 
+static inline void bind_key_value(sqlite3_stmt *stmt, VALUE k, VALUE v) {
+  switch (TYPE(k)) {
+    case T_FIXNUM:
+      bind_parameter_value(stmt, FIX2INT(k), v);
+      break;
+    case T_SYMBOL:
+      k = rb_funcall(k, ID_to_s, 0);
+    case T_STRING:
+      if (RSTRING_PTR(k)[0] != ':') k = rb_str_plus(rb_str_new2(":"), k);
+      int pos = sqlite3_bind_parameter_index(stmt, StringValuePtr(k));
+      bind_parameter_value(stmt, pos, v);
+      break;
+    default:
+      rb_raise(cParameterError, "Cannot bind parameter with a key of type %"PRIsVALUE"",
+        rb_class_name(rb_obj_class(k)));
+  }
+}
+
 void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
   VALUE keys = rb_funcall(hash, ID_keys, 0);
   long len = RARRAY_LEN(keys);
   for (long i = 0; i < len; i++) {
     VALUE k = RARRAY_AREF(keys, i);
     VALUE v = rb_hash_aref(hash, k);
-
-    switch (TYPE(k)) {
-      case T_FIXNUM:
-        bind_parameter_value(stmt, FIX2INT(k), v);
-        break;
-      case T_SYMBOL:
-        k = rb_funcall(k, ID_to_s, 0);
-      case T_STRING:
-        if(RSTRING_PTR(k)[0] != ':') k = rb_str_plus(rb_str_new2(":"), k);
-        int pos = sqlite3_bind_parameter_index(stmt, StringValuePtr(k));
-        bind_parameter_value(stmt, pos, v);
-        break;
-      default:
-        rb_raise(cError, "Cannot bind hash key value idx %ld", i);
-    }
+    bind_key_value(stmt, k, v);
   }
   RB_GC_GUARD(keys);
+}
+
+void bind_struct_parameter_values(sqlite3_stmt *stmt, VALUE struct_obj) {
+  VALUE members = rb_struct_members(struct_obj);
+  for (long i = 0; i < RSTRUCT_LEN(struct_obj); i++) {
+    VALUE k = rb_ary_entry(members, i);
+    VALUE v = RSTRUCT_GET(struct_obj, i);
+    bind_key_value(stmt, k, v);
+  }
+  RB_GC_GUARD(members);
 }
 
 inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
@@ -72,8 +86,12 @@ inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
     case T_HASH:
       bind_hash_parameter_values(stmt, value);
       return;
+    case T_STRUCT:
+      bind_struct_parameter_values(stmt, value);
+      return;
     default:
-      rb_raise(cError, "Cannot bind parameter at position %d", pos);
+      rb_raise(cParameterError, "Cannot bind parameter at position %d of type %"PRIsVALUE"",
+        pos, rb_class_name(rb_obj_class(value)));
   }
 }
 

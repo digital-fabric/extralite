@@ -28,6 +28,7 @@ extern VALUE cError;
 extern VALUE cSQLError;
 extern VALUE cBusyError;
 extern VALUE cInterruptError;
+extern VALUE cParameterError;
 
 extern ID ID_call;
 extern ID ID_keys;

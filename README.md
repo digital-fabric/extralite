@@ -101,11 +101,18 @@ db.query_single_value("select 'foo'") #=> "foo"
 
 # parameter binding (works for all query_xxx methods)
 db.query_hash('select ? as foo, ? as bar', 1, 2) #=> [{ :foo => 1, :bar => 2 }]
+db.query_hash('select ?2 as foo, ?1 as bar, ?1 * ?2 as baz', 6, 7) #=> [{ :foo => 7, :bar => 6, :baz => 42 }]
 
 # parameter binding of named parameters
 db.query('select * from foo where bar = :bar', bar: 42)
 db.query('select * from foo where bar = :bar', 'bar' => 42)
 db.query('select * from foo where bar = :bar', ':bar' => 42)
+
+# parameter binding of named parameters from Struct and Data
+SomeStruct = Struct.new(:foo, :bar)
+db.query_single_column('select :bar', SomeStruct.new(41, 42)) #=> [42]
+SomeData = Data.define(:foo, :bar)
+db.query_single_column('select :bar', SomeData.new(foo: 41, bar: 42)) #=> [42]
 
 # insert multiple rows
 db.execute_multi('insert into foo values (?)', ['bar', 'baz'])

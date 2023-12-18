@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'helper'
+require 'date'
 
 class QueryTest < MiniTest::Test
   def setup
@@ -267,7 +268,7 @@ class QueryTest < MiniTest::Test
   end
 
   def test_query_each_without_block
-    query = @db.prepare('select * from t') 
+    query = @db.prepare('select * from t')
     iter = query.each
     assert_kind_of Extralite::Iterator, iter
 
@@ -294,7 +295,7 @@ class QueryTest < MiniTest::Test
   end
 
   def test_query_each_ary_without_block
-    query = @db.prepare('select * from t') 
+    query = @db.prepare('select * from t')
     iter = query.each_ary
     assert_kind_of Extralite::Iterator, iter
 
@@ -322,7 +323,7 @@ class QueryTest < MiniTest::Test
   end
 
   def test_query_each_single_column_without_block
-    query = @db.prepare('select x from t') 
+    query = @db.prepare('select x from t')
     iter = query.each_single_column
     assert_kind_of Extralite::Iterator, iter
 
@@ -375,6 +376,9 @@ class QueryTest < MiniTest::Test
   def test_query_parameter_binding_simple
     r = @db.prepare('select x, y, z from t where x = ?').bind(1).next
     assert_equal({ x: 1, y: 2, z: 3 }, r)
+
+    error = assert_raises(Extralite::ParameterError) { @db.prepare('select ?').bind(Date.today).next }
+    assert_equal error.message, 'Cannot bind parameter at position 1 of type Date'
   end
 
   def test_query_parameter_binding_with_index
@@ -402,6 +406,38 @@ class QueryTest < MiniTest::Test
 
     r = @db.prepare('select x, y, z from t where x = ?2').bind(1 => 42, 2 => 4).next
     assert_equal({ x: 4, y: 5, z: 6 }, r)
+  end
+
+  class Foo; end
+
+  def test_parameter_binding_from_hash
+    assert_equal 42, @db.prepare('select :bar').bind(foo: 41, bar: 42).next_single_column
+    assert_equal 42, @db.prepare('select :bar').bind('foo' => 41, 'bar' => 42).next_single_column
+    assert_equal 42, @db.prepare('select ?8').bind(7 => 41, 8 => 42).next_single_column
+    assert_nil @db.prepare('select :bar').bind(foo: 41).next_single_column
+
+    error = assert_raises(Extralite::ParameterError) { @db.prepare('select ?').bind(Foo.new => 42).next_single_column }
+    assert_equal error.message, 'Cannot bind parameter with a key of type QueryTest::Foo'
+
+    error = assert_raises(Extralite::ParameterError) { @db.prepare('select ?').bind(%w[a b] => 42).next_single_column }
+    assert_equal error.message, 'Cannot bind parameter with a key of type Array'
+  end
+
+  def test_parameter_binding_from_struct
+    foo_bar = Struct.new(:":foo", :bar)
+    value = foo_bar.new(41, 42)
+    assert_equal 41, @db.prepare('select :foo').bind(value).next_single_column
+    assert_equal 42, @db.prepare('select :bar').bind(value).next_single_column
+    assert_nil @db.prepare('select :baz').bind(value).next_single_column
+  end
+
+  def test_parameter_binding_from_data_class
+    skip "Data isn't supported in Ruby < 3.2" if RUBY_VERSION < '3.2'
+
+    foo_bar = Data.define(:":foo", :bar)
+    value = foo_bar.new(":foo": 41, bar: 42)
+    assert_equal 42, @db.prepare('select :bar').bind(value).next_single_column
+    assert_nil @db.prepare('select :baz').bind(value).next_single_column
   end
 
   def test_query_columns
@@ -459,7 +495,7 @@ class QueryTest < MiniTest::Test
       { a: 1, b: '2', c: 3 },
       { a: '4', b: 5, c: 6 }
     ], @db.query('select * from foo')
-  end  
+  end
 
   def test_query_status
     assert_equal 0, @query.status(Extralite::SQLITE_STMTSTATUS_RUN)
