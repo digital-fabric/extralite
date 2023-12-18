@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'helper'
+require 'date'
 
 class DatabaseTest < MiniTest::Test
   def setup
@@ -123,6 +124,9 @@ end
 
     r = @db.query('select x, y, z from t where z = ?', 6)
     assert_equal [{ x: 4, y: 5, z: 6 }], r
+
+    error = assert_raises(Extralite::ParameterError) { @db.query_single_value('select ?', Date.today) }
+    assert_equal error.message, 'Cannot bind parameter at position 1 of type Date'
   end
 
   def test_parameter_binding_with_index
@@ -150,6 +154,38 @@ end
 
     r = @db.query('select x, y, z from t where x = ?2', 1 => 42, 2 => 4)
     assert_equal [{ x: 4, y: 5, z: 6 }], r
+  end
+
+  class Foo; end
+
+  def test_parameter_binding_from_hash
+    assert_equal 42, @db.query_single_value('select :bar', foo: 41, bar: 42)
+    assert_equal 42, @db.query_single_value('select :bar', 'foo' => 41, 'bar' => 42)
+    assert_equal 42, @db.query_single_value('select ?8', 7 => 41, 8 => 42)
+    assert_nil @db.query_single_value('select :bar', foo: 41)
+
+    error = assert_raises(Extralite::ParameterError) { @db.query_single_value('select ?', Foo.new => 42) }
+    assert_equal error.message, 'Cannot bind parameter with a key of type DatabaseTest::Foo'
+
+    error = assert_raises(Extralite::ParameterError) { @db.query_single_value('select ?', %w[a b] => 42) }
+    assert_equal error.message, 'Cannot bind parameter with a key of type Array'
+  end
+
+  def test_parameter_binding_from_struct
+    foo_bar = Struct.new(:":foo", :bar)
+    value = foo_bar.new(41, 42)
+    assert_equal 41, @db.query_single_value('select :foo', value)
+    assert_equal 42, @db.query_single_value('select :bar', value)
+    assert_nil @db.query_single_value('select :baz', value)
+  end
+
+  def test_parameter_binding_from_data_class
+    skip "Data isn't supported in Ruby < 3.2" if RUBY_VERSION < '3.2'
+
+    foo_bar = Data.define(:":foo", :bar)
+    value = foo_bar.new(":foo": 41, bar: 42)
+    assert_equal 42, @db.query_single_value('select :bar', value)
+    assert_nil @db.query_single_value('select :baz', value)
   end
 
   def test_value_casting
