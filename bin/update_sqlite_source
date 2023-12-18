@@ -9,10 +9,10 @@ require 'date'
 
 FileUtils.cd '/tmp'
 
-version_id = version.gsub('.', '')
+version_id = version.split('.').each_with_index.map { |v, i| i == 0 ? v : v.rjust(2, '0') }.join
 version_id += '0' * (7 - version_id.length)
 url = "https://sqlite.org/#{Date.today.year}/sqlite-amalgamation-#{version_id}.zip"
-dest = File.expand_path('../ext/extralite', __dir__)
+dest = File.expand_path('../ext/sqlite3', __dir__)
 
 puts "Downloading from #{url}..."
 `curl #{url} > #{version_id}.zip`
@@ -22,5 +22,12 @@ puts "Unzipping zip file..."
 
 puts "Copying source files"
 `cp sqlite-amalgamation-#{version_id}/sqlite3.* #{dest}/`
+
+puts "Updating README"
+readme_path = File.expand_path('../README.md', __dir__)
+readme = File.read(readme_path)
+readme.gsub!(/\[\d+\.\d+\.\d+\]/, "[#{version}]")
+readme.gsub!(/\d+_\d+_\d+\.html/, "#{version.gsub('.', '_')}.html")
+File.write(readme_path, readme)
 
 puts 'Done updating source files'
