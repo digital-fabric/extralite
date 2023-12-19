@@ -2,6 +2,10 @@ name: Tests
 
 on: [push, pull_request]
 
+concurrency:
+  group: tests-${{ format('{0}-{1}', github.head_ref || github.run_number, github.job) }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
@@ -15,7 +19,7 @@ jobs:
 
     runs-on: ${{matrix.os}}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{matrix.ruby}}
@@ -24,3 +28,13 @@ jobs:
       run: bundle exec rake compile
     - name: Run tests
       run:  bundle exec rake test
+    - name: Build bundled gem
+      run:  bundle exec rake build_bundled
+    - name: Run tests with bundled gem
+      run: |
+        echo Installing extralite-bundle...
+        bundle config --local frozen false
+        mv Gemfile-bundle Gemfile
+        bundle install
+        echo Running tests...
+        bundle exec rake test

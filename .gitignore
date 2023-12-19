@@ -10,6 +10,7 @@
 /test/version_tmp/
 /tmp/
 lib/extralite_ext.*
+Gemfile-bundle.lock
 
 # Used by dotenv library to load environment variables.
 # .env
