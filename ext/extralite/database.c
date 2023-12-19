@@ -22,6 +22,11 @@ static size_t Database_size(const void *ptr) {
   return sizeof(Database_t);
 }
 
+static void Database_mark(void *ptr) {
+  Database_t *db = ptr;
+  rb_gc_mark(db->trace_block);
+}
+
 static void Database_free(void *ptr) {
   Database_t *db = ptr;
   if (db->sqlite3_db) sqlite3_close_v2(db->sqlite3_db);
@@ -30,7 +35,7 @@ static void Database_free(void *ptr) {
 
 static const rb_data_type_t Database_type = {
     "Database",
-    {0, Database_free, Database_size,},
+    {Database_mark, Database_free, Database_size,},
     0, 0, RUBY_TYPED_FREE_IMMEDIATELY
 };
 

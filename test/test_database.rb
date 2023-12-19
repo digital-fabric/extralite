@@ -501,6 +501,7 @@ class ScenarioTest < MiniTest::Test
   def test_database_trace
     sqls = []
     @db.trace { |sql| sqls << sql }
+    GC.start
 
     @db.query('select 1')
     assert_equal ['select 1'], sqls
