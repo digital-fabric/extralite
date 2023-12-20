@@ -581,6 +581,8 @@ class ConcurrencyTest < Minitest::Test
   end
 
   def test_gvl_release_by_default
+    skip if !IS_LINUX
+
     delays = []
     running = true
     t1 = Thread.new do
@@ -606,6 +608,8 @@ class ConcurrencyTest < Minitest::Test
   end
 
   def test_gvl_hold
+    skip if !IS_LINUX
+
     delays = []
     running = true
 
