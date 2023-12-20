@@ -11,6 +11,8 @@
 /tmp/
 lib/extralite_ext.*
 Gemfile-bundle.lock
+/cmake-build-debug/
+CMakeLists.txt
 
 # Used by dotenv library to load environment variables.
 # .env
