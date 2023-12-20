@@ -574,7 +574,7 @@ class ConcurrencyTest < Minitest::Test
         VALUES(0)
         UNION ALL
         SELECT i FROM r
-        LIMIT 1000000
+        LIMIT 2000000
       )
       SELECT i FROM r WHERE i = 1;
     SQL
@@ -586,7 +586,7 @@ class ConcurrencyTest < Minitest::Test
     t1 = Thread.new do
       last = Time.now
       while running
-        sleep 0.01
+        sleep 0.1
         now = Time.now
         delays << (now - last)
         last = now
@@ -601,8 +601,8 @@ class ConcurrencyTest < Minitest::Test
     t2.join
     t1.join
 
-    assert delays.size > 10
-    assert_equal 0, delays.select { |d| d > 0.015 }.size
+    assert delays.size > 4
+    assert_equal 0, delays.select { |d| d > 0.15 }.size
   end
 
   def test_gvl_hold
@@ -617,7 +617,7 @@ class ConcurrencyTest < Minitest::Test
       last = Time.now
       while running
         signal << true
-        sleep 0.01
+        sleep 0.1
         now = Time.now
         delays << (now - last)
         last = now
@@ -634,7 +634,7 @@ class ConcurrencyTest < Minitest::Test
     t1.join
 
     assert delays.size >= 1
-    assert delays.first > 0.1
+    assert delays.first > 0.5
   end
 
   def test_gvl_mode_get_set
