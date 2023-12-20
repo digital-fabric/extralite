@@ -245,6 +245,8 @@ end
     assert_equal '2023-12-24T18:30:00Z', db.query_single_value('select ?', time)
 
     hash = { foo: 42, bar: 43 }
+    assert_equal hash.to_json, db.query_single_value('select ?', hash)
+
     struct = Struct.new(:foo, :bar).new(42, 43)
     expected_value = { id: 7, json_value: '{"foo":42,"bar":43}' }
     assert_equal expected_value, db.query_single_row('select :id AS id, :value AS json_value', id: 7, value: hash)
