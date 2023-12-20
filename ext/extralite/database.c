@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "extralite.h"
 
 VALUE cDatabase;
@@ -54,7 +55,7 @@ inline Database_t *self_to_database(VALUE self) {
 inline Database_t *self_to_open_database(VALUE self) {
   Database_t *db = self_to_database(self);
   if (!(db)->sqlite3_db) rb_raise(cError, "Database is closed");
-  
+
   return db;
 }
 
@@ -196,18 +197,18 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
  * Runs a query returning rows as hashes (with symbol keys). If a block is
  * given, it will be called for each row. Otherwise, an array containing all
  * rows is returned.
- * 
+ *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
  * parameters are given as an array, the query should specify parameters using
  * `?`:
- * 
+ *
  *     db.query('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
  * specified using a hash, where keys are either strings are symbols. String
  * keys can include or omit the `:` prefix. The following are equivalent:
- * 
+ *
  *     db.query('select * from foo where x = :bar', bar: 42)
  *     db.query('select * from foo where x = :bar', 'bar' => 42)
  *     db.query('select * from foo where x = :bar', ':bar' => 42)
