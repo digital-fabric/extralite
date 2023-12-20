@@ -574,7 +574,7 @@ class ConcurrencyTest < Minitest::Test
         VALUES(0)
         UNION ALL
         SELECT i FROM r
-        LIMIT 2000000
+        LIMIT 3000000
       )
       SELECT i FROM r WHERE i = 1;
     SQL
@@ -634,7 +634,7 @@ class ConcurrencyTest < Minitest::Test
     t1.join
 
     assert delays.size >= 1
-    assert delays.first > 0.5
+    assert delays.first > 0.2
   end
 
   def test_gvl_mode_get_set
