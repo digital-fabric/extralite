@@ -2,6 +2,8 @@
 
 require_relative 'helper'
 require 'date'
+require 'time'
+require 'json'
 
 class DatabaseTest < MiniTest::Test
   def setup
@@ -186,6 +188,44 @@ end
     value = foo_bar.new(":foo": 41, bar: 42)
     assert_equal 42, @db.query_single_value('select :bar', value)
     assert_nil @db.query_single_value('select :baz', value)
+  end
+
+  def test_parameter_binding_with_unhandled_types
+    db = Extralite::Database.new(':memory:')
+    db.on_unhandled_parameter = ->(value) do
+      case value
+      when Date
+        value.iso8601
+      when Time
+        value.utc.iso8601
+      when Hash
+        value.to_json
+      when Struct
+        value.to_h.to_json
+      else
+        raise "don't know how to handle #{value.class}"
+      end
+    end
+
+    date = Date.new(2023, 12, 24)
+    assert_equal '2023-12-24', db.query_single_value('select ?', date)
+
+    time = Time.new(2023, 12, 24, 20, 30, 0, '+02:00')
+    assert_equal '2023-12-24T18:30:00Z', db.query_single_value('select ?', time)
+
+    hash = { foo: 42, bar: 43 }
+    struct = Struct.new(:foo, :bar).new(42, 43)
+    expected_value = { id: 7, json_value: '{"foo":42,"bar":43}' }
+    assert_equal expected_value, db.query_single_row('select :id AS id, :value AS json_value', id: 7, value: hash)
+    assert_equal expected_value, db.query_single_row('select :id AS id, :value AS json_value', id: 7, value: struct)
+
+    error = assert_raises(RuntimeError) { db.query_single_value('select ?', Foo.new) }
+    assert_equal error.message, "don't know how to handle DatabaseTest::Foo"
+
+    db.on_unhandled_parameter = nil
+
+    error = assert_raises(Extralite::Error) { db.query_single_value('select ?', date) }
+    assert_equal error.message, 'Cannot bind parameter at position 1 of type Date'
   end
 
   def test_value_casting

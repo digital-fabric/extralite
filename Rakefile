@@ -28,7 +28,7 @@ end
 task :release do
   require_relative './lib/extralite/version'
   version = Extralite::VERSION
-  
+
   puts 'Building extralite...'
   `gem build extralite.gemspec`
 

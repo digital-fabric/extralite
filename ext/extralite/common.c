@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include "extralite.h"
 
 rb_encoding *UTF8_ENCODING;
@@ -22,19 +23,19 @@ static inline VALUE get_column_value(sqlite3_stmt *stmt, int col, int type) {
   return Qnil;
 }
 
-void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value);
+static void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value, VALUE unhandled_parameter_proc, bool nested);
 
-static inline void bind_key_value(sqlite3_stmt *stmt, VALUE k, VALUE v) {
+static inline void bind_key_value(sqlite3_stmt *stmt, VALUE k, VALUE v, VALUE unhandled_parameter_proc) {
   switch (TYPE(k)) {
     case T_FIXNUM:
-      bind_parameter_value(stmt, FIX2INT(k), v);
+      bind_parameter_value(stmt, FIX2INT(k), v, unhandled_parameter_proc, true);
       break;
     case T_SYMBOL:
       k = rb_funcall(k, ID_to_s, 0);
     case T_STRING:
       if (RSTRING_PTR(k)[0] != ':') k = rb_str_plus(rb_str_new2(":"), k);
       int pos = sqlite3_bind_parameter_index(stmt, StringValuePtr(k));
-      bind_parameter_value(stmt, pos, v);
+      bind_parameter_value(stmt, pos, v, unhandled_parameter_proc, true);
       break;
     default:
       rb_raise(cParameterError, "Cannot bind parameter with a key of type %"PRIsVALUE"",
@@ -42,29 +43,42 @@ static inline void bind_key_value(sqlite3_stmt *stmt, VALUE k, VALUE v) {
   }
 }
 
-void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash) {
+static inline void bind_hash_parameter_values(sqlite3_stmt *stmt, VALUE hash, VALUE unhandled_parameter_proc) {
   VALUE keys = rb_funcall(hash, ID_keys, 0);
   long len = RARRAY_LEN(keys);
   for (long i = 0; i < len; i++) {
     VALUE k = RARRAY_AREF(keys, i);
     VALUE v = rb_hash_aref(hash, k);
-    bind_key_value(stmt, k, v);
+    bind_key_value(stmt, k, v, unhandled_parameter_proc);
   }
   RB_GC_GUARD(keys);
 }
 
-void bind_struct_parameter_values(sqlite3_stmt *stmt, VALUE struct_obj) {
+static inline void bind_struct_parameter_values(sqlite3_stmt *stmt, VALUE struct_obj, VALUE unhandled_parameter_proc) {
   VALUE members = rb_struct_members(struct_obj);
   for (long i = 0; i < RSTRUCT_LEN(struct_obj); i++) {
     VALUE k = rb_ary_entry(members, i);
     VALUE v = RSTRUCT_GET(struct_obj, i);
-    bind_key_value(stmt, k, v);
+    bind_key_value(stmt, k, v, unhandled_parameter_proc);
   }
   RB_GC_GUARD(members);
 }
 
-inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
-  switch (TYPE(value)) {
+static void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value, VALUE unhandled_parameter_proc, bool nested) {
+  int type = TYPE(value);
+
+  if (!nested) {
+    switch (type) {
+      case T_HASH:
+        bind_hash_parameter_values(stmt, value, unhandled_parameter_proc);
+        return;
+      case T_STRUCT:
+        bind_struct_parameter_values(stmt, value, unhandled_parameter_proc);
+        return;
+    }
+  }
+
+  switch (type) {
     case T_NIL:
       sqlite3_bind_null(stmt, pos);
       return;
@@ -83,30 +97,31 @@ inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
     case T_STRING:
       sqlite3_bind_text(stmt, pos, RSTRING_PTR(value), RSTRING_LEN(value), SQLITE_TRANSIENT);
       return;
-    case T_HASH:
-      bind_hash_parameter_values(stmt, value);
-      return;
-    case T_STRUCT:
-      bind_struct_parameter_values(stmt, value);
-      return;
     default:
-      rb_raise(cParameterError, "Cannot bind parameter at position %d of type %"PRIsVALUE"",
-        pos, rb_class_name(rb_obj_class(value)));
+      if (NIL_P(unhandled_parameter_proc)) {
+        rb_raise(cParameterError, "Cannot bind parameter at position %d of type %"PRIsVALUE"",
+          pos, rb_class_name(rb_obj_class(value)));
+      } else {
+        VALUE result = rb_funcall(unhandled_parameter_proc, ID_call, 1, value);
+        RB_GC_GUARD(result);
+        bind_parameter_value(stmt, pos, result, Qnil, false);
+      }
   }
 }
 
-inline void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv) {
-  for (int i = 0; i < argc; i++) bind_parameter_value(stmt, i + 1, argv[i]);
+inline void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv, VALUE unhandled_parameter_proc) {
+  for (int i = 0; i < argc; i++) bind_parameter_value(stmt, i + 1, argv[i], unhandled_parameter_proc, false);
 }
 
-inline void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj) {
+inline void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj, VALUE unhandled_parameter_proc) {
   if (TYPE(obj) == T_ARRAY) {
     int count = RARRAY_LEN(obj);
     for (int i = 0; i < count; i++)
-      bind_parameter_value(stmt, i + 1, RARRAY_AREF(obj, i));
+      bind_parameter_value(stmt, i + 1, RARRAY_AREF(obj, i), unhandled_parameter_proc, false);
   }
-  else
-    bind_parameter_value(stmt, 1, obj);
+  else {
+    bind_parameter_value(stmt, 1, obj, unhandled_parameter_proc, false);
+  }
 }
 
 static inline VALUE get_column_names(sqlite3_stmt *stmt, int column_count) {
@@ -404,7 +419,7 @@ VALUE safe_execute_multi(query_ctx *ctx) {
   for (int i = 0; i < count; i++) {
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
-    bind_all_parameters_from_object(ctx->stmt, RARRAY_AREF(ctx->params, i));
+    bind_all_parameters_from_object(ctx->stmt, RARRAY_AREF(ctx->params, i), ctx->unhandled_parameter_proc);
 
     while (stmt_iterate(ctx));
     changes += sqlite3_changes(ctx->sqlite3_db);

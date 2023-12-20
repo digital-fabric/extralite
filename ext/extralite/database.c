@@ -26,6 +26,7 @@ static size_t Database_size(const void *ptr) {
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
   rb_gc_mark(db->trace_block);
+  rb_gc_mark(db->unhandled_parameter_proc);
 }
 
 static void Database_free(void *ptr) {
@@ -125,6 +126,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
 #endif
 
   db->trace_block = Qnil;
+  db->unhandled_parameter_proc = Qnil;
 
   return Qnil;
 }
@@ -184,8 +186,16 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
-  bind_all_parameters(stmt, argc - 1, argv + 1);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  bind_all_parameters(stmt, argc - 1, argv + 1, db->unhandled_parameter_proc);
+  query_ctx ctx = {
+    self,
+    db->sqlite3_db,
+    stmt,
+    Qnil,
+    db->unhandled_parameter_proc,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  };
 
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -362,7 +372,15 @@ VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
 
   // prepare query ctx
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, params_array, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  query_ctx ctx = {
+    self,
+    db->sqlite3_db,
+    stmt,
+    params_array,
+    db->unhandled_parameter_proc,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  };
 
   return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -748,6 +766,22 @@ VALUE Database_inspect(VALUE self) {
   return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, filename);
 }
 
+VALUE Database_get_unhandled_parameter_proc(VALUE self) {
+  Database_t *db = self_to_database(self);
+  return db->unhandled_parameter_proc;
+}
+
+VALUE Database_set_unhandled_parameter_proc(VALUE self, VALUE proc_obj) {
+  if (!NIL_P(proc_obj) && !rb_obj_is_proc(proc_obj)) {
+    rb_raise(rb_eTypeError, "Expected a Proc or Lambda, but received %s", rb_obj_classname(proc_obj));
+  }
+
+  Database_t *db = self_to_database(self);
+  db->unhandled_parameter_proc = proc_obj;
+
+  return self;
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -777,6 +811,8 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "limit", Database_limit, -1);
+  rb_define_method(cDatabase, "on_unhandled_parameter", Database_get_unhandled_parameter_proc, 0);
+  rb_define_method(cDatabase, "on_unhandled_parameter=", Database_set_unhandled_parameter_proc, 1);
   rb_define_method(cDatabase, "prepare", Database_prepare, -1);
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);

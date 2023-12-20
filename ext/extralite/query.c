@@ -98,7 +98,7 @@ static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) 
   query->eof = 0;
   if (argc > 0) {
     sqlite3_clear_bindings(query->stmt);
-    bind_all_parameters(query->stmt, argc, argv);
+    bind_all_parameters(query->stmt, argc, argv, query->db_struct->unhandled_parameter_proc);
   }
 }
 
@@ -180,6 +180,7 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
     query->sqlite3_db,
     query->stmt,
     Qnil,
+    query->db_struct->unhandled_parameter_proc,
     QUERY_MODE(max_rows == SINGLE_ROW ? QUERY_SINGLE_ROW : QUERY_MULTI_ROW),
     MAX_ROWS(max_rows),
     0
@@ -388,7 +389,15 @@ VALUE Query_execute_multi(VALUE self, VALUE parameters) {
   if (!query->stmt)
     prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
 
-  query_ctx ctx = { self, query->sqlite3_db, query->stmt, parameters, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  query_ctx ctx = {
+    self,
+    query->sqlite3_db,
+    query->stmt,
+    parameters,
+    query->db_struct->unhandled_parameter_proc,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  };
   return safe_execute_multi(&ctx);
 }
 
