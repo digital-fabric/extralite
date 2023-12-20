@@ -134,14 +134,14 @@ VALUE Query_reset(VALUE self) {
  * Bound parameters can be specified as a list of values or as a hash mapping
  * parameter names to values. When parameters are given as a splatted array, the
  * query should specify parameters using `?`:
- * 
+ *
  *     query = db.prepare('select * from foo where x = ?')
  *     query.bind(42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
  * specified using a hash, where keys are either strings are symbols. String
  * keys can include or omit the `:` prefix. The following are equivalent:
- * 
+ *
  *     query = db.prepare('select * from foo where x = :bar')
  *     query.bind(bar: 42)
  *
@@ -171,7 +171,7 @@ VALUE Query_eof_p(VALUE self) {
 static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(query_ctx *)) {
   Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
-  
+
   if (!query->stmt) query_reset(query);
   if (query->eof) return rb_block_given_p() ? self : Qnil;
 
@@ -193,12 +193,12 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
 
 /* Returns the next 1 or more rows from the associated query's result set as a
  * hash.
- * 
+ *
  * If no row count is given, a single row is returned. If a row count is given,
  * an array containing up to the `row_count` rows is returned. If `row_count` is
  * -1, all rows are returned. If the end of the result set has been reached,
  * `nil` is returned.
- * 
+ *
  * If a block is given, rows are passed to the block and self is returned.
  *
  * @overload next()
@@ -219,12 +219,12 @@ VALUE Query_next_hash(int argc, VALUE *argv, VALUE self) {
 
 /* Returns the next 1 or more rows from the associated query's result set as an
  * array.
- * 
+ *
  * If no row count is given, a single row is returned. If a row count is given,
  * an array containing up to the `row_count` rows is returned. If `row_count` is
  * -1, all rows are returned. If the end of the result set has been reached,
  * `nil` is returned.
- * 
+ *
  * If a block is given, rows are passed to the block and self is returned.
  *
  * @overload next_ary()
@@ -241,12 +241,12 @@ VALUE Query_next_ary(int argc, VALUE *argv, VALUE self) {
 /* Returns the next 1 or more rows from the associated query's result set as an
  * single values. If the result set contains more than one column an error is
  * raised.
- * 
+ *
  * If no row count is given, a single row is returned. If a row count is given,
  * an array containing up to the `row_count` rows is returned. If `row_count` is
  * -1, all rows are returned. If the end of the result set has been reached,
  * `nil` is returned.
- * 
+ *
  * If a block is given, rows are passed to the block and self is returned.
  *
  * @overload next_ary()
@@ -261,7 +261,7 @@ VALUE Query_next_single_column(int argc, VALUE *argv, VALUE self) {
 }
 
 /* Returns all rows in the associated query's result set as hashes.
- * 
+ *
  * @overload to_a()
  *   @return [Array<Hash>] all rows
  * @overload to_a_hash
@@ -274,7 +274,7 @@ VALUE Query_to_a_hash(VALUE self) {
 }
 
 /* Returns all rows in the associated query's result set as arrays.
- * 
+ *
  * @return [Array<Array>] all rows
  */
 VALUE Query_to_a_ary(VALUE self) {
@@ -285,7 +285,7 @@ VALUE Query_to_a_ary(VALUE self) {
 
 /* Returns all rows in the associated query's result set as single values. If
  * the result set contains more than one column an error is raised.
- * 
+ *
  * @return [Array<Object>] all rows
  */
 VALUE Query_to_a_single_column(VALUE self) {
@@ -297,7 +297,7 @@ VALUE Query_to_a_single_column(VALUE self) {
 /* Iterates through the result set, passing each row to the given block as a
  * hash. If no block is given, returns a `Extralite::Iterator` instance in hash
  * mode.
- * 
+ *
  * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
  */
 VALUE Query_each_hash(VALUE self) {
@@ -311,7 +311,7 @@ VALUE Query_each_hash(VALUE self) {
 /* Iterates through the result set, passing each row to the given block as an
  * array. If no block is given, returns a `Extralite::Iterator` instance in
  * array mode.
- * 
+ *
  * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
  */
 VALUE Query_each_ary(VALUE self) {
@@ -326,7 +326,7 @@ VALUE Query_each_ary(VALUE self) {
  * single value. If the result set contains more than one column an error is
  * raised. If no block is given, returns a `Extralite::Iterator` instance in
  * single column mode.
- * 
+ *
  * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
  */
 VALUE Query_each_single_column(VALUE self) {
@@ -405,7 +405,7 @@ VALUE Query_database(VALUE self) {
 }
 
 /* Returns the SQL string for the query.
- * 
+ *
  * @return [String] SQL string
  */
 VALUE Query_sql(VALUE self) {
@@ -414,7 +414,7 @@ VALUE Query_sql(VALUE self) {
 }
 
 /* Returns the column names for the query without running it.
- * 
+ *
  * @return [Array<Symbol>] column names
  */
 VALUE Query_columns(VALUE self) {
@@ -424,7 +424,7 @@ VALUE Query_columns(VALUE self) {
 }
 
 /* Closes the query. Attempting to run a closed query will raise an error.
- * 
+ *
  * @return [Extralite::Query] self
  */
 VALUE Query_close(VALUE self) {
@@ -438,7 +438,7 @@ VALUE Query_close(VALUE self) {
 }
 
 /* Returns true if the query is closed.
- * 
+ *
  * @return [boolean] true if query is closed
  */
 VALUE Query_closed_p(VALUE self) {
@@ -449,7 +449,7 @@ VALUE Query_closed_p(VALUE self) {
 /* Returns the current [status
  * value](https://sqlite.org/c3ref/c_stmtstatus_counter.html) for the given op.
  * To reset the value, pass true as reset.
- * 
+ *
  * @overload status(op)
  *   @param op [Integer] status op
  *   @return [Integer] current status value for the given op
@@ -486,7 +486,7 @@ VALUE Query_inspect(VALUE self) {
     rb_str_cat2(sql, "...");
   }
   sql = rb_funcall(sql, ID_inspect, 0);
-    
+
   RB_GC_GUARD(sql);
   return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, sql);
 }

@@ -82,13 +82,6 @@ typedef struct {
   int             eof;
 } query_ctx;
 
-typedef struct {
-  VALUE           dst;
-  VALUE           src;
-  sqlite3_backup  *p;
-} backup_t;
-
-#define TUPLE_MAX_EMBEDDED_VALUES 20
 #define ALL_ROWS -1
 #define SINGLE_ROW -2
 #define QUERY_MODE(default) (rb_block_given_p() ? QUERY_YIELD : default)

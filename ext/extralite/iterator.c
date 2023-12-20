@@ -52,7 +52,7 @@ static inline enum iterator_mode symbol_to_mode(VALUE sym) {
  * iteration mode is one of: `:hash`, `:ary`, or `:single_column`. An iterator
  * is normally returned from one of the methods `Query#each`/`Query#each_hash`,
  * `Query#each_ary` or `Query#each_single_column` when called without a block:
- * 
+ *
  *     iterator = query.each
  *     ...
  *
@@ -115,12 +115,12 @@ inline next_method mode_to_next_method(enum iterator_mode mode) {
 
 /* Returns the next 1 or more rows from the associated query's result set
  * according to the iteration mode, i.e. as a hash, an array or a single value.
- * 
+ *
  * If no row count is given, a single row is returned. If a row count is given,
  * an array containing up to the `row_count` rows is returned. If `row_count` is
  * -1, all rows are returned. If the end of the result set has been reached,
  * `nil` is returned.
- * 
+ *
  * If a block is given, rows are passed to the block and self is returned.
  *
  * @overload next()
@@ -152,7 +152,7 @@ inline to_a_method mode_to_to_a_method(enum iterator_mode mode) {
 
 /* Returns all rows from the associated query's result set according to the
  * iteration mode, i.e. as a hash, an array or a single value.
- * 
+ *
  * @return [Array] array of query result set rows
  */
 VALUE Iterator_to_a(VALUE self) {
@@ -180,7 +180,7 @@ inline VALUE mode_to_symbol(Iterator_t *iterator) {
 VALUE Iterator_inspect(VALUE self) {
   VALUE cname = rb_class_name(CLASS_OF(self));
   VALUE sym = mode_to_symbol(self_to_iterator(self));
-  
+
   return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, sym);
 }
 
