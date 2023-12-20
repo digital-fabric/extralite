@@ -16,7 +16,6 @@ ID ID_call;
 ID ID_keys;
 ID ID_new;
 ID ID_strip;
-ID ID_to_s;
 
 VALUE SYM_read_only;
 
@@ -748,7 +747,7 @@ VALUE Database_inspect(VALUE self) {
   if (!(db)->sqlite3_db)
     return rb_sprintf("#<%"PRIsVALUE":%p (closed)>", cname, (void*)self);
   else {
-    VALUE filename = Database_filename(0, NULL, self);    
+    VALUE filename = Database_filename(0, NULL, self);
     if (RSTRING_LEN(filename) == 0) filename = rb_str_new_literal(":memory:");
     return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, filename);
   }
@@ -820,7 +819,6 @@ void Init_ExtraliteDatabase(void) {
   ID_keys   = rb_intern("keys");
   ID_new    = rb_intern("new");
   ID_strip  = rb_intern("strip");
-  ID_to_s   = rb_intern("to_s");
 
   SYM_read_only = ID2SYM(rb_intern("read_only"));
   rb_gc_register_mark_object(SYM_read_only);

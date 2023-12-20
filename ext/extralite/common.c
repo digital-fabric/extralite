@@ -30,7 +30,7 @@ static inline void bind_key_value(sqlite3_stmt *stmt, VALUE k, VALUE v) {
       bind_parameter_value(stmt, FIX2INT(k), v);
       break;
     case T_SYMBOL:
-      k = rb_funcall(k, ID_to_s, 0);
+      k = rb_sym2str(k);
     case T_STRING:
       if (RSTRING_PTR(k)[0] != ':') k = rb_str_plus(rb_str_new2(":"), k);
       int pos = sqlite3_bind_parameter_index(stmt, StringValuePtr(k));
@@ -69,6 +69,7 @@ inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
       sqlite3_bind_null(stmt, pos);
       return;
     case T_FIXNUM:
+    case T_BIGNUM:
       sqlite3_bind_int64(stmt, pos, NUM2LL(value));
       return;
     case T_FLOAT:
@@ -80,6 +81,8 @@ inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
     case T_FALSE:
       sqlite3_bind_int(stmt, pos, 0);
       return;
+    case T_SYMBOL:
+      value = rb_sym2str(value);
     case T_STRING:
       if (rb_enc_get_index(value) == rb_ascii8bit_encindex() || CLASS_OF(value) == cBlob)
         sqlite3_bind_blob(stmt, pos, RSTRING_PTR(value), RSTRING_LEN(value), SQLITE_TRANSIENT);

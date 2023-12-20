@@ -220,6 +220,30 @@ end
     assert_equal 'Hello, 世界!', result[:data].force_encoding(Encoding::UTF_8)
   end
 
+  def test_parameter_binding_for_simple_types
+    assert_nil @db.query_single_value('select ?', nil)
+
+    # 32-bit integers
+    assert_equal -2** 31, @db.query_single_value('select ?', -2**31)
+    assert_equal 2**31 - 1, @db.query_single_value('select ?', 2**31 - 1)
+
+    # 64-bit integers
+    assert_equal -2 ** 63, @db.query_single_value('select ?', -2 ** 63)
+    assert_equal 2**63 - 1, @db.query_single_value('select ?', 2**63 - 1)
+
+    # floats
+    assert_equal Float::MIN, @db.query_single_value('select ?', Float::MIN)
+    assert_equal Float::MAX, @db.query_single_value('select ?', Float::MAX)
+
+    # boolean
+    assert_equal 1, @db.query_single_value('select ?', true)
+    assert_equal 0, @db.query_single_value('select ?', false)
+
+    # strings and symbols
+    assert_equal 'foo', @db.query_single_value('select ?', 'foo')
+    assert_equal 'foo', @db.query_single_value('select ?', :foo)
+  end
+
   def test_value_casting
     r = @db.query_single_value("select 'abc'")
     assert_equal 'abc', r
