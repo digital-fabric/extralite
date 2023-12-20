@@ -799,11 +799,6 @@ void Init_ExtraliteDatabase(void) {
   cBusyError = rb_define_class_under(mExtralite, "BusyError", cError);
   cInterruptError = rb_define_class_under(mExtralite, "InterruptError", cError);
   cParameterError = rb_define_class_under(mExtralite, "ParameterError", cError);
-  rb_gc_register_mark_object(cError);
-  rb_gc_register_mark_object(cSQLError);
-  rb_gc_register_mark_object(cBusyError);
-  rb_gc_register_mark_object(cInterruptError);
-  rb_gc_register_mark_object(cParameterError);
 
   eArgumentError = rb_const_get(rb_cObject, rb_intern("ArgumentError"));
 
