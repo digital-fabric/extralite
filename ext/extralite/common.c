@@ -144,7 +144,7 @@ typedef struct {
   int rc;
 } prepare_stmt_ctx;
 
-void *prepare_multi_stmt_without_gvl(void *ptr) {
+void *prepare_multi_stmt_impl(void *ptr) {
   prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
   const char *rest = NULL;
   const char *str = ctx->str;
@@ -179,9 +179,9 @@ statements. It will release the GVL while the statements are being prepared and
 executed. All statements excluding the last one are executed. The last statement
 is not executed, but instead handed back to the caller for looping over results.
 */
-void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+void prepare_multi_stmt(enum gvl_mode gvl_mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   prepare_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
-  rb_thread_call_without_gvl(prepare_multi_stmt_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  gvl_call(gvl_mode, prepare_multi_stmt_impl, (void *)&ctx);
   RB_GC_GUARD(sql);
 
   switch (ctx.rc) {
@@ -198,7 +198,7 @@ void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
 
 #define SQLITE_MULTI_STMT -1
 
-void *prepare_single_stmt_without_gvl(void *ptr) {
+void *prepare_single_stmt_impl(void *ptr) {
   prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
   const char *rest = NULL;
   const char *str = ctx->str;
@@ -221,9 +221,9 @@ end:
   return NULL;
 }
 
-void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+void prepare_single_stmt(enum gvl_mode gvl_mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   prepare_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
-  rb_thread_call_without_gvl(prepare_single_stmt_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  gvl_call(gvl_mode, prepare_single_stmt_impl, (void *)&ctx);
   RB_GC_GUARD(sql);
 
   switch (ctx.rc) {
@@ -245,7 +245,7 @@ struct step_ctx {
   int rc;
 };
 
-void *stmt_iterate_without_gvl(void *ptr) {
+void *stmt_iterate_impl(void *ptr) {
   struct step_ctx *ctx = (struct step_ctx *)ptr;
   ctx->rc = sqlite3_step(ctx->stmt);
   return NULL;
@@ -253,7 +253,7 @@ void *stmt_iterate_without_gvl(void *ptr) {
 
 inline int stmt_iterate(query_ctx *ctx) {
   struct step_ctx step_ctx = {ctx->stmt, 0};
-  rb_thread_call_without_gvl(stmt_iterate_without_gvl, (void *)&step_ctx, RUBY_UBF_IO, 0);
+  gvl_call(ctx->gvl_mode, stmt_iterate_impl, (void *)&step_ctx);
   switch (step_ctx.rc) {
     case SQLITE_ROW:
       return 1;
@@ -420,4 +420,11 @@ VALUE safe_query_columns(query_ctx *ctx) {
 VALUE safe_query_changes(query_ctx *ctx) {
   while (stmt_iterate(ctx));
   return INT2FIX(sqlite3_changes(ctx->sqlite3_db));
+}
+
+void *gvl_call(enum gvl_mode mode, void *(*fn)(void *), void *data) {
+  if (mode == GVL_RELEASE)
+    return rb_thread_call_without_gvl(fn, data, RUBY_UBF_IO, 0);
+  else
+    return fn(data);
 }

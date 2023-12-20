@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "sqlite3"
-require "extralite"
+require "./lib/extralite"
 require "benchmark"
 
 # Setup
@@ -12,6 +12,7 @@ POOL_SIZE = 10
 
 EXTRALITE_CONNECTIONS = POOL_SIZE.times.map do
   db = Extralite::Database.new("benchmark.sqlite3")
+  db.gvl_mode = :hold
   db.execute("PRAGMA journal_mode = WAL")
   db.execute("PRAGMA synchronous = NORMAL")
   db.execute("PRAGMA journal_size_limit = 64000000")
@@ -41,7 +42,7 @@ end
 # Benchmark variations
 
 THREAD_COUNTS = [1, 2, 4, 8]
-LIMITS = [1000]#[10, 100, 1000]
+LIMITS = [1, 10, 100]
 CLIENTS = %w[extralite sqlite3]
 
 # Benchmark

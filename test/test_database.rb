@@ -566,3 +566,91 @@ class BackupTest < MiniTest::Test
     assert_equal [[1, 2, 3], [4, 5, 6]], db.query_ary('select * from t')
   end
 end
+
+class ConcurrencyTest < Minitest::Test
+  def setup
+    @sql = <<~SQL
+      WITH RECURSIVE r(i) AS (
+        VALUES(0)
+        UNION ALL
+        SELECT i FROM r
+        LIMIT 1000000
+      )
+      SELECT i FROM r WHERE i = 1;
+    SQL
+  end
+
+  def test_gvl_release_by_default
+    delays = []
+    running = true
+    t1 = Thread.new do
+      last = Time.now
+      while running
+        sleep 0.01
+        now = Time.now
+        delays << (now - last)
+        last = now
+      end
+    end
+    t2 = Thread.new do
+      db = Extralite::Database.new(':memory:')
+      db.query(@sql)
+    ensure
+      running = false
+    end
+    t2.join
+    t1.join
+
+    assert delays.size > 10
+    assert_equal 0, delays.select { |d| d > 0.015 }.size
+  end
+
+  def test_gvl_hold
+    delays = []
+    running = true
+
+    signal = Queue.new
+    db = Extralite::Database.new(':memory:')
+    db.gvl_mode = :hold
+
+    t1 = Thread.new do
+      last = Time.now
+      while running
+        signal << true
+        sleep 0.01
+        now = Time.now
+        delays << (now - last)
+        last = now
+      end
+    end
+
+    t2 = Thread.new do
+      signal.pop
+      db.query(@sql)
+    ensure
+      running = false
+    end
+    t2.join
+    t1.join
+
+    assert delays.size >= 1
+    assert delays.first > 0.1
+  end
+
+  def test_gvl_mode_get_set
+    db = Extralite::Database.new(':memory:')
+    assert_equal :release, db.gvl_mode
+
+    db.gvl_mode = :hold
+    assert_equal :hold, db.gvl_mode
+
+    assert_raises(Extralite::Error) { db.gvl_mode = :foo }
+    assert_equal :hold, db.gvl_mode
+
+    db.gvl_mode = :release
+    assert_equal :release, db.gvl_mode
+
+    assert_raises(Extralite::Error) { db.gvl_mode = :bar }
+    assert_equal :release, db.gvl_mode
+  end
+end

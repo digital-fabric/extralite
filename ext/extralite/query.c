@@ -80,7 +80,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
 
 static inline void query_reset(Query_t *query) {
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(query->db_struct->gvl_mode, query->sqlite3_db, &query->stmt, query->sql);
   if (query->db_struct->trace_block != Qnil)
     rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
   sqlite3_reset(query->stmt);
@@ -89,7 +89,7 @@ static inline void query_reset(Query_t *query) {
 
 static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(query->db_struct->gvl_mode, query->sqlite3_db, &query->stmt, query->sql);
 
   if (query->db_struct->trace_block != Qnil)
     rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
@@ -177,6 +177,7 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
 
   query_ctx ctx = {
     self,
+    query->db_struct->gvl_mode,
     query->sqlite3_db,
     query->stmt,
     Qnil,
@@ -386,9 +387,9 @@ VALUE Query_execute_multi(VALUE self, VALUE parameters) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(query->db_struct->gvl_mode, query->sqlite3_db, &query->stmt, query->sql);
 
-  query_ctx ctx = { self, query->sqlite3_db, query->stmt, parameters, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  query_ctx ctx = { self, query->db_struct->gvl_mode, query->sqlite3_db, query->stmt, parameters, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
   return safe_execute_multi(&ctx);
 }
 
@@ -467,7 +468,7 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(query->db_struct->gvl_mode, query->sqlite3_db, &query->stmt, query->sql);
 
   int value = sqlite3_stmt_status(query->stmt, NUM2INT(op), RTEST(reset) ? 1 : 0);
   return INT2NUM(value);

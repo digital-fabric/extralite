@@ -17,7 +17,9 @@ ID ID_new;
 ID ID_strip;
 ID ID_to_s;
 
+VALUE SYM_hold;
 VALUE SYM_read_only;
+VALUE SYM_release;
 
 static size_t Database_size(const void *ptr) {
   return sizeof(Database_t);
@@ -124,6 +126,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   }
 #endif
 
+  db->gvl_mode = GVL_RELEASE;
   db->trace_block = Qnil;
 
   return Qnil;
@@ -181,11 +184,11 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
 
   // prepare query ctx
   if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_call, 1, sql);
-  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
+  prepare_multi_stmt(db->gvl_mode, db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  query_ctx ctx = { self, db->gvl_mode, db->sqlite3_db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
 
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -361,8 +364,8 @@ VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   // prepare query ctx
-  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, params_array, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  prepare_single_stmt(db->gvl_mode, db->sqlite3_db, &stmt, sql);
+  query_ctx ctx = { self, db->gvl_mode, db->sqlite3_db, stmt, params_array, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
 
   return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -487,13 +490,13 @@ typedef struct {
 #define BACKUP_STEP_MAX_PAGES 16
 #define BACKUP_SLEEP_MS       100
 
-void *backup_step_without_gvl(void *ptr) {
+void *backup_step_impl(void *ptr) {
   backup_ctx *ctx = (backup_ctx *)ptr;
   ctx->rc = sqlite3_backup_step(ctx->backup, BACKUP_STEP_MAX_PAGES);
   return NULL;
 }
 
-void *backup_sleep_without_gvl(void *unused) {
+void *backup_sleep_impl(void *unused) {
   sqlite3_sleep(BACKUP_SLEEP_MS);
   return NULL;
 }
@@ -503,7 +506,7 @@ VALUE backup_safe_iterate(VALUE ptr) {
   int done = 0;
 
   while (!done) {
-    rb_thread_call_without_gvl(backup_step_without_gvl, (void *)ctx, RUBY_UBF_IO, 0);
+    gvl_call(GVL_RELEASE, backup_step_impl, (void *)ctx);
     switch(ctx->rc) {
       case SQLITE_DONE:
         if (ctx->block_given) {
@@ -521,7 +524,7 @@ VALUE backup_safe_iterate(VALUE ptr) {
         continue;
       case SQLITE_BUSY:
       case SQLITE_LOCKED:
-        rb_thread_call_without_gvl(backup_sleep_without_gvl, NULL, RUBY_UBF_IO, 0);
+        gvl_call(GVL_RELEASE, backup_sleep_impl, NULL);
         continue;
       default:
         rb_raise(cError, "%s", sqlite3_errstr(ctx->rc));
@@ -722,6 +725,35 @@ VALUE Database_errmsg(VALUE self) {
   return rb_str_new2(sqlite3_errmsg(db->sqlite3_db));
 }
 
+/* call-seq:
+ *   db.gvl_mode -> sym
+ *
+ * Returns the database's GVL mode as a symbol (either :release or :hold).
+ */
+VALUE Database_gvl_mode_get(VALUE self) {
+  Database_t *db = self_to_open_database(self);
+
+  return (db->gvl_mode == GVL_RELEASE) ? SYM_release : SYM_hold;
+}
+
+/* call-seq:
+ *   db.gvl_mode = sym
+ *
+ * Sets the database's GVL mode (either :release or :hold).
+ */
+VALUE Database_gvl_mode_set(VALUE self, VALUE mode) {
+  Database_t *db = self_to_open_database(self);
+
+  if (mode == SYM_hold)
+    db->gvl_mode = GVL_HOLD;
+  else if (mode == SYM_release)
+    db->gvl_mode = GVL_RELEASE;
+  else
+    rb_raise(cError, "Invalid GVL mode specified");
+
+  return self;
+}
+
 #ifdef HAVE_SQLITE3_ERROR_OFFSET
 /* call-seq:
  *   db.error_offset -> ofs
@@ -769,6 +801,8 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "columns", Database_columns, 1);
   rb_define_method(cDatabase, "errcode", Database_errcode, 0);
   rb_define_method(cDatabase, "errmsg", Database_errmsg, 0);
+  rb_define_method(cDatabase, "gvl_mode", Database_gvl_mode_get, 0);
+  rb_define_method(cDatabase, "gvl_mode=", Database_gvl_mode_set, 1);
 
   #ifdef HAVE_SQLITE3_ERROR_OFFSET
   rb_define_method(cDatabase, "error_offset", Database_error_offset, 0);
@@ -819,8 +853,13 @@ void Init_ExtraliteDatabase(void) {
   ID_strip  = rb_intern("strip");
   ID_to_s   = rb_intern("to_s");
 
+  SYM_hold      = ID2SYM(rb_intern("hold"));
   SYM_read_only = ID2SYM(rb_intern("read_only"));
+  SYM_release   = ID2SYM(rb_intern("release"));
+
+  rb_gc_register_mark_object(SYM_hold);
   rb_gc_register_mark_object(SYM_read_only);
+  rb_gc_register_mark_object(SYM_release);
 
   UTF8_ENCODING = rb_utf8_encoding();
 }
