@@ -173,12 +173,43 @@ end
     assert_equal error.message, 'Cannot bind parameter with a key of type Array'
   end
 
+  def test_parameter_binding_from_nested_hash
+    assert_raises(Extralite::ParameterError) { @db.query_single_row('select :x as x, :y as y, :z as z', x: 1, y: { z: 3}) }
+  end
+
+  class Bar
+    attr_accessor :values
+
+    def to_h
+      @values
+    end
+  end
+
+  def test_parameter_binding_to_h_casting
+    db = Extralite::Database.new(':memory:')
+
+    bar = Bar.new
+    bar.values = { x: 1, y: 2, z: 3 }
+
+    assert_equal({ x: 1, y: 2, z: 3 }, db.query_single_row('select :x as x, :y as y, :z as z', bar))
+
+    baz = Object.new
+    assert_raises(Extralite::ParameterError) { @db.query('select :x as x', baz) }
+  end
+
   def test_parameter_binding_from_struct
     foo_bar = Struct.new(:":foo", :bar)
     value = foo_bar.new(41, 42)
     assert_equal 41, @db.query_single_value('select :foo', value)
     assert_equal 42, @db.query_single_value('select :bar', value)
     assert_nil @db.query_single_value('select :baz', value)
+  end
+
+  def test_parameter_binding_from_nested_struct
+    foo = Struct.new(:x, :y)
+    bar = Struct.new(:z)
+    value = foo.new(41, bar.new(42))
+    assert_raises(Extralite::ParameterError) { @db.query_single_row('select :x as x, :y as y, :z as z', value) }
   end
 
   def test_parameter_binding_from_data_class

@@ -34,6 +34,7 @@ extern ID ID_call;
 extern ID ID_keys;
 extern ID ID_new;
 extern ID ID_strip;
+extern ID ID_to_h;
 extern ID ID_to_s;
 
 extern VALUE SYM_hash;

@@ -15,6 +15,7 @@ ID ID_call;
 ID ID_keys;
 ID ID_new;
 ID ID_strip;
+ID ID_to_h;
 ID ID_to_s;
 
 VALUE SYM_read_only;
@@ -848,6 +849,7 @@ void Init_ExtraliteDatabase(void) {
   ID_keys   = rb_intern("keys");
   ID_new    = rb_intern("new");
   ID_strip  = rb_intern("strip");
+  ID_to_h   = rb_intern("to_h");
   ID_to_s   = rb_intern("to_s");
 
   SYM_read_only = ID2SYM(rb_intern("read_only"));

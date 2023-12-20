@@ -98,14 +98,20 @@ static void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value, VALUE
       sqlite3_bind_text(stmt, pos, RSTRING_PTR(value), RSTRING_LEN(value), SQLITE_TRANSIENT);
       return;
     default:
-      if (NIL_P(unhandled_parameter_proc)) {
+      if (!NIL_P(unhandled_parameter_proc)) {
+        VALUE result = rb_funcall(unhandled_parameter_proc, ID_call, 1, value);
+        bind_parameter_value(stmt, pos, result, Qnil, false);
+        RB_GC_GUARD(result);
+        return;
+      }
+
+      if (!rb_respond_to(value, ID_to_h))
         rb_raise(cParameterError, "Cannot bind parameter at position %d of type %"PRIsVALUE"",
           pos, rb_class_name(rb_obj_class(value)));
-      } else {
-        VALUE result = rb_funcall(unhandled_parameter_proc, ID_call, 1, value);
-        RB_GC_GUARD(result);
-        bind_parameter_value(stmt, pos, result, Qnil, false);
-      }
+        
+      VALUE hash = rb_funcall(value, ID_to_h, 0);
+      bind_parameter_value(stmt, pos, hash, Qnil, false);
+      RB_GC_GUARD(hash);
   }
 }
 
