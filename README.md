@@ -114,6 +114,11 @@ db.query_single_column('select :bar', SomeStruct.new(41, 42)) #=> [42]
 SomeData = Data.define(:foo, :bar)
 db.query_single_column('select :bar', SomeData.new(foo: 41, bar: 42)) #=> [42]
 
+# parameter binding for binary data (BLOBs)
+db.execute('insert into foo values (?)', File.binread('/path/to/file'))
+db.execute('insert into foo values (?)', Extralite::Blob.new('Hello, 世界!'))
+db.execute('insert into foo values (?)', 'Hello, 世界!'.force_encoding(Encoding::ASCII_8BIT))
+
 # insert multiple rows
 db.execute_multi('insert into foo values (?)', ['bar', 'baz'])
 db.execute_multi('insert into foo values (?, ?)', [[1, 2], [3, 4]])

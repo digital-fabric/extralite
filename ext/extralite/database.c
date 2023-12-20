@@ -3,6 +3,7 @@
 #include "extralite.h"
 
 VALUE cDatabase;
+VALUE cBlob;
 VALUE cError;
 VALUE cSQLError;
 VALUE cBusyError;
@@ -798,6 +799,8 @@ void Init_ExtraliteDatabase(void) {
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 #endif
+
+  cBlob = rb_define_class_under(mExtralite, "Blob", rb_cString);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eStandardError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);

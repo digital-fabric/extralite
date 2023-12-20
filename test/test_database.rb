@@ -188,6 +188,38 @@ end
     assert_nil @db.query_single_value('select :baz', value)
   end
 
+  def test_parameter_binding_for_blobs
+    sql = 'SELECT typeof(data) AS type, data FROM blobs WHERE ROWID = ?'
+    blob_path = File.expand_path('fixtures/image.png', __dir__)
+    @db.execute('CREATE TABLE blobs (data BLOB)')
+
+    # it's a string, not a blob
+    @db.execute('INSERT INTO blobs VALUES (?)', 'Hello, 世界!')
+    result = @db.query_single_row(sql, @db.last_insert_rowid)
+    assert_equal 'text', result[:type]
+    assert_equal Encoding::UTF_8, result[:data].encoding
+
+    data = File.binread(blob_path)
+    @db.execute('INSERT INTO blobs VALUES (?)', data)
+    result = @db.query_single_row(sql, @db.last_insert_rowid)
+    assert_equal 'blob', result[:type]
+    assert_equal data, result[:data]
+
+    data = (+'Hello, 世界!').force_encoding(Encoding::ASCII_8BIT)
+    @db.execute('INSERT INTO blobs VALUES (?)', data)
+    result = @db.query_single_row(sql, @db.last_insert_rowid)
+    assert_equal 'blob', result[:type]
+    assert_equal Encoding::ASCII_8BIT, result[:data].encoding
+    assert_equal 'Hello, 世界!', result[:data].force_encoding(Encoding::UTF_8)
+
+    data = Extralite::Blob.new('Hello, 世界!')
+    @db.execute('INSERT INTO blobs VALUES (?)', data)
+    result = @db.query_single_row(sql, @db.last_insert_rowid)
+    assert_equal 'blob', result[:type]
+    assert_equal Encoding::ASCII_8BIT, result[:data].encoding
+    assert_equal 'Hello, 世界!', result[:data].force_encoding(Encoding::UTF_8)
+  end
+
   def test_value_casting
     r = @db.query_single_value("select 'abc'")
     assert_equal 'abc', r

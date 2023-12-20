@@ -81,7 +81,10 @@ inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
       sqlite3_bind_int(stmt, pos, 0);
       return;
     case T_STRING:
-      sqlite3_bind_text(stmt, pos, RSTRING_PTR(value), RSTRING_LEN(value), SQLITE_TRANSIENT);
+      if (rb_enc_get_index(value) == rb_ascii8bit_encindex() || CLASS_OF(value) == cBlob)
+        sqlite3_bind_blob(stmt, pos, RSTRING_PTR(value), RSTRING_LEN(value), SQLITE_TRANSIENT);
+      else
+        sqlite3_bind_text(stmt, pos, RSTRING_PTR(value), RSTRING_LEN(value), SQLITE_TRANSIENT);
       return;
     case T_HASH:
       bind_hash_parameter_values(stmt, value);
