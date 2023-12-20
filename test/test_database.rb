@@ -424,6 +424,13 @@ end
     assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect
   end
 
+  def test_database_inspect_on_closed_database
+    db = Extralite::Database.new(':memory:')
+    assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect
+    db.close
+    assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ \(closed\)\>$/, db.inspect
+  end
+
   def test_string_encoding
     db = Extralite::Database.new(':memory:')
     v = db.query_single_value("select 'foo'")
