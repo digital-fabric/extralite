@@ -1,5 +1,5 @@
 - Minor fixes and cleanup of C-code.
-- Fix `Database#inspect`` for a closed database instance [#37](https://github.com/digital-fabric/extralite/issues/37)
+- Fix `Database#inspect` for a closed database instance [#37](https://github.com/digital-fabric/extralite/issues/37)
 - Add support for binding named parameters from Struct and Data classes [#30](https://github.com/digital-fabric/extralite/pull/30)
 - Update bundled SQLite code to version 3.44.2 [#32](https://github.com/digital-fabric/extralite/pull/32)
 
