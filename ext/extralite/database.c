@@ -127,7 +127,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   }
 #endif
 
-  db->gvl_mode = GVL_RELEASE;
+  db->gvl_mode = GVL_HYBRID;
   db->trace_block = Qnil;
 
   return Qnil;

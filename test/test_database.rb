@@ -567,7 +567,7 @@ class BackupTest < MiniTest::Test
   end
 end
 
-class ConcurrencyTest < Minitest::Test
+class GVLModeTest < Minitest::Test
   def setup
     @sql = <<~SQL
       WITH RECURSIVE r(i) AS (
@@ -578,6 +578,11 @@ class ConcurrencyTest < Minitest::Test
       )
       SELECT i FROM r WHERE i = 1;
     SQL
+  end
+
+  def test_default_gvl_mode
+    db = Extralite::Database.new(':memory:')
+    assert_equal :hybrid, db.gvl_mode
   end
 
   def test_gvl_release_mode
@@ -596,6 +601,7 @@ class ConcurrencyTest < Minitest::Test
     end
     t2 = Thread.new do
       db = Extralite::Database.new(':memory:')
+      db.gvl_mode = :release
       db.query(@sql)
     ensure
       running = false
@@ -607,7 +613,7 @@ class ConcurrencyTest < Minitest::Test
     assert_equal 0, delays.select { |d| d > 0.15 }.size
   end
 
-  def test_gvl_hold
+  def test_gvl_hold_mode
     skip if !IS_LINUX
 
     delays = []
@@ -671,7 +677,7 @@ class ConcurrencyTest < Minitest::Test
 
   def test_gvl_mode_get_set
     db = Extralite::Database.new(':memory:')
-    assert_equal :release, db.gvl_mode
+    assert_equal :hybrid, db.gvl_mode
 
     db.gvl_mode = :hold
     assert_equal :hold, db.gvl_mode
