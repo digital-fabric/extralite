@@ -26,7 +26,7 @@ static size_t Database_size(const void *ptr) {
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
   rb_gc_mark(db->trace_block);
-  rb_gc_mark(db->parameter_transform_block);
+  rb_gc_mark(db->parameter_transform_proc);
 }
 
 static void Database_free(void *ptr) {
@@ -126,7 +126,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
 #endif
 
   db->trace_block = Qnil;
-  db->parameter_transform_block = Qnil;
+  db->parameter_transform_proc = Qnil;
 
   return Qnil;
 }
@@ -186,10 +186,10 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
-  bind_all_parameters(stmt, db->parameter_transform_block, argc - 1, argv + 1);
+  bind_all_parameters(stmt, db->parameter_transform_proc, argc - 1, argv + 1);
   query_ctx ctx = {
     self,
-    db->parameter_transform_block,
+    db->parameter_transform_proc,
     db->sqlite3_db,
     stmt,
     Qnil,
@@ -374,7 +374,7 @@ VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
   query_ctx ctx = {
     self,
-    db->parameter_transform_block,
+    db->parameter_transform_proc,
     db->sqlite3_db,
     stmt,
     params_array,
@@ -719,16 +719,15 @@ VALUE Database_trace(VALUE self) {
 }
 
 /* call-seq:
- *   db.parameter_transform { |v| v } -> db
- *   db.parameter_transform -> db
+ *   db.parameter_transform = proc -> proc
  * 
- * Installs or removes a block to transform all parameters passed to queries.
+ * Installs or removes a proc to transform all parameters passed to queries.
 */
 VALUE Database_parameter_transform(VALUE self, VALUE proc) {
   Database_t *db = self_to_open_database(self);
 
-  db->parameter_transform_block = proc;
-  return self;
+  db->parameter_transform_proc = proc;
+  return proc;
 }
 
 /* call-seq:

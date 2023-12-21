@@ -105,25 +105,25 @@ static inline VALUE parameter_transform(VALUE block, VALUE v) {
   return NIL_P(block) ? v : CALL_BLOCK(block, v);
 }
 
-inline void bind_all_parameters(sqlite3_stmt *stmt, VALUE parameter_transform_block, int argc, VALUE *argv) {
+inline void bind_all_parameters(sqlite3_stmt *stmt, VALUE parameter_transform_proc, int argc, VALUE *argv) {
   for (int i = 0; i < argc; i++) {
-    VALUE v = parameter_transform(parameter_transform_block, argv[i]);
+    VALUE v = parameter_transform(parameter_transform_proc, argv[i]);
     bind_parameter_value(stmt, i + 1, v);
     RB_GC_GUARD(v);
   }
 }
 
-inline void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE parameter_transform_block, VALUE obj) {
+inline void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE parameter_transform_proc, VALUE obj) {
   if (TYPE(obj) == T_ARRAY) {
     int count = RARRAY_LEN(obj);
     for (int i = 0; i < count; i++) {
-      VALUE v = parameter_transform(parameter_transform_block, RARRAY_AREF(obj, i));
+      VALUE v = parameter_transform(parameter_transform_proc, RARRAY_AREF(obj, i));
       bind_parameter_value(stmt, i + 1, v);
       RB_GC_GUARD(v);
     }
   }
   else {
-    VALUE v = parameter_transform(parameter_transform_block, obj);
+    VALUE v = parameter_transform(parameter_transform_proc, obj);
     bind_parameter_value(stmt, 1, v);
     RB_GC_GUARD(v);
   }
@@ -424,7 +424,7 @@ VALUE safe_execute_multi(query_ctx *ctx) {
   for (int i = 0; i < count; i++) {
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
-    bind_all_parameters_from_object(ctx->stmt, ctx->parameter_transform_block, RARRAY_AREF(ctx->params, i));
+    bind_all_parameters_from_object(ctx->stmt, ctx->parameter_transform_proc, RARRAY_AREF(ctx->params, i));
 
     while (stmt_iterate(ctx));
     changes += sqlite3_changes(ctx->sqlite3_db);

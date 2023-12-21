@@ -44,7 +44,7 @@ extern VALUE SYM_single_column;
 typedef struct {
   sqlite3 *sqlite3_db;
   VALUE   trace_block;
-  VALUE   parameter_transform_block;
+  VALUE   parameter_transform_proc;
 } Database_t;
 
 typedef struct {
@@ -76,7 +76,7 @@ enum query_mode {
 
 typedef struct {
   VALUE           self;
-  VALUE           parameter_transform_block;
+  VALUE           parameter_transform_proc;
   sqlite3         *sqlite3_db;
   sqlite3_stmt    *stmt;
   VALUE           params;
@@ -115,8 +115,8 @@ VALUE Query_to_a_single_column(VALUE self);
 
 void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
 void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
-void bind_all_parameters(sqlite3_stmt *stmt, VALUE parameter_transform_block, int argc, VALUE *argv);
-void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE parameter_transform_block, VALUE obj);
+void bind_all_parameters(sqlite3_stmt *stmt, VALUE parameter_transform_proc, int argc, VALUE *argv);
+void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE parameter_transform_proc, VALUE obj);
 int stmt_iterate(query_ctx *ctx);
 VALUE cleanup_stmt(query_ctx *ctx);
 
