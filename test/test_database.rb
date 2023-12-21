@@ -437,6 +437,41 @@ end
     assert_equal 'foo', v
     assert_equal 'UTF-8', v.encoding.name
   end
+
+  def test_database_transaction_commit
+    db = Extralite::Database.new(':memory:')
+    db.execute('create table foo(x)')
+
+    assert_equal [], db.query('select * from foo')
+
+    exception = nil
+    db.transaction do
+      db.execute('insert into foo values (42)')
+    end
+
+    assert_equal [{ x: 42 }], db.query('select * from foo')
+  end
+
+  def test_database_transaction_rollback
+    db = Extralite::Database.new(':memory:')
+    db.execute('create table foo(x)')
+
+    assert_equal [], db.query('select * from foo')
+
+    exception = nil
+    begin
+      db.transaction do
+        db.execute('insert into foo values (42)')
+        raise 'bar'
+      end
+    rescue => e
+      exception = e
+    end
+
+    assert_equal [], db.query('select * from foo')
+    assert_kind_of RuntimeError, exception
+    assert_equal 'bar', exception.message
+  end
 end
 
 class ScenarioTest < MiniTest::Test
