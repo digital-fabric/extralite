@@ -3,6 +3,7 @@
 #include "extralite.h"
 
 VALUE cDatabase;
+VALUE cBlob;
 VALUE cError;
 VALUE cSQLError;
 VALUE cBusyError;
@@ -417,10 +418,10 @@ VALUE Database_changes(VALUE self) {
   return INT2FIX(sqlite3_changes(db->sqlite3_db));
 }
 
-/* call-seq:
- *   db.filename -> string
+/* call-seq: db.filename -> string db.filename(db_name) -> string
  *
- * Returns the database filename.
+ * Returns the database filename. If db_name is given, returns the filename for
+ * the respective attached database.
  */
 VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
   const char *db_name;
@@ -760,11 +761,16 @@ VALUE Database_error_offset(VALUE self) {
  * @return [String] string representation
  */
 VALUE Database_inspect(VALUE self) {
+  Database_t *db = self_to_database(self);
   VALUE cname = rb_class_name(CLASS_OF(self));
-  VALUE filename = Database_filename(0, NULL, self);
-  if (RSTRING_LEN(filename) == 0) filename = rb_str_new_literal(":memory:");
 
-  return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, filename);
+  if (!(db)->sqlite3_db)
+    return rb_sprintf("#<%"PRIsVALUE":%p (closed)>", cname, (void*)self);
+  else {
+    VALUE filename = Database_filename(0, NULL, self);    
+    if (RSTRING_LEN(filename) == 0) filename = rb_str_new_literal(":memory:");
+    return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, filename);
+  }
 }
 
 VALUE Database_get_unhandled_parameter_proc(VALUE self) {
@@ -830,6 +836,8 @@ void Init_ExtraliteDatabase(void) {
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
   rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
 #endif
+
+  cBlob = rb_define_class_under(mExtralite, "Blob", rb_cString);
 
   cError = rb_define_class_under(mExtralite, "Error", rb_eStandardError);
   cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);

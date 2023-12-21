@@ -23,6 +23,7 @@
 extern VALUE cDatabase;
 extern VALUE cQuery;
 extern VALUE cIterator;
+extern VALUE cBlob;
 
 extern VALUE cError;
 extern VALUE cSQLError;
