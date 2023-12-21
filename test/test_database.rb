@@ -2,6 +2,7 @@
 
 require_relative 'helper'
 require 'date'
+require 'json'
 
 class DatabaseTest < MiniTest::Test
   def setup
@@ -622,3 +623,50 @@ class BackupTest < MiniTest::Test
     assert_equal [[1, 2, 3], [4, 5, 6]], db.query_ary('select * from t')
   end
 end
+
+class ParameterTransformTest < MiniTest::Test
+  def setup
+    @db = Extralite::Database.new(':memory:')
+  end
+
+  def test_parameter_transform
+    @db.parameter_transform = ->(v) do
+      case v
+      when Time
+        v.to_i
+      when Hash
+        v.to_json
+      else
+        v
+      end
+    end
+
+    assert_equal 'foo', @db.query_single_value('select ?', 'foo')
+
+    t = Time.now
+    assert_equal t.to_i, @db.query_single_value('select ?', t)
+
+    h = { foo: 1 }
+    assert_equal h.to_json, @db.query_single_value('select ?', h)
+    assert_equal h.to_json, @db.query_single_value('select ?', **h)
+    assert_equal h.to_json, @db.query_single_value('select :foo', foo: 1)
+
+    @db.parameter_transform = nil
+
+    assert_equal 1, @db.query_single_value('select :foo', foo: 1)
+    assert_raises(Extralite::ParameterError) { @db.query_single_value('select ?', t) }
+
+    @db.parameter_transform = ->(v) do
+      case v
+      when Time
+        v.to_i
+      else
+        v
+      end
+    end
+
+    assert_equal t.to_i, @db.query_single_value('select ?', t)
+    assert_equal 1, @db.query_single_value('select :foo', foo: 1)
+  end
+end
+

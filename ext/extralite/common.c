@@ -101,18 +101,32 @@ inline void bind_parameter_value(sqlite3_stmt *stmt, int pos, VALUE value) {
   }
 }
 
-inline void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv) {
-  for (int i = 0; i < argc; i++) bind_parameter_value(stmt, i + 1, argv[i]);
+static inline VALUE parameter_transform(VALUE block, VALUE v) {
+  return NIL_P(block) ? v : CALL_BLOCK(block, v);
 }
 
-inline void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj) {
+inline void bind_all_parameters(sqlite3_stmt *stmt, VALUE parameter_transform_block, int argc, VALUE *argv) {
+  for (int i = 0; i < argc; i++) {
+    VALUE v = parameter_transform(parameter_transform_block, argv[i]);
+    bind_parameter_value(stmt, i + 1, v);
+    RB_GC_GUARD(v);
+  }
+}
+
+inline void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE parameter_transform_block, VALUE obj) {
   if (TYPE(obj) == T_ARRAY) {
     int count = RARRAY_LEN(obj);
-    for (int i = 0; i < count; i++)
-      bind_parameter_value(stmt, i + 1, RARRAY_AREF(obj, i));
+    for (int i = 0; i < count; i++) {
+      VALUE v = parameter_transform(parameter_transform_block, RARRAY_AREF(obj, i));
+      bind_parameter_value(stmt, i + 1, v);
+      RB_GC_GUARD(v);
+    }
   }
-  else
-    bind_parameter_value(stmt, 1, obj);
+  else {
+    VALUE v = parameter_transform(parameter_transform_block, obj);
+    bind_parameter_value(stmt, 1, v);
+    RB_GC_GUARD(v);
+  }
 }
 
 static inline VALUE get_column_names(sqlite3_stmt *stmt, int column_count) {
@@ -410,7 +424,7 @@ VALUE safe_execute_multi(query_ctx *ctx) {
   for (int i = 0; i < count; i++) {
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
-    bind_all_parameters_from_object(ctx->stmt, RARRAY_AREF(ctx->params, i));
+    bind_all_parameters_from_object(ctx->stmt, ctx->parameter_transform_block, RARRAY_AREF(ctx->params, i));
 
     while (stmt_iterate(ctx));
     changes += sqlite3_changes(ctx->sqlite3_db);

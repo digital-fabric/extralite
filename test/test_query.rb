@@ -552,4 +552,29 @@ class QueryTest < MiniTest::Test
     q = @db.prepare('select x from t')
     assert_match /^\#\<Extralite::Query:0x[0-9a-f]+ #{q.sql.inspect}\>$/, q.inspect
   end
+
+  def test_query_parameter_transform
+    @db.parameter_transform = ->(v) do
+      case v
+      when Time
+        v.to_i
+      when Hash
+        v.to_json
+      else
+        v
+      end
+    end
+
+    q = @db.prepare('select ?')
+    assert_equal ['foo'], q.bind('foo').to_a_single_column
+
+    t = Time.now
+    assert_equal [t.to_i], q.bind(t).to_a_single_column
+
+    h = { foo: 1 }
+    assert_equal [h.to_json], q.bind(h).to_a_single_column
+    assert_equal [h.to_json], q.bind(**h).to_a_single_column
+    assert_equal [h.to_json], q.bind(foo: 1).to_a_single_column
+  end
+
 end

@@ -26,6 +26,7 @@ static size_t Database_size(const void *ptr) {
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
   rb_gc_mark(db->trace_block);
+  rb_gc_mark(db->parameter_transform_block);
 }
 
 static void Database_free(void *ptr) {
@@ -125,6 +126,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
 #endif
 
   db->trace_block = Qnil;
+  db->parameter_transform_block = Qnil;
 
   return Qnil;
 }
@@ -184,8 +186,16 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
-  bind_all_parameters(stmt, argc - 1, argv + 1);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  bind_all_parameters(stmt, db->parameter_transform_block, argc - 1, argv + 1);
+  query_ctx ctx = {
+    self,
+    db->parameter_transform_block,
+    db->sqlite3_db,
+    stmt,
+    Qnil,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  };
 
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -362,7 +372,15 @@ VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
 
   // prepare query ctx
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, params_array, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  query_ctx ctx = {
+    self,
+    db->parameter_transform_block,
+    db->sqlite3_db,
+    stmt,
+    params_array,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  };
 
   return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -701,6 +719,19 @@ VALUE Database_trace(VALUE self) {
 }
 
 /* call-seq:
+ *   db.parameter_transform { |v| v } -> db
+ *   db.parameter_transform -> db
+ * 
+ * Installs or removes a block to transform all parameters passed to queries.
+*/
+VALUE Database_parameter_transform(VALUE self, VALUE proc) {
+  Database_t *db = self_to_open_database(self);
+
+  db->parameter_transform_block = proc;
+  return self;
+}
+
+/* call-seq:
  *   db.errcode -> errcode
  *
  * Returns the last error code for the database.
@@ -782,6 +813,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "limit", Database_limit, -1);
+  rb_define_method(cDatabase, "parameter_transform=", Database_parameter_transform, 1);
   rb_define_method(cDatabase, "prepare", Database_prepare, -1);
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
