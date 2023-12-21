@@ -7,7 +7,7 @@
 
 ## What is Extralite?
 
-Extralite is a super fast, extra-lightweight (about 1300 lines of C-code)
+Extralite is a super fast, extra-lightweight (~1300 lines of C-code)
 SQLite3 wrapper for Ruby. It provides a minimal set of methods for interacting
 with an SQLite3 database, as well as prepared queries (prepared statements).
 
@@ -20,8 +20,7 @@ latest features and enhancements.
 ## Features
 
 - Super fast - [up to 11x faster](#performance) than the
-  [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem (see also
-  [comparison](#why-not-just-use-the-sqlite3-gem).)
+  [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem.
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
 - Prepared statements.
@@ -29,8 +28,9 @@ latest features and enhancements.
 - External iteration - get single records or batches of records.
 - Use system-installed sqlite3, or the [bundled latest version of
   SQLite3](#installing-the-extralite-sqlite3-bundle).
-- Improved [concurrency](#concurrency) for multithreaded apps: the Ruby GVL is
-  released while preparing SQL statements and while iterating over results.
+- Improved [concurrency](#concurrency) for multithreaded apps, with support for
+  different GVL modes, allowing use in various circumstances: single-threaded,
+  multi-threaded, multi-fiber.
 - Automatically execute SQL strings containing multiple semicolon-separated
   queries (handy for creating/modifying schemas).
 - Execute the same query with multiple parameter lists (useful for inserting records).
@@ -302,11 +302,27 @@ p articles.to_a
 
 ## Concurrency
 
-Extralite releases the GVL while making blocking calls to the sqlite3 library,
-that is while preparing SQL statements and fetching rows. Releasing the GVL
-allows other threads to run while the sqlite3 library is busy compiling SQL into
-bytecode, or fetching the next row. This *does not* hurt Extralite's
-performance, as you can see:
+When writing multi-threaded apps in Ruby, we are limited by [Ruby's
+GVL](https://ivoanjo.me/blog/2022/07/17/tracing-ruby-global-vm-lock/), which
+limits execution of Ruby code to one thread at a time. This means that Ruby code
+can run concurrently, [but not in
+parallel](https://stackoverflow.com/questions/1050222/what-is-the-difference-between-concurrency-and-parallelism).
+
+In Extralite, the GVL can be released while running a query, in order to allow
+Ruby code on other threads to run while the query is being processed. Queries
+are run using one of the following GVL modes:
+
+- `:hybrid` - the GVL is released when preparing a stmt, when fetching the first
+  record, and held on subsequent records. This is the default mode.
+- `:release` - the GVL is released when preparing a stmt and on fetching each
+  record.
+- `:hold` - the GVL is held while preparing a stmt and fetching records.
+
+The backup API always releases the GVL while backing up the DB.
+
+Note that for most situations, whether single-thread or mutli-threaded, hybrid
+mode offers ideal performance. If you run into performance issues, you might
+want to try which of the three GVL modes better suits your circumstances.
 
 ## Performance
 
@@ -317,7 +333,8 @@ large number of rows.
 
 ### Rows as Hashes
 
- [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb)
+ [Benchmark source
+ code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb)
 
 |Row count|sqlite3 1.6.0|Extralite 1.21|Advantage|
 |-:|-:|-:|-:|
@@ -327,7 +344,8 @@ large number of rows.
 
 ### Rows as Arrays
 
-[Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
+[Benchmark source
+code](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
 
 |Row count|sqlite3 1.6.0|Extralite 1.21|Advantage|
 |-:|-:|-:|-:|
@@ -337,7 +355,8 @@ large number of rows.
 
 ### Prepared Queries (Prepared Statements)
 
-[Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_prepared.rb)
+[Benchmark source
+code](https://github.com/digital-fabric/extralite/blob/main/test/perf_prepared.rb)
 
 |Row count|sqlite3 1.6.0|Extralite 1.21|Advantage|
 |-:|-:|-:|-:|
