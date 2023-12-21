@@ -42,7 +42,8 @@ extern VALUE SYM_single_column;
 
 enum gvl_mode {
   GVL_HOLD,
-  GVL_RELEASE
+  GVL_RELEASE,
+  GVL_HYBRID
 };
 
 typedef struct {

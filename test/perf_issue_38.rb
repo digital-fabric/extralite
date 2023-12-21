@@ -12,7 +12,7 @@ POOL_SIZE = 10
 
 EXTRALITE_CONNECTIONS = POOL_SIZE.times.map do
   db = Extralite::Database.new("benchmark.sqlite3")
-  db.gvl_mode = :hold
+  db.gvl_mode = :hybrid
   db.execute("PRAGMA journal_mode = WAL")
   db.execute("PRAGMA synchronous = NORMAL")
   db.execute("PRAGMA journal_size_limit = 64000000")
@@ -41,7 +41,7 @@ end
 
 # Benchmark variations
 
-THREAD_COUNTS = [1, 2, 4, 8]
+THREAD_COUNTS = [1, 8]
 LIMITS = [1, 10, 100]
 CLIENTS = %w[extralite sqlite3]
 

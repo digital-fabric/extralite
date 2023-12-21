@@ -253,7 +253,12 @@ void *stmt_iterate_impl(void *ptr) {
 
 inline int stmt_iterate(query_ctx *ctx) {
   struct step_ctx step_ctx = {ctx->stmt, 0};
-  gvl_call(ctx->gvl_mode, stmt_iterate_impl, (void *)&step_ctx);
+  
+  enum gvl_mode gvl_mode = ctx->gvl_mode;
+  if (gvl_mode == GVL_HYBRID)
+    gvl_mode = sqlite3_stmt_busy(ctx->stmt) ? GVL_HOLD : GVL_RELEASE;
+  
+  gvl_call(gvl_mode, stmt_iterate_impl, (void *)&step_ctx);
   switch (step_ctx.rc) {
     case SQLITE_ROW:
       return 1;
@@ -422,9 +427,12 @@ VALUE safe_query_changes(query_ctx *ctx) {
   return INT2FIX(sqlite3_changes(ctx->sqlite3_db));
 }
 
-void *gvl_call(enum gvl_mode mode, void *(*fn)(void *), void *data) {
-  if (mode == GVL_RELEASE)
-    return rb_thread_call_without_gvl(fn, data, RUBY_UBF_IO, 0);
-  else
-    return fn(data);
+inline void *gvl_call(enum gvl_mode mode, void *(*fn)(void *), void *data) {
+  switch (mode) {
+    case GVL_RELEASE:
+    case GVL_HYBRID:
+      return rb_thread_call_without_gvl(fn, data, RUBY_UBF_IO, 0);
+    default:
+      return fn(data);
+  }
 }

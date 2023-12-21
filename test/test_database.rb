@@ -580,7 +580,7 @@ class ConcurrencyTest < Minitest::Test
     SQL
   end
 
-  def test_gvl_release_by_default
+  def test_gvl_release_mode
     skip if !IS_LINUX
 
     delays = []
@@ -641,19 +641,50 @@ class ConcurrencyTest < Minitest::Test
     assert delays.first > 0.2
   end
 
+  def test_gvl_hybrid_mode
+    skip if !IS_LINUX
+
+    db = Extralite::Database.new(':memory:')
+    db.gvl_mode = :hybrid
+    delays = []
+    running = true
+    t1 = Thread.new do
+      last = Time.now
+      while running
+        sleep 0.1
+        now = Time.now
+        delays << (now - last)
+        last = now
+      end
+    end
+    t2 = Thread.new do
+      db.query(@sql)
+    ensure
+      running = false
+    end
+    t2.join
+    t1.join
+
+    assert delays.size > 4
+    assert_equal 0, delays.select { |d| d > 0.15 }.size
+  end
+
   def test_gvl_mode_get_set
     db = Extralite::Database.new(':memory:')
     assert_equal :release, db.gvl_mode
 
     db.gvl_mode = :hold
     assert_equal :hold, db.gvl_mode
-
     assert_raises(Extralite::Error) { db.gvl_mode = :foo }
     assert_equal :hold, db.gvl_mode
 
+    db.gvl_mode = :hybrid
+    assert_equal :hybrid, db.gvl_mode
+    assert_raises(Extralite::Error) { db.gvl_mode = 123 }
+    assert_equal :hybrid, db.gvl_mode
+
     db.gvl_mode = :release
     assert_equal :release, db.gvl_mode
-
     assert_raises(Extralite::Error) { db.gvl_mode = :bar }
     assert_equal :release, db.gvl_mode
   end

@@ -31,6 +31,7 @@ end
 
 def extralite_run(count)
   db = Extralite::Database.new(DB_PATH)
+  db.gvl_mode = :hybrid
   results = db.query('select * from foo')
   raise unless results.size == count
 end

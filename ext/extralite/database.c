@@ -20,6 +20,7 @@ ID ID_to_s;
 VALUE SYM_hold;
 VALUE SYM_read_only;
 VALUE SYM_release;
+VALUE SYM_hybrid;
 
 static size_t Database_size(const void *ptr) {
   return sizeof(Database_t);
@@ -728,18 +729,25 @@ VALUE Database_errmsg(VALUE self) {
 /* call-seq:
  *   db.gvl_mode -> sym
  *
- * Returns the database's GVL mode as a symbol (either :release or :hold).
+ * Returns the database's GVL mode as a symbol (:hybrid, :release or :hold).
  */
 VALUE Database_gvl_mode_get(VALUE self) {
   Database_t *db = self_to_open_database(self);
 
-  return (db->gvl_mode == GVL_RELEASE) ? SYM_release : SYM_hold;
+  switch (db->gvl_mode) {
+    case GVL_HOLD:
+      return SYM_hold;
+    case GVL_HYBRID:
+      return SYM_hybrid;
+    default:
+      return SYM_release;
+  }
 }
 
 /* call-seq:
  *   db.gvl_mode = sym
  *
- * Sets the database's GVL mode (either :release or :hold).
+ * Sets the database's GVL mode (:hybrid, :release or :hold).
  */
 VALUE Database_gvl_mode_set(VALUE self, VALUE mode) {
   Database_t *db = self_to_open_database(self);
@@ -748,6 +756,8 @@ VALUE Database_gvl_mode_set(VALUE self, VALUE mode) {
     db->gvl_mode = GVL_HOLD;
   else if (mode == SYM_release)
     db->gvl_mode = GVL_RELEASE;
+  else if (mode == SYM_hybrid)
+    db->gvl_mode = GVL_HYBRID;
   else
     rb_raise(cError, "Invalid GVL mode specified");
 
@@ -853,13 +863,15 @@ void Init_ExtraliteDatabase(void) {
   ID_strip  = rb_intern("strip");
   ID_to_s   = rb_intern("to_s");
 
-  SYM_hold      = ID2SYM(rb_intern("hold"));
-  SYM_read_only = ID2SYM(rb_intern("read_only"));
-  SYM_release   = ID2SYM(rb_intern("release"));
+  SYM_hold                  = ID2SYM(rb_intern("hold"));
+  SYM_read_only             = ID2SYM(rb_intern("read_only"));
+  SYM_release               = ID2SYM(rb_intern("release"));
+  SYM_hybrid = ID2SYM(rb_intern("hybrid"));
 
   rb_gc_register_mark_object(SYM_hold);
   rb_gc_register_mark_object(SYM_read_only);
   rb_gc_register_mark_object(SYM_release);
+  rb_gc_register_mark_object(SYM_hybrid);
 
   UTF8_ENCODING = rb_utf8_encoding();
 }
