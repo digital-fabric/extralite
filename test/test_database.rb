@@ -331,7 +331,7 @@ end
   end
 
   def test_database_busy_timeout
-    fn = "/tmp/extralite-#{rand(10000)}.db"
+    fn = Tempfile.new('extralite_test_database_busy_timeout').path
     db1 = Extralite::Database.new(fn)
     db2 = Extralite::Database.new(fn)
 
@@ -441,7 +441,7 @@ end
   end
 
   def test_database_transaction_commit
-    path = Tempfile.new('extralite_transaction_commit').path
+    path = Tempfile.new('extralite_test_database_transaction_commit').path
     db1 = Extralite::Database.new(path)
     db2 = Extralite::Database.new(path)
 
@@ -495,7 +495,8 @@ end
 
 class ScenarioTest < MiniTest::Test
   def setup
-    @db = Extralite::Database.new('/tmp/extralite.db')
+    @fn = Tempfile.new('extralite_scenario_test').path
+    @db = Extralite::Database.new(@fn)
     @db.query('create table if not exists t (x,y,z)')
     @db.query('delete from t')
     @db.query('insert into t values (1, 2, 3)')
@@ -505,7 +506,7 @@ class ScenarioTest < MiniTest::Test
   def test_concurrent_transactions
     done = false
     t = Thread.new do
-      db = Extralite::Database.new('/tmp/extralite.db')
+      db = Extralite::Database.new(@fn)
       db.query 'begin immediate'
       sleep 0.01 until done
 
@@ -613,7 +614,7 @@ class BackupTest < MiniTest::Test
   end
 
   def test_backup_with_fn
-    tmp_fn = "/tmp/#{rand(86400)}.db"
+    tmp_fn = Tempfile.new('extralite_test_backup_with_fn').path
     @src.backup(tmp_fn)
 
     db = Extralite::Database.new(tmp_fn)
