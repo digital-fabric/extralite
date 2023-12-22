@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require_relative 'helper'
+
 require 'date'
+require 'tempfile'
 
 class DatabaseTest < MiniTest::Test
   def setup
@@ -439,17 +441,34 @@ end
   end
 
   def test_database_transaction_commit
-    db = Extralite::Database.new(':memory:')
-    db.execute('create table foo(x)')
+    path = Tempfile.new('extralite_transaction_commit').path
+    db1 = Extralite::Database.new(path)
+    db2 = Extralite::Database.new(path)
 
-    assert_equal [], db.query('select * from foo')
+    db1.execute('create table foo(x)')
+    assert_equal ['foo'], db1.tables
+    assert_equal ['foo'], db2.tables
 
-    exception = nil
-    db.transaction do
-      db.execute('insert into foo values (42)')
+    q1 = Queue.new
+    q2 = Queue.new
+    th = Thread.new do
+      db1.transaction do
+        assert_equal true, db1.transaction_active?
+        db1.execute('insert into foo values (42)')
+        q1 << true
+        q2.pop
+      end
+      assert_equal false, db1.transaction_active?
     end
+    q1.pop
+    # transaction not yet committed
+    assert_equal false, db2.transaction_active?
+    assert_equal [], db2.query('select * from foo')
 
-    assert_equal [{ x: 42 }], db.query('select * from foo')
+    q2 << true
+    th.join
+    # transaction now committed
+    assert_equal [{ x: 42 }], db2.query('select * from foo')
   end
 
   def test_database_transaction_rollback
