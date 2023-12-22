@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require_relative 'helper'
+
 require 'date'
+require 'tempfile'
 
 class DatabaseTest < MiniTest::Test
   def setup
@@ -385,7 +387,7 @@ end
   end
 
   def test_database_busy_timeout
-    fn = "/tmp/extralite-#{rand(10000)}.db"
+    fn = Tempfile.new('extralite_test_database_busy_timeout').path
     db1 = Extralite::Database.new(fn)
     db2 = Extralite::Database.new(fn)
 
@@ -493,11 +495,64 @@ end
     assert_equal 'foo', v
     assert_equal 'UTF-8', v.encoding.name
   end
+
+  def test_database_transaction_commit
+    path = Tempfile.new('extralite_test_database_transaction_commit').path
+    db1 = Extralite::Database.new(path)
+    db2 = Extralite::Database.new(path)
+
+    db1.execute('create table foo(x)')
+    assert_equal ['foo'], db1.tables
+    assert_equal ['foo'], db2.tables
+
+    q1 = Queue.new
+    q2 = Queue.new
+    th = Thread.new do
+      db1.transaction do
+        assert_equal true, db1.transaction_active?
+        db1.execute('insert into foo values (42)')
+        q1 << true
+        q2.pop
+      end
+      assert_equal false, db1.transaction_active?
+    end
+    q1.pop
+    # transaction not yet committed
+    assert_equal false, db2.transaction_active?
+    assert_equal [], db2.query('select * from foo')
+
+    q2 << true
+    th.join
+    # transaction now committed
+    assert_equal [{ x: 42 }], db2.query('select * from foo')
+  end
+
+  def test_database_transaction_rollback
+    db = Extralite::Database.new(':memory:')
+    db.execute('create table foo(x)')
+
+    assert_equal [], db.query('select * from foo')
+
+    exception = nil
+    begin
+      db.transaction do
+        db.execute('insert into foo values (42)')
+        raise 'bar'
+      end
+    rescue => e
+      exception = e
+    end
+
+    assert_equal [], db.query('select * from foo')
+    assert_kind_of RuntimeError, exception
+    assert_equal 'bar', exception.message
+  end
 end
 
 class ScenarioTest < MiniTest::Test
   def setup
-    @db = Extralite::Database.new('/tmp/extralite.db')
+    @fn = Tempfile.new('extralite_scenario_test').path
+    @db = Extralite::Database.new(@fn)
     @db.query('create table if not exists t (x,y,z)')
     @db.query('delete from t')
     @db.query('insert into t values (1, 2, 3)')
@@ -507,7 +562,7 @@ class ScenarioTest < MiniTest::Test
   def test_concurrent_transactions
     done = false
     t = Thread.new do
-      db = Extralite::Database.new('/tmp/extralite.db')
+      db = Extralite::Database.new(@fn)
       db.query 'begin immediate'
       sleep 0.01 until done
 
@@ -615,7 +670,7 @@ class BackupTest < MiniTest::Test
   end
 
   def test_backup_with_fn
-    tmp_fn = "/tmp/#{rand(86400)}.db"
+    tmp_fn = Tempfile.new('extralite_test_backup_with_fn').path
     @src.backup(tmp_fn)
 
     db = Extralite::Database.new(tmp_fn)

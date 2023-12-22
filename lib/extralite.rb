@@ -56,6 +56,29 @@ module Extralite
       value.is_a?(Hash) ? pragma_set(value) : pragma_get(value)
     end
 
+    # Starts a transaction and runs the given block. If an exception is raised
+    # in the block, the transaction is rolled back. Otherwise, the transaction
+    # is commited after running the block.
+    #
+    #     db.transaction do
+    #       db.execute('insert into foo values (1, 2, 3)')
+    #       raise if db.query_single_value('select x from bar') > 42
+    #     end
+    #
+    # @param mode [Symbol, String] transaction mode (deferred, immediate or exclusive). Defaults to immediate.
+    # @return [Any] the given block's return value
+    def transaction(mode = :immediate)
+      execute "begin #{mode} transaction"
+    
+      abort = false
+      yield self
+    rescue
+      abort = true
+      raise
+    ensure
+      execute(abort ? 'rollback' : 'commit')
+    end
+
     private
 
     def pragma_set(values)
