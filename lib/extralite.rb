@@ -65,9 +65,9 @@ module Extralite
     #       raise if db.query_single_value('select x from bar') > 42
     #     end
     #
-    # @param mode [Symbol, String] transaction mode (deferred, immediate or exclusive). Defaults to deferred.
+    # @param mode [Symbol, String] transaction mode (deferred, immediate or exclusive). Defaults to immediate.
     # @return [Any] the given block's return value
-    def transaction(mode = :deferred)
+    def transaction(mode = :immediate)
       execute "begin #{mode} transaction"
     
       abort = false

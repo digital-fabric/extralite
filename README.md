@@ -173,6 +173,13 @@ db.pragma(:journal_mode) #=> 'wal'
 # load an extension
 db.load_extension('/path/to/extension.so')
 
+# run queries in a transaction
+db.transaction do
+  db.execute('insert into foo values (?)', 1)
+  db.execute('insert into foo values (?)', 2)
+  db.execute('insert into foo values (?)', 3)
+end
+
 # close database
 db.close
 db.closed? #=> true
@@ -200,6 +207,23 @@ ensure
   timeout_thread.join
 end
 ```
+
+### Running transactions
+
+In order to run multiple queries in a single transaction, use
+`Database#transaction`, passing a block that runs the queries. You can specify
+the [transaction
+mode](https://www.sqlite.org/lang_transaction.html#deferred_immediate_and_exclusive_transactions).
+The default mode is `:immediate`:
+
+```ruby
+db.transaction { ... } # Run an immediate transaction
+db.transaction(:deferred) { ... } # Run a deferred transaction
+db.transaction(:exclusive) { ... } # Run an exclusive transaction
+```
+
+If an exception is raised in the given block, the transaction will be rolled
+back. Otherwise, it is committed.
 
 ### Creating Backups
 
