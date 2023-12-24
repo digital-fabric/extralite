@@ -103,7 +103,8 @@ class IteratorTest < MiniTest::Test
   end
 
   def test_return_from_block_issue_26
-    db = Extralite::Database.new('/tmp/locked.db')
+    fn = Tempfile.new('extralite_test_return_from_block_issue_26').path
+    db = Extralite::Database.new(fn)
 
     λ = ->(sql) {
       db.prepare(sql).each { |r| r.each { |_, v| return v } }
