@@ -1,3 +1,10 @@
+# 2.4 2023-12-24
+
+- Implement GVL release threshold. [#46](https://github.com/digital-fabric/extralite/pull/46)
+- Implement write barriers for better GC performance.
+- Add support for binding large numbers and symbols. [#43](https://github.com/digital-fabric/extralite/pull/43)
+- Implement Database#transaction. [#42](https://github.com/digital-fabric/extralite/pull/42)
+- Add support for binding BLOBs. [#40](https://github.com/digital-fabric/extralite/pull/40)
 - Minor fixes and cleanup of C-code.
 - Fix `Database#inspect` for a closed database instance [#37](https://github.com/digital-fabric/extralite/issues/37)
 - Add support for binding named parameters from Struct and Data classes [#30](https://github.com/digital-fabric/extralite/pull/30)
