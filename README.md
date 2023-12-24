@@ -20,8 +20,7 @@ latest features and enhancements.
 ## Features
 
 - Super fast - [up to 11x faster](#performance) than the
-  [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem (see also
-  [comparison](#why-not-just-use-the-sqlite3-gem).)
+  [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem.
 - A variety of methods for different data access patterns: rows as hashes, rows
   as arrays, single row, single column, single value.
 - Prepared statements.
@@ -30,10 +29,12 @@ latest features and enhancements.
 - Use system-installed sqlite3, or the [bundled latest version of
   SQLite3](#installing-the-extralite-sqlite3-bundle).
 - Improved [concurrency](#concurrency) for multithreaded apps: the Ruby GVL is
-  released while preparing SQL statements and while iterating over results.
+  released peridically while preparing SQL statements and while iterating over
+  results.
 - Automatically execute SQL strings containing multiple semicolon-separated
   queries (handy for creating/modifying schemas).
-- Execute the same query with multiple parameter lists (useful for inserting records).
+- Execute the same query with multiple parameter lists (useful for inserting
+  records).
 - Load extensions (loading of extensions is autmatically enabled. You can find
   some useful extensions here: https://github.com/nalgeon/sqlean.)
 - Includes a [Sequel adapter](#usage-with-sequel).
@@ -331,11 +332,33 @@ p articles.to_a
 
 ## Concurrency
 
-Extralite releases the GVL while making blocking calls to the sqlite3 library,
-that is while preparing SQL statements and fetching rows. Releasing the GVL
-allows other threads to run while the sqlite3 library is busy compiling SQL into
-bytecode, or fetching the next row. This *does not* hurt Extralite's
-performance, as you can see:
+Extralite releases the GVL while making calls to the sqlite3 library that might
+block, such as when backing up a database, or when preparing a query. Extralite
+also releases the GVL periodically when iterating over records. By default, the
+GVL is released every 1000 records iterated. The GVL release threshold can be
+set separately for each database:
+
+```ruby
+db.gvl_release_threshold = 10 # release GVL every 10 records
+
+db.gvl_release_threshold = nil # use default value (currently 1000)
+```
+
+For most applications, there's no need to tune the GVL threshold value, as it
+provides [excellent](#performance) performance characteristics for both single-threaded and
+multi-threaded applications.
+
+In a heavily multi-threaded application, releasing the GVL more often (lower
+threshold value) will lead to less latency (for threads not running a query),
+but will also hurt the throughput (for the thread running the query). Releasing
+the GVL less often (higher threshold value) will lead to better throughput for
+queries, while increasing latency for threads not running a query. The following
+diagram demonstrates the relationship between the GVL release threshold value,
+latency and throughput:
+
+```
+less latency & throughput <<< GVL release threshold >>> more latency & throughput
+```
 
 ## Performance
 

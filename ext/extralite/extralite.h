@@ -43,6 +43,7 @@ extern VALUE SYM_single_column;
 typedef struct {
   sqlite3 *sqlite3_db;
   VALUE   trace_block;
+  int     gvl_release_threshold;
 } Database_t;
 
 typedef struct {
@@ -80,12 +81,22 @@ typedef struct {
   enum query_mode mode;
   int             max_rows;
   int             eof;
+  int             gvl_release_threshold;
+  int             step_count;
 } query_ctx;
+
+enum gvl_mode {
+  GVL_RELEASE,
+  GVL_HOLD
+};
 
 #define ALL_ROWS -1
 #define SINGLE_ROW -2
 #define QUERY_MODE(default) (rb_block_given_p() ? QUERY_YIELD : default)
 #define MULTI_ROW_P(mode) (mode == QUERY_MULTI_ROW)
+#define QUERY_CTX(self, db, stmt, params, mode, max_rows) \
+  { self, db->sqlite3_db, stmt, params, mode, max_rows, 0, db->gvl_release_threshold, 0 }
+#define DEFAULT_GVL_RELEASE_THRESHOLD 1000
 
 extern rb_encoding *UTF8_ENCODING;
 
@@ -119,5 +130,7 @@ VALUE cleanup_stmt(query_ctx *ctx);
 
 sqlite3 *Database_sqlite3_db(VALUE self);
 Database_t *self_to_database(VALUE self);
+
+void *gvl_call(enum gvl_mode mode, void *(*fn)(void *), void *data);
 
 #endif /* EXTRALITE_H */

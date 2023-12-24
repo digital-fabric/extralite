@@ -677,3 +677,100 @@ class BackupTest < MiniTest::Test
     assert_equal [[1, 2, 3], [4, 5, 6]], db.query_ary('select * from t')
   end
 end
+
+class GVLReleaseThresholdTest < Minitest::Test
+  def setup
+    @sql = <<~SQL
+      WITH RECURSIVE r(i) AS (
+        VALUES(0)
+        UNION ALL
+        SELECT i FROM r
+        LIMIT 3000000
+      )
+      SELECT i FROM r WHERE i = 1;
+    SQL
+  end
+
+  def test_default_gvl_release_threshold
+    db = Extralite::Database.new(':memory:')
+    assert_equal 1000, db.gvl_release_threshold
+  end
+
+  def test_gvl_always_release
+    skip if !IS_LINUX
+
+    delays = []
+    running = true
+    t1 = Thread.new do
+      last = Time.now
+      while running
+        sleep 0.1
+        now = Time.now
+        delays << (now - last)
+        last = now
+      end
+    end
+    t2 = Thread.new do
+      db = Extralite::Database.new(':memory:')
+      db.gvl_release_threshold = 1
+      db.query(@sql)
+    ensure
+      running = false
+    end
+    t2.join
+    t1.join
+
+    assert delays.size > 4
+    assert_equal 0, delays.select { |d| d > 0.15 }.size
+  end
+
+  def test_gvl_always_hold
+    skip if !IS_LINUX
+
+    delays = []
+    running = true
+
+    signal = Queue.new
+    db = Extralite::Database.new(':memory:')
+    db.gvl_release_threshold = 0
+
+    t1 = Thread.new do
+      last = Time.now
+      while running
+        signal << true
+        sleep 0.1
+        now = Time.now
+        delays << (now - last)
+        last = now
+      end
+    end
+
+    t2 = Thread.new do
+      signal.pop
+      db.query(@sql)
+    ensure
+      running = false
+    end
+    t2.join
+    t1.join
+
+    assert delays.size >= 1
+    assert delays.first > 0.2
+  end
+
+  def test_gvl_mode_get_set
+    db = Extralite::Database.new(':memory:')
+    assert_equal 1000, db.gvl_release_threshold
+
+    db.gvl_release_threshold = 42
+    assert_equal 42, db.gvl_release_threshold
+
+    db.gvl_release_threshold = 0
+    assert_equal 0, db.gvl_release_threshold
+
+    assert_raises(ArgumentError) { db.gvl_release_threshold = :foo }
+
+    db.gvl_release_threshold = nil
+    assert_equal 1000, db.gvl_release_threshold
+  end
+end
