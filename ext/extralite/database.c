@@ -37,7 +37,7 @@ static void Database_free(void *ptr) {
 static const rb_data_type_t Database_type = {
     "Database",
     {Database_mark, Database_free, Database_size,},
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY
+    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 
 static VALUE Database_allocate(VALUE klass) {
@@ -696,7 +696,7 @@ VALUE Database_total_changes(VALUE self) {
 VALUE Database_trace(VALUE self) {
   Database_t *db = self_to_open_database(self);
 
-  db->trace_block = rb_block_given_p() ? rb_block_proc() : Qnil;
+  RB_OBJ_WRITE(self, &db->trace_block, rb_block_given_p() ? rb_block_proc() : Qnil);
   return self;
 }
 

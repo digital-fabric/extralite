@@ -33,7 +33,7 @@ static void Query_free(void *ptr) {
 static const rb_data_type_t Query_type = {
     "Query",
     {Query_mark, Query_free, Query_size,},
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY
+    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 
 static VALUE Query_allocate(VALUE klass) {
@@ -67,10 +67,12 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
   if (!RSTRING_LEN(sql))
     rb_raise(cError, "Cannot prepare an empty SQL query");
 
+  RB_OBJ_WRITE(self, &query->db, db);
+  RB_OBJ_WRITE(self, &query->sql, sql);
+
   query->db = db;
   query->db_struct = self_to_database(db);
   query->sqlite3_db = Database_sqlite3_db(db);
-  query->sql = sql;
   query->stmt = NULL;
   query->closed = 0;
   query->eof = 0;
