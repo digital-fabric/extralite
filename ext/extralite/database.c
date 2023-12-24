@@ -125,6 +125,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
 #endif
 
   db->trace_block = Qnil;
+  db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
 
   return Qnil;
 }
@@ -185,7 +186,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   RB_GC_GUARD(sql);
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
-  query_ctx ctx = QUERY_CTX(self, db->sqlite3_db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS);
   
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -362,7 +363,7 @@ VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
 
   // prepare query ctx
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db->sqlite3_db, stmt, params_array, QUERY_MULTI_ROW, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, params_array, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -753,6 +754,41 @@ VALUE Database_inspect(VALUE self) {
   }
 }
 
+/* Returns the database's GVL release threshold.
+ *
+ * @return [Integer] GVL release threshold
+ */
+VALUE Database_gvl_release_threshold_get(VALUE self) {
+  Database_t *db = self_to_open_database(self);
+  return INT2NUM(db->gvl_release_threshold);
+}
+
+/* Sets the database's GVL release threshold. To always hold the GVL while
+ * running a query, set the threshold to 0. To release the GVL on each record,
+ * set the threshold to 1. Larger values mean the GVL will be released less
+ * often, e.g. a value of 10 means the GVL will be released every 10 records
+ * iterated. A value of nil sets the threshold to the default value, which is
+ * currently 1000.
+ *
+ * @return [Integer, nil] New GVL release threshold
+ */
+VALUE Database_gvl_release_threshold_set(VALUE self, VALUE value) {
+  Database_t *db = self_to_open_database(self);
+
+  switch (TYPE(value)) {
+    case T_FIXNUM:
+      db->gvl_release_threshold = NUM2INT(value);
+      break;
+    case T_NIL:
+      db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
+      break;
+    default:
+      rb_raise(eArgumentError, "Invalid GVL release threshold value (expect integer or nil)");
+  }
+
+  return INT2NUM(db->gvl_release_threshold);
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -777,6 +813,8 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "execute", Database_execute, -1);
   rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
+  rb_define_method(cDatabase, "gvl_release_threshold", Database_gvl_release_threshold_get, 0);
+  rb_define_method(cDatabase, "gvl_release_threshold=", Database_gvl_release_threshold_set, 1);
   rb_define_method(cDatabase, "initialize", Database_initialize, -1);
   rb_define_method(cDatabase, "inspect", Database_inspect, 0);
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);

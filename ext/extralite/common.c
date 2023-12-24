@@ -266,9 +266,20 @@ void *stmt_iterate_step(void *ptr) {
   return NULL;
 }
 
+inline enum gvl_mode stepwise_gvl_mode(query_ctx *ctx) {
+  // a negative or zero threshold means the GVL is always held during iteration.
+  if (ctx->gvl_release_threshold <= 0) return GVL_HOLD;
+  
+  if (!sqlite3_stmt_busy(ctx->stmt)) return GVL_RELEASE;
+
+  // if positive, the GVL is normally held, and release every <threshold> steps.
+  return (ctx->step_count % ctx->gvl_release_threshold) ? GVL_HOLD : GVL_RELEASE;
+}
+
 inline int stmt_iterate(query_ctx *ctx) {
   struct step_ctx step_ctx = {ctx->stmt, 0};
-  gvl_call(GVL_RELEASE, stmt_iterate_step, (void *)&step_ctx);
+  ctx->step_count += 1;
+  gvl_call(stepwise_gvl_mode(ctx), stmt_iterate_step, (void *)&step_ctx);
   switch (step_ctx.rc) {
     case SQLITE_ROW:
       return 1;

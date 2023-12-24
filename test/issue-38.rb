@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "sqlite3"
-require "extralite"
+require "./lib/extralite"
 require "benchmark"
 
 # Setup
@@ -41,7 +41,7 @@ end
 # Benchmark variations
 
 THREAD_COUNTS = [1, 2, 4, 8]
-LIMITS = [1000]#[10, 100, 1000]
+LIMITS = [10, 100, 1000]
 CLIENTS = %w[extralite sqlite3]
 
 # Benchmark

@@ -179,7 +179,7 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
 
   query_ctx ctx = QUERY_CTX(
     self,
-    query->sqlite3_db,
+    query->db_struct,
     query->stmt,
     Qnil,
     QUERY_MODE(max_rows == SINGLE_ROW ? QUERY_SINGLE_ROW : QUERY_MULTI_ROW),
@@ -391,7 +391,7 @@ VALUE Query_execute_multi(VALUE self, VALUE parameters) {
 
   query_ctx ctx = QUERY_CTX(
     self,
-    query->sqlite3_db,
+    query->db_struct,
     query->stmt,
     parameters,
     QUERY_MODE(QUERY_MULTI_ROW),

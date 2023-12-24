@@ -12,15 +12,18 @@ end
 require 'benchmark/ips'
 require 'fileutils'
 
-DB_PATH = '/tmp/extralite_sqlite3_perf.db'
+DB_PATH = "/tmp/extralite_sqlite3_perf-#{Time.now.to_i}-#{rand(10000)}.db"
+puts "DB_PATH = #{DB_PATH.inspect}"
+
 
 def prepare_database(count)
-  FileUtils.rm(DB_PATH) rescue nil
   db = Extralite::Database.new(DB_PATH)
-  db.query('create table foo ( a integer primary key, b text )')
+  db.query('create table if not exists foo ( a integer primary key, b text )')
+  db.query('delete from foo')
   db.query('begin')
   count.times { db.query('insert into foo (b) values (?)', "hello#{rand(1000)}" )}
   db.query('commit')
+  db.close
 end
 
 def sqlite3_run(count)
