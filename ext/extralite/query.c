@@ -177,15 +177,14 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
   if (!query->stmt) query_reset(query);
   if (query->eof) return rb_block_given_p() ? self : Qnil;
 
-  query_ctx ctx = {
+  query_ctx ctx = QUERY_CTX(
     self,
     query->sqlite3_db,
     query->stmt,
     Qnil,
     QUERY_MODE(max_rows == SINGLE_ROW ? QUERY_SINGLE_ROW : QUERY_MULTI_ROW),
-    MAX_ROWS(max_rows),
-    0
-  };
+    MAX_ROWS(max_rows)
+  );
   VALUE result = call(&ctx);
   query->eof = ctx.eof;
   return (ctx.mode == QUERY_YIELD) ? self : result;
@@ -390,7 +389,14 @@ VALUE Query_execute_multi(VALUE self, VALUE parameters) {
   if (!query->stmt)
     prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
 
-  query_ctx ctx = { self, query->sqlite3_db, query->stmt, parameters, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  query_ctx ctx = QUERY_CTX(
+    self,
+    query->sqlite3_db,
+    query->stmt,
+    parameters,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  );
   return safe_execute_multi(&ctx);
 }
 

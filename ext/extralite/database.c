@@ -185,8 +185,8 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   RB_GC_GUARD(sql);
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
-
+  query_ctx ctx = QUERY_CTX(self, db->sqlite3_db, stmt, Qnil, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS);
+  
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
@@ -362,7 +362,7 @@ VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
 
   // prepare query ctx
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = { self, db->sqlite3_db, stmt, params_array, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS };
+  query_ctx ctx = QUERY_CTX(self, db->sqlite3_db, stmt, params_array, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -487,13 +487,13 @@ typedef struct {
 #define BACKUP_STEP_MAX_PAGES 16
 #define BACKUP_SLEEP_MS       100
 
-void *backup_step_without_gvl(void *ptr) {
+void *backup_step_impl(void *ptr) {
   backup_ctx *ctx = (backup_ctx *)ptr;
   ctx->rc = sqlite3_backup_step(ctx->backup, BACKUP_STEP_MAX_PAGES);
   return NULL;
 }
 
-void *backup_sleep_without_gvl(void *unused) {
+void *backup_sleep_impl(void *unused) {
   sqlite3_sleep(BACKUP_SLEEP_MS);
   return NULL;
 }
@@ -503,7 +503,7 @@ VALUE backup_safe_iterate(VALUE ptr) {
   int done = 0;
 
   while (!done) {
-    rb_thread_call_without_gvl(backup_step_without_gvl, (void *)ctx, RUBY_UBF_IO, 0);
+    gvl_call(GVL_RELEASE, backup_step_impl, (void *)ctx);
     switch(ctx->rc) {
       case SQLITE_DONE:
         if (ctx->block_given) {
@@ -521,7 +521,7 @@ VALUE backup_safe_iterate(VALUE ptr) {
         continue;
       case SQLITE_BUSY:
       case SQLITE_LOCKED:
-        rb_thread_call_without_gvl(backup_sleep_without_gvl, NULL, RUBY_UBF_IO, 0);
+        gvl_call(GVL_RELEASE, backup_sleep_impl, NULL);
         continue;
       default:
         rb_raise(cError, "%s", sqlite3_errstr(ctx->rc));

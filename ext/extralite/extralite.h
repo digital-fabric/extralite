@@ -80,12 +80,20 @@ typedef struct {
   enum query_mode mode;
   int             max_rows;
   int             eof;
+  int             row_count;
 } query_ctx;
+
+enum gvl_mode {
+  GVL_RELEASE,
+  GVL_HOLD
+};
 
 #define ALL_ROWS -1
 #define SINGLE_ROW -2
 #define QUERY_MODE(default) (rb_block_given_p() ? QUERY_YIELD : default)
 #define MULTI_ROW_P(mode) (mode == QUERY_MULTI_ROW)
+#define QUERY_CTX(self, sqlite3_db, stmt, params, mode, max_rows) \
+  { self, sqlite3_db, stmt, params, mode, max_rows, 0, 0 }
 
 extern rb_encoding *UTF8_ENCODING;
 
@@ -119,5 +127,7 @@ VALUE cleanup_stmt(query_ctx *ctx);
 
 sqlite3 *Database_sqlite3_db(VALUE self);
 Database_t *self_to_database(VALUE self);
+
+void *gvl_call(enum gvl_mode mode, void *(*fn)(void *), void *data);
 
 #endif /* EXTRALITE_H */
