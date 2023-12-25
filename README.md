@@ -332,11 +332,18 @@ p articles.to_a
 
 ## Concurrency
 
-Extralite releases the GVL while making calls to the sqlite3 library that might
-block, such as when backing up a database, or when preparing a query. Extralite
-also releases the GVL periodically when iterating over records. By default, the
-GVL is released every 1000 records iterated. The GVL release threshold can be
-set separately for each database:
+### The Ruby GVL
+
+Extralite releases the [Ruby
+GVL](https://www.speedshop.co/2020/05/11/the-ruby-gvl-and-scaling.html) while
+making calls to the sqlite3 library that might block, such as when backing up a
+database, or when preparing a query. This allows other threads to run while the
+underlying sqlite3 library is busy preparing queries, fetching records and
+backing up databases.
+
+Extralite also releases the GVL periodically when iterating over records. By
+default, the GVL is released every 1000 records iterated. The GVL release
+threshold can be set separately for each database:
 
 ```ruby
 db.gvl_release_threshold = 10 # release GVL every 10 records
@@ -345,8 +352,8 @@ db.gvl_release_threshold = nil # use default value (currently 1000)
 ```
 
 For most applications, there's no need to tune the GVL threshold value, as it
-provides [excellent](#performance) performance characteristics for both single-threaded and
-multi-threaded applications.
+provides [excellent](#performance) performance characteristics for both
+single-threaded and multi-threaded applications.
 
 In a heavily multi-threaded application, releasing the GVL more often (lower
 threshold value) will lead to less latency (for threads not running a query),
@@ -359,6 +366,21 @@ latency and throughput:
 ```
 less latency & throughput <<< GVL release threshold >>> more latency & throughput
 ```
+
+### Thread Safety
+
+A single database instance can be safely used in multiple threads simultaneously
+as long as the following conditions are met:
+
+- No explicit transactions are used.
+- Each thread issues queries by calling `Database#query_xxx`, or uses a separate
+  `Query` instance.
+- The GVL release threshold is not `0` (i.e. the GVL is released periodically
+  while running queries.)
+
+### Use with Ractors
+
+Extralite databases can be used inside ractors 
 
 ## Performance
 

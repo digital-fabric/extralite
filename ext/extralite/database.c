@@ -341,11 +341,15 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_changes);
 }
 
-/* call-seq:
- *   db.execute_multi(sql, params_array) -> changes
+/* call-seq: db.execute_multi(sql, params_array) -> changes
+ *   db.execute_multi(sql) { ... } -> changes
  *
- * Executes the given query for each list of parameters in params_array. Returns
- * the number of changes effected. This method is designed for inserting
+ * Executes the given query for each list of parameters in params_array. If a
+ * block is given, the block is called for each iteration, and its return value
+ * is used as parameters for the query. To stop iteration, the block should
+ * return nil.
+ *
+ * Returns the number of changes effected. This method is designed for inserting
  * multiple records.
  *
  *     records = [
@@ -354,6 +358,17 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *     ]
  *     db.execute_multi('insert into foo values (?, ?, ?)', records)
  *
+ *     records = [
+ *       [1, 2, 3],
+ *       [4, 5, 6]
+ *     ]
+ *     db.execute_multi('insert into foo values (?, ?, ?)') do
+ *       x = queue.pop
+ *       y = queue.pop
+ *       z = queue.pop
+ *       [x, y, z]
+ *     end
+ * 
  */
 VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
   Database_t *db = self_to_open_database(self);

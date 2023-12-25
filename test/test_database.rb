@@ -61,7 +61,7 @@ class DatabaseTest < MiniTest::Test
 
     r = @db.query_single_column('select y from t where x = 2')
     assert_equal [], r
-end
+  end
 
   def test_query_single_value
     r = @db.query_single_value('select z from t order by Z desc limit 1')
@@ -616,6 +616,32 @@ class ScenarioTest < MiniTest::Test
     assert_equal [1, 4, 7], result
   end
 
+  def test_concurrent_queries
+    @db.query('delete from t')
+    @db.gvl_release_threshold = 1
+    q1 = @db.prepare('insert into t values (?, ?, ?)')
+    q2 = @db.prepare('insert into t values (?, ?, ?)')
+
+    t1 = Thread.new do
+      data = (1..50).each_slice(10).map { |a| a.map { |i| [i, i + 1, i + 2] } }
+      data.each do |params|
+        q1.execute_multi(params)
+      end
+    end
+
+    t2 = Thread.new do
+      data = (51..100).each_slice(10).map { |a| a.map { |i| [i, i + 1, i + 2] } }
+      data.each do |params|
+        q2.execute_multi(params)
+      end
+    end
+
+    t1.join
+    t2.join
+
+    assert_equal (1..100).to_a, @db.query_single_column('select x from t order by x')
+  end
+
   def test_database_trace
     sqls = []
     @db.trace { |sql| sqls << sql }
@@ -772,5 +798,82 @@ class GVLReleaseThresholdTest < Minitest::Test
 
     db.gvl_release_threshold = nil
     assert_equal 1000, db.gvl_release_threshold
+  end
+end
+
+class RactorTest < Minitest::Test
+  def test_ractor_simple
+    fn = Tempfile.new('extralite_test_database_in_ractor').path
+
+    r = Ractor.new do
+      path = receive
+      db = Extralite::Database.new(path)
+      i = receive
+      db.execute 'insert into foo values (?)', i
+    end
+
+    r << fn
+    db = Extralite::Database.new(fn)
+    db.execute 'create table foo (x)'
+    r << 42
+    r.take # wait for ractor to terminate
+
+    assert_equal 42, db.query_single_value('select x from foo')
+  end
+
+  # Adapted from here: https://github.com/sparklemotion/sqlite3-ruby/pull/365/files
+  def test_ractor_share_database
+    db_receiver = Ractor.new do
+      db = Ractor.receive
+      Ractor.yield db.object_id
+      begin
+        db.execute("create table foo (b)")
+        raise "Should have raised an exception in db.execute()"
+      rescue => e
+        Ractor.yield e
+      end
+    end
+    db_creator = Ractor.new(db_receiver) do |db_receiver|
+      db = Extralite::Database.new(":memory:")
+      Ractor.yield db.object_id
+      db_receiver.send(db)
+      sleep 0.1
+      db.execute("create table foo (a)")
+    end
+    first_oid = db_creator.take
+    second_oid = db_receiver.take
+    refute_equal first_oid, second_oid
+    ex = db_receiver.take
+    assert_kind_of Extralite::Error, ex
+    assert_equal "Database is closed", ex.message
+  end
+
+  STRESS_DB_NAME = Tempfile.new('extralite_test_ractor_stress').path
+
+  # Adapted from here: https://github.com/sparklemotion/sqlite3-ruby/pull/365/files
+  def test_ractor_stress
+    Ractor.make_shareable(STRESS_DB_NAME)
+
+    db = Extralite::Database.new(STRESS_DB_NAME)
+    db.execute("PRAGMA journal_mode=WAL") # A little slow without this
+    db.execute("create table stress_test (a integer primary_key, b text)")
+    random = Random.new.freeze
+    ractors = (0..9).map do |ractor_number|
+      Ractor.new(random, ractor_number) do |random, ractor_number|
+        db_in_ractor = Extralite::Database.new(STRESS_DB_NAME)
+        db_in_ractor.busy_timeout = 3
+        10.times do |i|
+          db_in_ractor.execute("insert into stress_test(a, b) values (#{ractor_number * 100 + i}, '#{random.rand}')")
+        end
+      end
+    end
+    ractors.each { |r| r.take }
+    final_check = Ractor.new do
+      db_in_ractor = Extralite::Database.new(STRESS_DB_NAME)
+      count = db_in_ractor.query_single_value("select count(*) from stress_test")
+      Ractor.yield count
+    end
+    count = final_check.take
+    assert_equal 100, count
   end
 end
