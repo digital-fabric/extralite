@@ -474,6 +474,25 @@ VALUE safe_batch_execute_each(query_ctx *ctx) {
   return INT2FIX(each_ctx.changes);
 }
 
+VALUE safe_batch_execute_proc(query_ctx *ctx) {
+  VALUE params = Qnil;
+  int changes = 0;
+  while (1) {
+    params = rb_funcall(ctx->params, ID_call, 0);
+    if (NIL_P(params)) break;
+
+    sqlite3_reset(ctx->stmt);
+    sqlite3_clear_bindings(ctx->stmt);
+    bind_all_parameters_from_object(ctx->stmt, params);
+
+    while (stmt_iterate(ctx));
+    changes += sqlite3_changes(ctx->sqlite3_db);
+  }
+
+  RB_GC_GUARD(params);
+  return INT2FIX(changes);
+}
+
 VALUE safe_batch_execute(query_ctx *ctx) {
   if (TYPE(ctx->params) == T_ARRAY)
     return safe_batch_execute_array(ctx);
@@ -481,7 +500,10 @@ VALUE safe_batch_execute(query_ctx *ctx) {
   if (rb_respond_to(ctx->params, ID_each))
     return safe_batch_execute_each(ctx);
   
-  rb_raise(cParameterError, "Invalid parameter list supplied to #batch_execute");
+  if (rb_respond_to(ctx->params, ID_call))
+    return safe_batch_execute_proc(ctx);
+  
+  rb_raise(cParameterError, "Invalid parameter source supplied to #batch_execute");
 }
 
 VALUE safe_query_columns(query_ctx *ctx) {

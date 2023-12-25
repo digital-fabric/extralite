@@ -186,7 +186,6 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   sql = rb_funcall(argv[0], ID_strip, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  // prepare query ctx
   if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_call, 1, sql);
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
@@ -347,7 +346,8 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_changes);
 }
 
-/* call-seq: db.batch_execute(sql, params_array) -> changes
+/* call-seq:
+ *   db.batch_execute(sql, params_array) -> changes
  *   db.batch_execute(sql) { ... } -> changes
  *
  * Executes the given query for each list of parameters in params_array. If a
@@ -364,27 +364,38 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *     ]
  *     db.batch_execute('insert into foo values (?, ?, ?)', records)
  *
- *     records = [
+ *     source = [
  *       [1, 2, 3],
  *       [4, 5, 6]
  *     ]
- *     db.batch_execute('insert into foo values (?, ?, ?)') do
- *       x = queue.pop
- *       y = queue.pop
- *       z = queue.pop
- *       [x, y, z]
- *     end
+ *     db.batch_execute('insert into foo values (?, ?, ?)') { records.shift }
  * 
  */
-VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE params) {
+VALUE Database_batch_execute(int argc, VALUE *argv, VALUE self) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
+  VALUE sql = Qnil;
+  VALUE parameters = Qnil;
+
+  if (argc == 0)
+    rb_raise(eArgumentError, "No parameter source given");
+  
+  sql = argv[0];
+
+  if (argc == 1) {
+    if (!rb_block_given_p())
+      rb_raise(cParameterError, "No parameter source given");
+    parameters = rb_block_proc();
+  }
+  else if (argc == 2)
+    parameters = argv[1];
+  else
+    rb_raise(cParameterError, "Multiple parameter sources given");
 
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  // prepare query ctx
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, params, QUERY_MULTI_ROW, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -834,7 +845,7 @@ void Init_ExtraliteDatabase(void) {
   #endif
 
   rb_define_method(cDatabase, "execute", Database_execute, -1);
-  rb_define_method(cDatabase, "batch_execute", Database_batch_execute, 2);
+  rb_define_method(cDatabase, "batch_execute", Database_batch_execute, -1);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "gvl_release_threshold", Database_gvl_release_threshold_get, 0);
   rb_define_method(cDatabase, "gvl_release_threshold=", Database_gvl_release_threshold_set, 1);

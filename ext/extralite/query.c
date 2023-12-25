@@ -417,12 +417,23 @@ VALUE Query_execute_chevrons(VALUE self, VALUE params) {
  * @param parameters [Array<Array, Hash>] array of parameters to run query with
  * @return [Integer] number of changes effected
  */
-VALUE Query_batch_execute(VALUE self, VALUE parameters) {
+VALUE Query_batch_execute(int argc, VALUE *argv, VALUE self) {
   Query_t *query = self_to_query(self);
+  VALUE parameters = Qnil;
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
     prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+
+  if (argc == 0) {
+    if (!rb_block_given_p())
+      rb_raise(cParameterError, "No parameter source given");
+    parameters = rb_block_proc();
+  }
+  else if (argc == 1)
+    parameters = argv[0];
+  else
+    rb_raise(cParameterError, "Multiple parameter sources given");
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -570,7 +581,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "eof?", Query_eof_p, 0);
   rb_define_method(cQuery, "execute", Query_execute, -1);
   rb_define_method(cQuery, "<<", Query_execute_chevrons, 1);
-  rb_define_method(cQuery, "batch_execute", Query_batch_execute, 1);
+  rb_define_method(cQuery, "batch_execute", Query_batch_execute, -1);
   rb_define_method(cQuery, "initialize", Query_initialize, 2);
   rb_define_method(cQuery, "inspect", Query_inspect, 0);
 

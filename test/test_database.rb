@@ -367,6 +367,22 @@ class DatabaseTest < MiniTest::Test
     ], @db.query('select * from foo')
   end
 
+  def test_batch_execute_with_block
+    source = [42, 43, 44]
+
+    @db.query('create table foo (a)')
+    assert_equal [], @db.query('select * from foo')
+
+    changes = @db.batch_execute('insert into foo values (?)') { source.shift }
+
+    assert_equal 3, changes
+    assert_equal [
+      { a: 42 },
+      { a: 43 },
+      { a: 44 }
+    ], @db.query('select * from foo')
+  end
+
   def test_interrupt
     t = Thread.new do
       sleep 0.5
