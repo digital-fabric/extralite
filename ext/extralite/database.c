@@ -25,7 +25,12 @@ static size_t Database_size(const void *ptr) {
 
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
-  rb_gc_mark(db->trace_block);
+  rb_gc_mark_movable(db->trace_block);
+}
+
+static void Database_compact(void *ptr) {
+  Database_t *db = ptr;
+  db->trace_block = rb_gc_location(db->trace_block);
 }
 
 static void Database_free(void *ptr) {
@@ -36,7 +41,7 @@ static void Database_free(void *ptr) {
 
 static const rb_data_type_t Database_type = {
     "Database",
-    {Database_mark, Database_free, Database_size,},
+    {Database_mark, Database_free, Database_size, Database_compact},
     0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 

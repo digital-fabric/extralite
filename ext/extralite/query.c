@@ -20,8 +20,14 @@ static size_t Query_size(const void *ptr) {
 
 static void Query_mark(void *ptr) {
   Query_t *query = ptr;
-  rb_gc_mark(query->db);
-  rb_gc_mark(query->sql);
+  rb_gc_mark_movable(query->db);
+  rb_gc_mark_movable(query->sql);
+}
+
+static void Query_compact(void *ptr) {
+  Query_t *query = ptr;
+  query->db = rb_gc_location(query->db);
+  query->sql = rb_gc_location(query->sql);
 }
 
 static void Query_free(void *ptr) {
@@ -32,7 +38,7 @@ static void Query_free(void *ptr) {
 
 static const rb_data_type_t Query_type = {
     "Query",
-    {Query_mark, Query_free, Query_size,},
+    {Query_mark, Query_free, Query_size, Query_compact},
     0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 
