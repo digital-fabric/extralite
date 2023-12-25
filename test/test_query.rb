@@ -478,6 +478,24 @@ class QueryTest < MiniTest::Test
     assert_equal [[1, 2, 3], [4, 5, 6], [42, 8, 9]], @db.query_ary('select * from t order by z')
   end
 
+  def test_query_execute_with_mixed_params
+    @db.execute 'delete from t'
+    q = @db.prepare('insert into t values (?, ?, ?)')
+    
+    q.execute(1, [2], 3)
+    q.execute([4, 5], 6)
+    q.execute([7], 8, [9])
+
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], @db.query_ary('select * from t order by z')
+  end
+
+  def test_query_chverons
+    q = @db.prepare('update t set x = ? where z = ?')
+    assert_equal q, (q << [42, 9])
+    assert_equal [[1, 2, 3], [4, 5, 6], [42, 8, 9]], @db.query_ary('select * from t order by z')
+  end
+
+
   def test_query_execute_multi
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')
