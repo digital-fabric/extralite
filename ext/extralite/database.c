@@ -469,8 +469,10 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
 
 /* call-seq:
  *   db.prepare(sql) -> Extralite::Query
+ *   db.prepare(sql, ...) -> Extralite::Query
  *
- * Creates a prepared statement with the given SQL query.
+ * Creates a prepared statement with the given SQL query. If query parameters
+ * are given, they are bound to the query.
  */
 VALUE Database_prepare(int argc, VALUE *argv, VALUE self) {
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);

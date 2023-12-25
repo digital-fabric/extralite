@@ -570,4 +570,24 @@ class QueryTest < MiniTest::Test
     q = @db.prepare('select x from t')
     assert_match /^\#\<Extralite::Query:0x[0-9a-f]+ #{q.sql.inspect}\>$/, q.inspect
   end
+
+  def test_query_clone
+    q1 = @db.prepare('select x from t')
+    q2 = q1.clone
+
+    assert_kind_of Extralite::Query, q2
+    assert_equal @db, q2.database
+    assert_equal q1.sql, q2.sql
+    refute_equal q1, q2
+  end
+
+  def test_query_dup
+    q1 = @db.prepare('select x from t')
+    q2 = q1.dup
+
+    assert_kind_of Extralite::Query, q2
+    assert_equal @db, q2.database
+    assert_equal q1.sql, q2.sql
+    refute_equal q1, q2
+  end
 end

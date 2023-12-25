@@ -843,6 +843,7 @@ class RactorTest < Minitest::Test
         Ractor.yield e
       end
     end
+    sleep 0.1
     db_creator = Ractor.new(db_receiver) do |db_receiver|
       db = Extralite::Database.new(":memory:")
       Ractor.yield db.object_id

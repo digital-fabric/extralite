@@ -466,6 +466,19 @@ VALUE Query_columns(VALUE self) {
   return Query_perform_next(self, ALL_ROWS, safe_query_columns);
 }
 
+/* call-seq:
+ *   query.clone -> copy
+ *   query.dup -> copy
+ *
+ * Returns a new query instance for the same SQL as the original query.
+ *
+ * @return [Extralite::Query] copy of query
+ */
+VALUE Query_clone(VALUE self) {
+  Query_t *query = self_to_query(self);
+  return rb_funcall(cQuery, ID_new, 2, query->db, query->sql);
+}
+
 /* Closes the query. Attempting to run a closed query will raise an error.
  *
  * @return [Extralite::Query] self
@@ -544,8 +557,10 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "close", Query_close, 0);
   rb_define_method(cQuery, "closed?", Query_closed_p, 0);
   rb_define_method(cQuery, "columns", Query_columns, 0);
+  rb_define_method(cQuery, "clone", Query_clone, 0);
   rb_define_method(cQuery, "database", Query_database, 0);
   rb_define_method(cQuery, "db", Query_database, 0);
+  rb_define_method(cQuery, "dup", Query_clone, 0);
 
   rb_define_method(cQuery, "each", Query_each_hash, 0);
   rb_define_method(cQuery, "each_ary", Query_each_ary, 0);
