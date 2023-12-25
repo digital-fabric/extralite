@@ -49,6 +49,8 @@ gem 'extralite'
 
 You can also run `gem install extralite` if you just want to check it out.
 
+__Note__: Extralite supports Ruby 3.0 and higher.
+
 ### Installing the Extralite-SQLite3 Bundle
 
 If you don't have sqlite3 installed on your system, do not want to use the
