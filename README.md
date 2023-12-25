@@ -129,6 +129,13 @@ db.execute('insert into foo values (?)', 'Hello, 世界!'.force_encoding(Encodin
 db.batch_execute('insert into foo values (?)', ['bar', 'baz'])
 db.batch_execute('insert into foo values (?, ?)', [[1, 2], [3, 4]])
 
+# batch execute from enumerable
+db.batch_execute('insert into foo values (?)', 1..10)
+
+# batch execute from block
+source = [[1, 2], [2, 3], [3, 4]]
+db.batch_execute('insert into foo values (?, ?)') { source.shift }
+
 # prepared queries
 query = db.prepare('select ? as foo, ? as bar') #=> Extralite::Query
 query.bind(1, 2) #=> [{ :foo => 1, :bar => 2 }]
