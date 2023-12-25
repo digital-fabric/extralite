@@ -32,6 +32,7 @@ extern VALUE cInterruptError;
 extern VALUE cParameterError;
 
 extern ID ID_call;
+extern ID ID_each;
 extern ID ID_keys;
 extern ID ID_new;
 extern ID ID_strip;
@@ -100,7 +101,7 @@ enum gvl_mode {
 
 extern rb_encoding *UTF8_ENCODING;
 
-VALUE safe_execute_multi(query_ctx *ctx);
+VALUE safe_batch_execute(query_ctx *ctx);
 VALUE safe_query_ary(query_ctx *ctx);
 VALUE safe_query_changes(query_ctx *ctx);
 VALUE safe_query_columns(query_ctx *ctx);

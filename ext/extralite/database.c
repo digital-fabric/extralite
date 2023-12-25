@@ -13,6 +13,7 @@ VALUE eArgumentError;
 
 ID ID_bind;
 ID ID_call;
+ID ID_each;
 ID ID_keys;
 ID ID_new;
 ID ID_strip;
@@ -185,7 +186,6 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   sql = rb_funcall(argv[0], ID_strip, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  // prepare query ctx
   if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_call, 1, sql);
   prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
@@ -346,46 +346,65 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_changes);
 }
 
-/* call-seq: db.execute_multi(sql, params_array) -> changes
- *   db.execute_multi(sql) { ... } -> changes
+/* call-seq:
+ *   db.batch_execute(sql, params_array) -> changes
+ *   db.batch_execute(sql, enumerable) -> changes
+ *   db.batch_execute(sql, callable) -> changes
+ *   db.batch_execute(sql) { ... } -> changes
  *
- * Executes the given query for each list of parameters in params_array. If a
- * block is given, the block is called for each iteration, and its return value
- * is used as parameters for the query. To stop iteration, the block should
- * return nil.
+ * Executes the given query for each list of parameters in params_array. If an
+ * enumerable is given, it is iterated and each of its values is used as the
+ * parameters for running the query. If a callable is given, it is called
+ * repeatedly and each of its return values is used as the parameters, until nil
+ * is returned. If a block is given, the block is called for each iteration, and
+ * its return value is used as parameters for the query, until nil is returned.
  *
  * Returns the number of changes effected. This method is designed for inserting
- * multiple records.
+ * multiple records or performing other mass operations.
  *
  *     records = [
  *       [1, 2, 3],
  *       [4, 5, 6]
  *     ]
- *     db.execute_multi('insert into foo values (?, ?, ?)', records)
+ *     db.batch_execute('insert into foo values (?, ?, ?)', records)
  *
- *     records = [
+ *     source = [
  *       [1, 2, 3],
  *       [4, 5, 6]
  *     ]
- *     db.execute_multi('insert into foo values (?, ?, ?)') do
- *       x = queue.pop
- *       y = queue.pop
- *       z = queue.pop
- *       [x, y, z]
- *     end
- * 
+ *     db.batch_execute('insert into foo values (?, ?, ?)') { records.shift }
+ *
+ * @param sql [String] query SQL
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] array of parameters to run query with
+ * @return [Integer] Total number of changes effected
  */
-VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
+VALUE Database_batch_execute(int argc, VALUE *argv, VALUE self) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
+  VALUE sql = Qnil;
+  VALUE parameters = Qnil;
+
+  if (argc == 0)
+    rb_raise(eArgumentError, "No parameter source given");
+  
+  sql = argv[0];
+
+  if (argc == 1) {
+    if (!rb_block_given_p())
+      rb_raise(cParameterError, "No parameter source given");
+    parameters = rb_block_proc();
+  }
+  else if (argc == 2)
+    parameters = argv[1];
+  else
+    rb_raise(cParameterError, "Multiple parameter sources given");
 
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  // prepare query ctx
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, params_array, QUERY_MULTI_ROW, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
 
-  return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+  return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
 /* call-seq:
@@ -833,7 +852,7 @@ void Init_ExtraliteDatabase(void) {
   #endif
 
   rb_define_method(cDatabase, "execute", Database_execute, -1);
-  rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
+  rb_define_method(cDatabase, "batch_execute", Database_batch_execute, -1);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "gvl_release_threshold", Database_gvl_release_threshold_get, 0);
   rb_define_method(cDatabase, "gvl_release_threshold=", Database_gvl_release_threshold_set, 1);
@@ -871,6 +890,7 @@ void Init_ExtraliteDatabase(void) {
 
   ID_bind   = rb_intern("bind");
   ID_call   = rb_intern("call");
+  ID_each   = rb_intern("each");
   ID_keys   = rb_intern("keys");
   ID_new    = rb_intern("new");
   ID_strip  = rb_intern("strip");

@@ -317,7 +317,7 @@ class DatabaseTest < MiniTest::Test
     assert_equal [[1, 2, 3], [42, 5, 6]], @db.query_ary('select * from t order by x')
   end
 
-  def test_execute_multi
+  def test_batch_execute
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')
 
@@ -326,7 +326,7 @@ class DatabaseTest < MiniTest::Test
       ['4', 5, 6]
     ]
 
-    changes = @db.execute_multi('insert into foo values (?, ?, ?)', records)
+    changes = @db.batch_execute('insert into foo values (?, ?, ?)', records)
 
     assert_equal 2, changes
     assert_equal [
@@ -335,7 +335,7 @@ class DatabaseTest < MiniTest::Test
     ], @db.query('select * from foo')
   end
 
-  def test_execute_multi_single_values
+  def test_batch_execute_single_values
     @db.query('create table foo (bar)')
     assert_equal [], @db.query('select * from foo')
 
@@ -344,12 +344,42 @@ class DatabaseTest < MiniTest::Test
       'bye'
     ]
 
-    changes = @db.execute_multi('insert into foo values (?)', records)
+    changes = @db.batch_execute('insert into foo values (?)', records)
 
     assert_equal 2, changes
     assert_equal [
       { bar: 'hi' },
       { bar: 'bye' }
+    ], @db.query('select * from foo')
+  end
+
+  def test_batch_execute_with_each_interface
+    @db.query('create table foo (bar)')
+    assert_equal [], @db.query('select * from foo')
+
+    changes = @db.batch_execute('insert into foo values (?)', 1..3)
+
+    assert_equal 3, changes
+    assert_equal [
+      { bar: 1 },
+      { bar: 2 },
+      { bar: 3 }
+    ], @db.query('select * from foo')
+  end
+
+  def test_batch_execute_with_block
+    source = [42, 43, 44]
+
+    @db.query('create table foo (a)')
+    assert_equal [], @db.query('select * from foo')
+
+    changes = @db.batch_execute('insert into foo values (?)') { source.shift }
+
+    assert_equal 3, changes
+    assert_equal [
+      { a: 42 },
+      { a: 43 },
+      { a: 44 }
     ], @db.query('select * from foo')
   end
 
@@ -631,14 +661,14 @@ class ScenarioTest < MiniTest::Test
     t1 = Thread.new do
       data = (1..50).each_slice(10).map { |a| a.map { |i| [i, i + 1, i + 2] } }
       data.each do |params|
-        q1.execute_multi(params)
+        q1.batch_execute(params)
       end
     end
 
     t2 = Thread.new do
       data = (51..100).each_slice(10).map { |a| a.map { |i| [i, i + 1, i + 2] } }
       data.each do |params|
-        q2.execute_multi(params)
+        q2.batch_execute(params)
       end
     end
 
