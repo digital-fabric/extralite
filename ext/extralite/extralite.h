@@ -32,6 +32,7 @@ extern VALUE cInterruptError;
 extern VALUE cParameterError;
 
 extern ID ID_call;
+extern ID ID_each;
 extern ID ID_keys;
 extern ID ID_new;
 extern ID ID_strip;

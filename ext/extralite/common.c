@@ -434,7 +434,7 @@ VALUE safe_query_single_value(query_ctx *ctx) {
   return value;
 }
 
-VALUE safe_batch_execute(query_ctx *ctx) {
+VALUE safe_batch_execute_array(query_ctx *ctx) {
   int count = RARRAY_LEN(ctx->params);
   int changes = 0;
 
@@ -448,6 +448,40 @@ VALUE safe_batch_execute(query_ctx *ctx) {
   }
 
   return INT2FIX(changes);
+}
+
+struct batch_execute_each_ctx {
+  query_ctx *ctx;
+  int changes;
+};
+
+static VALUE safe_batch_execute_each_iter(RB_BLOCK_CALL_FUNC_ARGLIST(yield_value, vctx)) {
+  struct batch_execute_each_ctx *each_ctx = (struct batch_execute_each_ctx*)vctx;
+
+  sqlite3_reset(each_ctx->ctx->stmt);
+  sqlite3_clear_bindings(each_ctx->ctx->stmt);
+  bind_all_parameters_from_object(each_ctx->ctx->stmt, yield_value);
+
+  while (stmt_iterate(each_ctx->ctx));
+  each_ctx->changes += sqlite3_changes(each_ctx->ctx->sqlite3_db);
+
+  return Qnil;
+}
+
+VALUE safe_batch_execute_each(query_ctx *ctx) {
+  struct batch_execute_each_ctx each_ctx = { ctx, 0 };
+  rb_block_call(ctx->params, ID_each, 0, 0, safe_batch_execute_each_iter, (VALUE)&each_ctx);
+  return INT2FIX(each_ctx.changes);
+}
+
+VALUE safe_batch_execute(query_ctx *ctx) {
+  if (TYPE(ctx->params) == T_ARRAY)
+    return safe_batch_execute_array(ctx);
+  
+  if (rb_respond_to(ctx->params, ID_each))
+    return safe_batch_execute_each(ctx);
+  
+  rb_raise(cParameterError, "Invalid parameter list supplied to #batch_execute");
 }
 
 VALUE safe_query_columns(query_ctx *ctx) {

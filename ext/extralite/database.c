@@ -13,6 +13,7 @@ VALUE eArgumentError;
 
 ID ID_bind;
 ID ID_call;
+ID ID_each;
 ID ID_keys;
 ID ID_new;
 ID ID_strip;
@@ -375,7 +376,7 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *     end
  * 
  */
-VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE params_array) {
+VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE params) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
@@ -383,7 +384,7 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE params_array) {
 
   // prepare query ctx
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, params_array, QUERY_MULTI_ROW, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, params, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -871,6 +872,7 @@ void Init_ExtraliteDatabase(void) {
 
   ID_bind   = rb_intern("bind");
   ID_call   = rb_intern("call");
+  ID_each   = rb_intern("each");
   ID_keys   = rb_intern("keys");
   ID_new    = rb_intern("new");
   ID_strip  = rb_intern("strip");

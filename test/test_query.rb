@@ -515,6 +515,21 @@ class QueryTest < MiniTest::Test
     ], @db.query('select * from foo')
   end
 
+  def test_query_batch_execute_with_each_interface
+    @db.query('create table foo (a)')
+    assert_equal [], @db.query('select * from foo')
+
+    p = @db.prepare('insert into foo values (?)')
+    changes = p.batch_execute(1..3)
+
+    assert_equal 3, changes
+    assert_equal [
+      { a: 1 },
+      { a: 2 },
+      { a: 3 }
+    ], @db.query('select * from foo')
+  end
+
   def test_query_status
     assert_equal 0, @query.status(Extralite::SQLITE_STMTSTATUS_RUN)
     @query.to_a
