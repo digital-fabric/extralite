@@ -402,7 +402,13 @@ VALUE Query_execute_chevrons(VALUE self, VALUE params) {
   return self;
 }
 
-/* Executes the query for each set of parameters in the given array. Parameters
+/* call-seq:
+ *   query.batch_execute(params_array) -> changes
+ *   query.batch_execute(enumerable) -> changes
+ *   query.batch_execute(callable) -> changes
+ *   query.batch_execute { ... } -> changes
+ *
+ * Executes the query for each set of parameters in the given array. Parameters
  * can be specified as either an array (for unnamed parameters) or a hash (for
  * named parameters). Returns the number of changes effected. This method is
  * designed for inserting multiple records.
@@ -413,8 +419,14 @@ VALUE Query_execute_chevrons(VALUE self, VALUE params) {
  *       [4, 5, 6]
  *     ]
  *     query.batch_execute(records)
+ * 
+ *     source = [
+ *       [1, 2, 3],
+ *       [4, 5, 6]
+ *     ]
+ *     query.batch_execute { records.shift }
  *
- * @param parameters [Array<Array, Hash>] array of parameters to run query with
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] array of parameters to run query with
  * @return [Integer] number of changes effected
  */
 VALUE Query_batch_execute(int argc, VALUE *argv, VALUE self) {

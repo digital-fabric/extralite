@@ -348,15 +348,19 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
 
 /* call-seq:
  *   db.batch_execute(sql, params_array) -> changes
+ *   db.batch_execute(sql, enumerable) -> changes
+ *   db.batch_execute(sql, callable) -> changes
  *   db.batch_execute(sql) { ... } -> changes
  *
- * Executes the given query for each list of parameters in params_array. If a
- * block is given, the block is called for each iteration, and its return value
- * is used as parameters for the query. To stop iteration, the block should
- * return nil.
+ * Executes the given query for each list of parameters in params_array. If an
+ * enumerable is given, it is iterated and each of its values is used as the
+ * parameters for running the query. If a callable is given, it is called
+ * repeatedly and each of its return values is used as the parameters, until nil
+ * is returned. If a block is given, the block is called for each iteration, and
+ * its return value is used as parameters for the query, until nil is returned.
  *
  * Returns the number of changes effected. This method is designed for inserting
- * multiple records.
+ * multiple records or performing other mass operations.
  *
  *     records = [
  *       [1, 2, 3],
@@ -369,7 +373,10 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *       [4, 5, 6]
  *     ]
  *     db.batch_execute('insert into foo values (?, ?, ?)') { records.shift }
- * 
+ *
+ * @param sql [String] query SQL
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] array of parameters to run query with
+ * @return [Integer] Total number of changes effected
  */
 VALUE Database_batch_execute(int argc, VALUE *argv, VALUE self) {
   Database_t *db = self_to_open_database(self);
