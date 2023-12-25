@@ -346,8 +346,8 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_changes);
 }
 
-/* call-seq: db.execute_multi(sql, params_array) -> changes
- *   db.execute_multi(sql) { ... } -> changes
+/* call-seq: db.batch_execute(sql, params_array) -> changes
+ *   db.batch_execute(sql) { ... } -> changes
  *
  * Executes the given query for each list of parameters in params_array. If a
  * block is given, the block is called for each iteration, and its return value
@@ -361,13 +361,13 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *       [1, 2, 3],
  *       [4, 5, 6]
  *     ]
- *     db.execute_multi('insert into foo values (?, ?, ?)', records)
+ *     db.batch_execute('insert into foo values (?, ?, ?)', records)
  *
  *     records = [
  *       [1, 2, 3],
  *       [4, 5, 6]
  *     ]
- *     db.execute_multi('insert into foo values (?, ?, ?)') do
+ *     db.batch_execute('insert into foo values (?, ?, ?)') do
  *       x = queue.pop
  *       y = queue.pop
  *       z = queue.pop
@@ -375,7 +375,7 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *     end
  * 
  */
-VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
+VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE params_array) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
@@ -385,7 +385,7 @@ VALUE Database_execute_multi(VALUE self, VALUE sql, VALUE params_array) {
   prepare_single_stmt(db->sqlite3_db, &stmt, sql);
   query_ctx ctx = QUERY_CTX(self, db, stmt, params_array, QUERY_MULTI_ROW, ALL_ROWS);
 
-  return rb_ensure(SAFE(safe_execute_multi), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+  return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
 /* call-seq:
@@ -833,7 +833,7 @@ void Init_ExtraliteDatabase(void) {
   #endif
 
   rb_define_method(cDatabase, "execute", Database_execute, -1);
-  rb_define_method(cDatabase, "execute_multi", Database_execute_multi, 2);
+  rb_define_method(cDatabase, "batch_execute", Database_batch_execute, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "gvl_release_threshold", Database_gvl_release_threshold_get, 0);
   rb_define_method(cDatabase, "gvl_release_threshold=", Database_gvl_release_threshold_set, 1);

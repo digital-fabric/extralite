@@ -412,12 +412,12 @@ VALUE Query_execute_chevrons(VALUE self, VALUE params) {
  *       [1, 2, 3],
  *       [4, 5, 6]
  *     ]
- *     query.execute_multi(records)
+ *     query.batch_execute(records)
  *
  * @param parameters [Array<Array, Hash>] array of parameters to run query with
  * @return [Integer] number of changes effected
  */
-VALUE Query_execute_multi(VALUE self, VALUE parameters) {
+VALUE Query_batch_execute(VALUE self, VALUE parameters) {
   Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
@@ -432,7 +432,7 @@ VALUE Query_execute_multi(VALUE self, VALUE parameters) {
     QUERY_MODE(QUERY_MULTI_ROW),
     ALL_ROWS
   );
-  return safe_execute_multi(&ctx);
+  return safe_batch_execute(&ctx);
 }
 
 /* Returns the database associated with the query.
@@ -570,7 +570,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "eof?", Query_eof_p, 0);
   rb_define_method(cQuery, "execute", Query_execute, -1);
   rb_define_method(cQuery, "<<", Query_execute_chevrons, 1);
-  rb_define_method(cQuery, "execute_multi", Query_execute_multi, 1);
+  rb_define_method(cQuery, "batch_execute", Query_batch_execute, 1);
   rb_define_method(cQuery, "initialize", Query_initialize, 2);
   rb_define_method(cQuery, "inspect", Query_inspect, 0);
 

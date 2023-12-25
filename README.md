@@ -126,8 +126,8 @@ db.execute('insert into foo values (?)', Extralite::Blob.new('Hello, 世界!'))
 db.execute('insert into foo values (?)', 'Hello, 世界!'.force_encoding(Encoding::ASCII_8BIT))
 
 # insert multiple rows
-db.execute_multi('insert into foo values (?)', ['bar', 'baz'])
-db.execute_multi('insert into foo values (?, ?)', [[1, 2], [3, 4]])
+db.batch_execute('insert into foo values (?)', ['bar', 'baz'])
+db.batch_execute('insert into foo values (?, ?)', [[1, 2], [3, 4]])
 
 # prepared queries
 query = db.prepare('select ? as foo, ? as bar') #=> Extralite::Query

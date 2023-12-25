@@ -434,7 +434,7 @@ VALUE safe_query_single_value(query_ctx *ctx) {
   return value;
 }
 
-VALUE safe_execute_multi(query_ctx *ctx) {
+VALUE safe_batch_execute(query_ctx *ctx) {
   int count = RARRAY_LEN(ctx->params);
   int changes = 0;
 

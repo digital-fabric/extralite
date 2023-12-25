@@ -496,7 +496,7 @@ class QueryTest < MiniTest::Test
   end
 
 
-  def test_query_execute_multi
+  def test_query_batch_execute
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')
 
@@ -506,7 +506,7 @@ class QueryTest < MiniTest::Test
     ]
 
     p = @db.prepare('insert into foo values (?, ?, ?)')
-    changes = p.execute_multi(records)
+    changes = p.batch_execute(records)
 
     assert_equal 2, changes
     assert_equal [
