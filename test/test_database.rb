@@ -809,6 +809,8 @@ end
 
 class RactorTest < Minitest::Test
   def test_ractor_simple
+    skip if SKIP_RACTOR_TESTS
+    
     fn = Tempfile.new('extralite_test_database_in_ractor').path
 
     r = Ractor.new do
@@ -829,6 +831,8 @@ class RactorTest < Minitest::Test
 
   # Adapted from here: https://github.com/sparklemotion/sqlite3-ruby/pull/365/files
   def test_ractor_share_database
+    skip if SKIP_RACTOR_TESTS
+
     db_receiver = Ractor.new do
       db = Ractor.receive
       Ractor.yield db.object_id
@@ -858,6 +862,8 @@ class RactorTest < Minitest::Test
 
   # Adapted from here: https://github.com/sparklemotion/sqlite3-ruby/pull/365/files
   def test_ractor_stress
+    skip if SKIP_RACTOR_TESTS
+    
     Ractor.make_shareable(STRESS_DB_NAME)
 
     db = Extralite::Database.new(STRESS_DB_NAME)
