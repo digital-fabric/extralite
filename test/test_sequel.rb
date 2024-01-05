@@ -62,4 +62,37 @@ class SequelExtraliteTest < MiniTest::Test
       assert_equal [:id], db[:foobars].columns
     end
   end
+
+  def test_regexp
+    refute_operator @db, :allow_regexp?
+    assert_raises Sequel::InvalidOperation do
+      @db[:items].where(name: /abc/).to_a
+    end
+  end
+end
+
+class SequelRegexpExtraliteTest < MiniTest::Test
+  def setup
+    @db = Sequel.connect('extralite::memory:', setup_regexp_function: true)
+    assert_operator @db, :allow_regexp?
+    @db.create_table :items do
+      primary_key :id
+      String :name, unique: true, null: false
+      Float :price, null: false
+    end
+
+    items = @db[:items]
+    items.insert(name: 'abc', price: 123)
+    items.insert(name: 'def', price: 456)
+    items.insert(name: 'ghi', price: 789)
+  end
+
+  def teardown
+    @db.disconnect
+  end
+
+  def test_regex
+    p @db[:items].where(name: /abc/).to_a
+    # TODO
+  end
 end
