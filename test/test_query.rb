@@ -496,7 +496,7 @@ class QueryTest < MiniTest::Test
   end
 
 
-  def test_query_execute_multi
+  def test_query_batch_execute
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')
 
@@ -506,12 +506,44 @@ class QueryTest < MiniTest::Test
     ]
 
     p = @db.prepare('insert into foo values (?, ?, ?)')
-    changes = p.execute_multi(records)
+    changes = p.batch_execute(records)
 
     assert_equal 2, changes
     assert_equal [
       { a: 1, b: '2', c: 3 },
       { a: '4', b: 5, c: 6 }
+    ], @db.query('select * from foo')
+  end
+
+  def test_query_batch_execute_with_each_interface
+    @db.query('create table foo (a)')
+    assert_equal [], @db.query('select * from foo')
+
+    p = @db.prepare('insert into foo values (?)')
+    changes = p.batch_execute(1..3)
+
+    assert_equal 3, changes
+    assert_equal [
+      { a: 1 },
+      { a: 2 },
+      { a: 3 }
+    ], @db.query('select * from foo')
+  end
+
+  def test_query_batch_execute_with_block
+    source = [42, 43, 44]
+
+    @db.query('create table foo (a)')
+    assert_equal [], @db.query('select * from foo')
+
+    p = @db.prepare('insert into foo values (?)')
+    changes = p.batch_execute { source.shift }
+
+    assert_equal 3, changes
+    assert_equal [
+      { a: 42 },
+      { a: 43 },
+      { a: 44 }
     ], @db.query('select * from foo')
   end
 

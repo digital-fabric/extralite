@@ -38,6 +38,8 @@ module Extralite
         AND name NOT LIKE 'sqlite_%%';
     SQL
 
+    alias_method :execute_multi, :batch_execute
+
     # Returns the list of currently defined tables. If a database name is given,
     # returns the list of tables for the relevant attached database.
     #
@@ -91,5 +93,9 @@ module Extralite
     def pragma_get(key)
       query("pragma #{key}")
     end
+  end
+
+  class Query
+    alias_method :execute_multi, :batch_execute
   end
 end
