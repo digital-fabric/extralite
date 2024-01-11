@@ -33,16 +33,18 @@ module Extralite
   class Database
     # @!visibility private
     TABLES_SQL = <<~SQL
-      SELECT name FROM sqlite_master
+      SELECT name FROM %<db>s.sqlite_master
       WHERE type ='table'
-        AND name NOT LIKE 'sqlite_%';
+        AND name NOT LIKE 'sqlite_%%';
     SQL
 
-    # Returns the list of currently defined tables.
+    # Returns the list of currently defined tables. If a database name is given,
+    # returns the list of tables for the relevant attached database.
     #
+    # @param db [String] name of attached database
     # @return [Array] list of tables
-    def tables
-      query_single_column(TABLES_SQL)
+    def tables(db = 'main')
+      query_single_column(format(TABLES_SQL, db: db))
     end
 
     # Gets or sets one or more pragmas:

@@ -288,6 +288,28 @@ class DatabaseTest < MiniTest::Test
     assert_equal [], @db.tables
   end
 
+  def test_tables_with_db_name
+    assert_equal ['t'], @db.tables('main')
+
+    @db.query('create table foo (bar text)')
+    assert_equal ['t', 'foo'], @db.tables('main')
+
+    @db.query('drop table t')
+    assert_equal ['foo'], @db.tables('main')
+
+    @db.query('drop table foo')
+    assert_equal [], @db.tables('main')
+
+    assert_raises { @db.tables('foo') }
+
+    fn = Tempfile.new('extralite_test_tables_with_db_name').path
+    @db.execute "attach database '#{fn}' as foo"
+
+    assert_equal [], @db.tables('foo')
+    @db.execute 'create table foo.bar (x, y)'
+    assert_equal ['bar'], @db.tables('foo')
+  end
+
   def test_pragma
     assert_equal [{journal_mode: 'memory'}], @db.pragma('journal_mode')
     assert_equal [{synchronous: 2}], @db.pragma('synchronous')
