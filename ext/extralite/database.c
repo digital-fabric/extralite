@@ -18,7 +18,10 @@ ID ID_keys;
 ID ID_new;
 ID ID_strip;
 
+VALUE SYM_gvl_release_threshold;
 VALUE SYM_read_only;
+VALUE SYM_synchronous;
+VALUE SYM_wal_journal_mode;
 
 static size_t Database_size(const void *ptr) {
   return sizeof(Database_t);
@@ -91,14 +94,40 @@ default_flags:
   return SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
 }
 
+VALUE Database_execute(int argc, VALUE *argv, VALUE self);
+
+void Database_apply_opts(VALUE self, Database_t *db, VALUE opts) {
+  VALUE value = Qnil;
+
+  value = rb_hash_aref(opts, SYM_gvl_release_threshold);
+  if (!NIL_P(value)) db->gvl_release_threshold = NUM2INT(value);
+
+  value = rb_hash_aref(opts, SYM_wal_journal_mode);
+  if (RTEST(value)) {
+    value = rb_str_new_literal("PRAGMA journal_mode=wal");
+    Database_execute(1, &value, self);
+  }
+
+  value = rb_hash_aref(opts, SYM_synchronous);
+  if (RTEST(value)) {
+    value = rb_str_new_literal("PRAGMA synchronous=1");
+    Database_execute(1, &value, self);
+  }
+
+  RB_GC_GUARD(value);
+}
+
 /* Initializes a new SQLite database with the given path and options.
  *
  * @overload initialize(path)
  *   @param path [String] file path (or ':memory:' for memory database)
  *   @return [void]
- * @overload initialize(path, read_only: false)
+ * @overload initialize(path, gvl_release_threshold: , read_only: , synchronous: , wal_journal_mode: )
  *   @param path [String] file path (or ':memory:' for memory database)
+ *   @param gvl_release_threshold [Integer] GVL release threshold
  *   @param read_only [boolean] true for opening the database for reading only
+ *   @param synchronous [boolean] true to set PRAGMA synchronous=1
+ *   @param wal_journal_mode [boolean] true to set PRAGMA journal_mode=wal
  *   @return [void]
  */
 VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
@@ -132,6 +161,8 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
 
   db->trace_block = Qnil;
   db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
+
+  if (!NIL_P(opts)) Database_apply_opts(self, db, opts);
 
   return Qnil;
 }
@@ -895,8 +926,15 @@ void Init_ExtraliteDatabase(void) {
   ID_new    = rb_intern("new");
   ID_strip  = rb_intern("strip");
 
-  SYM_read_only = ID2SYM(rb_intern("read_only"));
+  SYM_gvl_release_threshold = ID2SYM(rb_intern("gvl_release_threshold"));
+  SYM_read_only             = ID2SYM(rb_intern("read_only"));
+  SYM_synchronous           = ID2SYM(rb_intern("synchronous"));
+  SYM_wal_journal_mode      = ID2SYM(rb_intern("wal_journal_mode"));
+
+  rb_gc_register_mark_object(SYM_gvl_release_threshold);
   rb_gc_register_mark_object(SYM_read_only);
+  rb_gc_register_mark_object(SYM_synchronous);
+  rb_gc_register_mark_object(SYM_wal_journal_mode);
 
   UTF8_ENCODING = rb_utf8_encoding();
 }

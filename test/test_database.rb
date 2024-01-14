@@ -535,6 +535,19 @@ class DatabaseTest < MiniTest::Test
     assert_equal true, db.read_only?
   end
 
+  def test_database_initialize_options
+    db = Extralite::Database.new(':memory:', gvl_release_threshold: 23)
+    assert_equal 23, db.gvl_release_threshold
+
+    fn = Tempfile.new('extralite_test_database_initialize_options_1').path
+    db = Extralite::Database.new(fn, wal_journal_mode: true)
+    assert_equal 'wal', db.pragma(:journal_mode)
+
+    fn = Tempfile.new('extralite_test_database_initialize_options_2').path
+    db = Extralite::Database.new(fn, synchronous: true)
+    assert_equal 1, db.pragma(:synchronous)
+  end
+
   def test_database_inspect
     db = Extralite::Database.new(':memory:')
     assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect
