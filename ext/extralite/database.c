@@ -461,7 +461,7 @@ VALUE Database_batch_execute(int argc, VALUE *argv, VALUE self) {
  * *
  * @param sql [String] query SQL
  * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
- * @return [Array<Hash>Integer] Total number of changes effected
+ * @return [Array<Hash>, Integer] Total number of changes effected
  */
 VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
@@ -471,6 +471,76 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+}
+
+/* call-seq:
+ *   db.batch_query_ary(sql, params_array) -> rows
+ *   db.batch_query_ary(sql, enumerable) -> rows
+ *   db.batch_query_ary(sql, callable) -> rows
+ *   db.batch_query_ary(sql, params_array) { |rows| ... } -> changes
+ *   db.batch_query_ary(sql, enumerable) { |rows| ... } -> changes
+ *   db.batch_query_ary(sql, callable) { |rows| ... } -> changes
+ *
+ * Executes the given query for each list of parameters in the given paramter
+ * source. If a block is given, it is called with the resulting rows for each
+ * invocation of the query, and the total number of changes is returned.
+ * Otherwise, an array containing the resulting rows for each invocation is
+ * returned. Rows are represented as arrays.
+ *
+ *     records = [
+ *       [1, 2],
+ *       [3, 4]
+ *     ]
+ *     db.batch_query_ary('insert into foo values (?, ?) returning bar, baz', records)
+ *     #=> [[1, 2], [3, 4]]
+ * *
+ * @param sql [String] query SQL
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
+ * @return [Array<Array>, Integer] Total number of changes effected
+ */
+VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
+  Database_t *db = self_to_open_database(self);
+  sqlite3_stmt *stmt;
+
+  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
+
+  return rb_ensure(SAFE(safe_batch_query_ary), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+}
+
+/* call-seq:
+ *   db.batch_query_single_column(sql, params_array) -> rows
+ *   db.batch_query_single_column(sql, enumerable) -> rows
+ *   db.batch_query_single_column(sql, callable) -> rows
+ *   db.batch_query_single_column(sql, params_array) { |rows| ... } -> changes
+ *   db.batch_query_single_column(sql, enumerable) { |rows| ... } -> changes
+ *   db.batch_query_single_column(sql, callable) { |rows| ... } -> changes
+ *
+ * Executes the given query for each list of parameters in the given paramter
+ * source. If a block is given, it is called with the resulting rows for each
+ * invocation of the query, and the total number of changes is returned.
+ * Otherwise, an array containing the resulting rows for each invocation is
+ * returned. Rows are single values.
+ *
+ *     records = [
+ *       [1, 2],
+ *       [3, 4]
+ *     ]
+ *     db.batch_query_ary('insert into foo values (?, ?) returning baz', records)
+ *     #=> [2, 4]
+ * *
+ * @param sql [String] query SQL
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
+ * @return [Array<any>, Integer] Total number of changes effected
+ */
+VALUE Database_batch_query_single_column(VALUE self, VALUE sql, VALUE parameters) {
+  Database_t *db = self_to_open_database(self);
+  sqlite3_stmt *stmt;
+
+  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
+
+  return rb_ensure(SAFE(safe_batch_query_single_column), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
 /* call-seq:
@@ -920,6 +990,8 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "execute", Database_execute, -1);
   rb_define_method(cDatabase, "batch_execute", Database_batch_execute, -1);
   rb_define_method(cDatabase, "batch_query", Database_batch_query, 2);
+  rb_define_method(cDatabase, "batch_query_ary", Database_batch_query_ary, 2);
+  rb_define_method(cDatabase, "batch_query_single_column", Database_batch_query_single_column, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "gvl_release_threshold", Database_gvl_release_threshold_get, 0);
   rb_define_method(cDatabase, "gvl_release_threshold=", Database_gvl_release_threshold_set, 1);
