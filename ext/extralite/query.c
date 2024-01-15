@@ -450,6 +450,138 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
   return safe_batch_execute(&ctx);
 }
 
+/* call-seq:
+ *   query.batch_query(sql, params_array) -> rows
+ *   query.batch_query(sql, enumerable) -> rows
+ *   query.batch_query(sql, callable) -> rows
+ *   query.batch_query(sql, params_array) { |rows| ... } -> changes
+ *   query.batch_query(sql, enumerable) { |rows| ... } -> changes
+ *   query.batch_query(sql, callable) { |rows| ... } -> changes
+ *
+ * Executes the prepared query for each list of parameters in the given paramter
+ * source. If a block is given, it is called with the resulting rows for each
+ * invocation of the query, and the total number of changes is returned.
+ * Otherwise, an array containing the resulting rows for each invocation is
+ * returned.
+ *
+ *     q = db.prepare('insert into foo values (?, ?) returning bar, baz')
+ *     records = [
+ *       [1, 2],
+ *       [3, 4]
+ *     ]
+ *     q.batch_query(records)
+ *     #=> [{ bar: 1, baz: 2 }, { bar: 3, baz: 4}]
+ * *
+ * @param sql [String] query SQL
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
+ * @return [Array<Hash>, Integer] Total number of changes effected
+ */
+VALUE Query_batch_query(VALUE self, VALUE parameters) {
+  Query_t *query = self_to_query(self);
+  if (query->closed) rb_raise(cError, "Query is closed");
+
+  if (!query->stmt)
+    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+
+  query_ctx ctx = QUERY_CTX(
+    self,
+    query->db_struct,
+    query->stmt,
+    parameters,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  );
+  return safe_batch_query(&ctx);
+}
+
+/* call-seq:
+ *   query.batch_query_ary(sql, params_array) -> rows
+ *   query.batch_query_ary(sql, enumerable) -> rows
+ *   query.batch_query_ary(sql, callable) -> rows
+ *   query.batch_query_ary(sql, params_array) { |rows| ... } -> changes
+ *   query.batch_query_ary(sql, enumerable) { |rows| ... } -> changes
+ *   query.batch_query_ary(sql, callable) { |rows| ... } -> changes
+ *
+ * Executes the prepared query for each list of parameters in the given paramter
+ * source. If a block is given, it is called with the resulting rows for each
+ * invocation of the query, and the total number of changes is returned.
+ * Otherwise, an array containing the resulting rows for each invocation is
+ * returned. Rows are represented as arrays.
+ *
+ *     q = db.prepare('insert into foo values (?, ?) returning bar, baz')
+ *     records = [
+ *       [1, 2],
+ *       [3, 4]
+ *     ]
+ *     q.batch_query_ary(records)
+ *     #=> [{ bar: 1, baz: 2 }, { bar: 3, baz: 4}]
+ * *
+ * @param sql [String] query SQL
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
+ * @return [Array<Hash>, Integer] Total number of changes effected
+ */
+VALUE Query_batch_query_ary(VALUE self, VALUE parameters) {
+  Query_t *query = self_to_query(self);
+  if (query->closed) rb_raise(cError, "Query is closed");
+
+  if (!query->stmt)
+    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+
+  query_ctx ctx = QUERY_CTX(
+    self,
+    query->db_struct,
+    query->stmt,
+    parameters,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  );
+  return safe_batch_query_ary(&ctx);
+}
+
+/* call-seq:
+ *   query.batch_query_single_column(sql, params_array) -> rows
+ *   query.batch_query_single_column(sql, enumerable) -> rows
+ *   query.batch_query_single_column(sql, callable) -> rows
+ *   query.batch_query_single_column(sql, params_array) { |rows| ... } -> changes
+ *   query.batch_query_single_column(sql, enumerable) { |rows| ... } -> changes
+ *   query.batch_query_single_column(sql, callable) { |rows| ... } -> changes
+ *
+ * Executes the prepared query for each list of parameters in the given paramter
+ * source. If a block is given, it is called with the resulting rows for each
+ * invocation of the query, and the total number of changes is returned.
+ * Otherwise, an array containing the resulting rows for each invocation is
+ * returned. Rows are represented as single values.
+ *
+ *     q = db.prepare('insert into foo values (?, ?) returning bar, baz')
+ *     records = [
+ *       [1, 2],
+ *       [3, 4]
+ *     ]
+ *     q.batch_query_single_column(records)
+ *     #=> [{ bar: 1, baz: 2 }, { bar: 3, baz: 4}]
+ * *
+ * @param sql [String] query SQL
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
+ * @return [Array<Hash>, Integer] Total number of changes effected
+ */
+VALUE Query_batch_query_single_column(VALUE self, VALUE parameters) {
+  Query_t *query = self_to_query(self);
+  if (query->closed) rb_raise(cError, "Query is closed");
+
+  if (!query->stmt)
+    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+
+  query_ctx ctx = QUERY_CTX(
+    self,
+    query->db_struct,
+    query->stmt,
+    parameters,
+    QUERY_MODE(QUERY_MULTI_ROW),
+    ALL_ROWS
+  );
+  return safe_batch_query_single_column(&ctx);
+}
+
 /* Returns the database associated with the query.
  *
  * @overload database()
@@ -586,6 +718,9 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "execute", Query_execute, -1);
   rb_define_method(cQuery, "<<", Query_execute_chevrons, 1);
   rb_define_method(cQuery, "batch_execute", Query_batch_execute, 1);
+  rb_define_method(cQuery, "batch_query", Query_batch_query, 1);
+  rb_define_method(cQuery, "batch_query_ary", Query_batch_query_ary, 1);
+  rb_define_method(cQuery, "batch_query_single_column", Query_batch_query_single_column, 1);
   rb_define_method(cQuery, "initialize", Query_initialize, 2);
   rb_define_method(cQuery, "inspect", Query_inspect, 0);
 
