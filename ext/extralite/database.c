@@ -381,14 +381,12 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *   db.batch_execute(sql, params_array) -> changes
  *   db.batch_execute(sql, enumerable) -> changes
  *   db.batch_execute(sql, callable) -> changes
- *   db.batch_execute(sql) { ... } -> changes
  *
  * Executes the given query for each list of parameters in the paramter source.
  * If an enumerable is given, it is iterated and each of its values is used as
  * the parameters for running the query. If a callable is given, it is called
  * repeatedly and each of its return values is used as the parameters, until nil
- * is returned. If a block is given, the block is called for each iteration, and
- * its return value is used as parameters for the query, until nil is returned.
+ * is returned.
  *
  * Returns the number of changes effected. This method is designed for inserting
  * multiple records or performing other mass operations.
@@ -403,32 +401,15 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *       [1, 2, 3],
  *       [4, 5, 6]
  *     ]
- *     db.batch_execute('insert into foo values (?, ?, ?)') { records.shift }
+ *     db.batch_execute('insert into foo values (?, ?, ?)', -> { records.shift })
  *
  * @param sql [String] query SQL
  * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
  * @return [Integer] Total number of changes effected
  */
-VALUE Database_batch_execute(int argc, VALUE *argv, VALUE self) {
+VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
-  VALUE sql = Qnil;
-  VALUE parameters = Qnil;
-
-  if (argc == 0)
-    rb_raise(eArgumentError, "No parameter source given");
-  
-  sql = argv[0];
-
-  if (argc == 1) {
-    if (!rb_block_given_p())
-      rb_raise(cParameterError, "No parameter source given");
-    parameters = rb_block_proc();
-  }
-  else if (argc == 2)
-    parameters = argv[1];
-  else
-    rb_raise(cParameterError, "Multiple parameter sources given");
 
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
@@ -988,7 +969,7 @@ void Init_ExtraliteDatabase(void) {
   #endif
 
   rb_define_method(cDatabase, "execute", Database_execute, -1);
-  rb_define_method(cDatabase, "batch_execute", Database_batch_execute, -1);
+  rb_define_method(cDatabase, "batch_execute", Database_batch_execute, 2);
   rb_define_method(cDatabase, "batch_query", Database_batch_query, 2);
   rb_define_method(cDatabase, "batch_query_ary", Database_batch_query_ary, 2);
   rb_define_method(cDatabase, "batch_query_single_column", Database_batch_query_single_column, 2);
