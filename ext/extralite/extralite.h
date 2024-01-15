@@ -103,6 +103,8 @@ extern rb_encoding *UTF8_ENCODING;
 
 VALUE safe_batch_execute(query_ctx *ctx);
 VALUE safe_batch_query(query_ctx *ctx);
+VALUE safe_batch_query_ary(query_ctx *ctx);
+VALUE safe_batch_query_single_column(query_ctx *ctx);
 VALUE safe_query_ary(query_ctx *ctx);
 VALUE safe_query_changes(query_ctx *ctx);
 VALUE safe_query_columns(query_ctx *ctx);

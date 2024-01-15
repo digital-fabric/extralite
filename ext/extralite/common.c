@@ -436,7 +436,9 @@ VALUE safe_query_single_value(query_ctx *ctx) {
 
 enum batch_mode {
   BATCH_EXECUTE,
-  BATCH_QUERY
+  BATCH_QUERY_ARY,
+  BATCH_QUERY_HASH,
+  BATCH_QUERY_SINGLE_COLUMN
 };
 
 static inline VALUE batch_iterate_hash(query_ctx *ctx) {
@@ -444,15 +446,42 @@ static inline VALUE batch_iterate_hash(query_ctx *ctx) {
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
   VALUE column_names = get_column_names(ctx->stmt, column_count);
-  int row_count = 0;
 
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
-    row_count++;
     rb_ary_push(rows, row);
   }
 
   RB_GC_GUARD(column_names);
+  RB_GC_GUARD(rows);
+  return rows;
+}
+
+static inline VALUE batch_iterate_ary(query_ctx *ctx) {
+  VALUE rows = rb_ary_new();
+  VALUE row = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+
+  while (stmt_iterate(ctx)) {
+    row = row_to_ary(ctx->stmt, column_count);
+    rb_ary_push(rows, row);
+  }
+
+  RB_GC_GUARD(rows);
+  return rows;
+}
+
+static inline VALUE batch_iterate_single_column(query_ctx *ctx) {
+  VALUE rows = rb_ary_new();
+  VALUE value = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+  if (column_count != 1) rb_raise(cError, "Expected query result to have 1 column");
+
+  while (stmt_iterate(ctx)) {
+    value = get_column_value(ctx->stmt, 0, sqlite3_column_type(ctx->stmt, 0));
+    rb_ary_push(rows, value);
+  }
+
   RB_GC_GUARD(rows);
   return rows;
 }
@@ -462,8 +491,14 @@ static inline void batch_iterate(query_ctx *ctx, enum batch_mode mode, VALUE *ro
     case BATCH_EXECUTE:
       while (stmt_iterate(ctx));
       break;
-    case BATCH_QUERY:
+    case BATCH_QUERY_ARY:
+      *rows = batch_iterate_ary(ctx);
+      break;
+    case BATCH_QUERY_HASH:
       *rows = batch_iterate_hash(ctx);
+      break;
+    case BATCH_QUERY_SINGLE_COLUMN:
+      *rows = batch_iterate_single_column(ctx);
       break;
   }
 }
@@ -600,7 +635,15 @@ VALUE safe_batch_execute(query_ctx *ctx) {
 }
 
 VALUE safe_batch_query(query_ctx *ctx) {
-  return batch_run(ctx, BATCH_QUERY);
+  return batch_run(ctx, BATCH_QUERY_HASH);
+}
+
+VALUE safe_batch_query_ary(query_ctx *ctx) {
+  return batch_run(ctx, BATCH_QUERY_ARY);
+}
+
+VALUE safe_batch_query_single_column(query_ctx *ctx) {
+  return batch_run(ctx, BATCH_QUERY_SINGLE_COLUMN);
 }
 
 VALUE safe_query_columns(query_ctx *ctx) {
