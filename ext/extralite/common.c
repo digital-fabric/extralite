@@ -434,8 +434,45 @@ VALUE safe_query_single_value(query_ctx *ctx) {
   return value;
 }
 
-VALUE safe_batch_execute_array(query_ctx *ctx) {
+enum batch_mode {
+  BATCH_EXECUTE,
+  BATCH_QUERY
+};
+
+static inline VALUE batch_iterate_hash(query_ctx *ctx) {
+  VALUE rows = rb_ary_new();
+  VALUE row = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+  VALUE column_names = get_column_names(ctx->stmt, column_count);
+  int row_count = 0;
+
+  while (stmt_iterate(ctx)) {
+    row = row_to_hash(ctx->stmt, column_count, column_names);
+    row_count++;
+    rb_ary_push(rows, row);
+  }
+
+  RB_GC_GUARD(column_names);
+  RB_GC_GUARD(rows);
+  return rows;
+}
+
+static inline void batch_iterate(query_ctx *ctx, enum batch_mode mode, VALUE *rows) {
+  switch (mode) {
+    case BATCH_EXECUTE:
+      while (stmt_iterate(ctx));
+      break;
+    case BATCH_QUERY:
+      *rows = batch_iterate_hash(ctx);
+      break;
+  }
+}
+
+static inline VALUE batch_run_array(query_ctx *ctx, enum batch_mode mode) {
   int count = RARRAY_LEN(ctx->params);
+  int block_given = rb_block_given_p();
+  VALUE results = (mode != BATCH_EXECUTE) && !block_given ? rb_ary_new() : Qnil;
+  VALUE rows = Qnil;
   int changes = 0;
 
   for (int i = 0; i < count; i++) {
@@ -443,40 +480,79 @@ VALUE safe_batch_execute_array(query_ctx *ctx) {
     sqlite3_clear_bindings(ctx->stmt);
     bind_all_parameters_from_object(ctx->stmt, RARRAY_AREF(ctx->params, i));
 
-    while (stmt_iterate(ctx));
+    batch_iterate(ctx, mode, &rows);
     changes += sqlite3_changes(ctx->sqlite3_db);
+
+    if (mode != BATCH_EXECUTE) {
+      if (block_given)
+        rb_yield(rows);
+      else
+        rb_ary_push(results, rows);
+    }
   }
 
-  return INT2FIX(changes);
+  RB_GC_GUARD(rows);
+  RB_GC_GUARD(results);
+
+  if (mode == BATCH_EXECUTE || block_given)
+    return INT2FIX(changes);
+  else
+    return results;
 }
 
 struct batch_execute_each_ctx {
   query_ctx *ctx;
+  enum batch_mode mode;
+  int block_given;
+  VALUE results;
   int changes;
 };
 
-static VALUE safe_batch_execute_each_iter(RB_BLOCK_CALL_FUNC_ARGLIST(yield_value, vctx)) {
+static VALUE batch_run_each_iter(RB_BLOCK_CALL_FUNC_ARGLIST(yield_value, vctx)) {
   struct batch_execute_each_ctx *each_ctx = (struct batch_execute_each_ctx*)vctx;
+  VALUE rows = Qnil;
 
   sqlite3_reset(each_ctx->ctx->stmt);
   sqlite3_clear_bindings(each_ctx->ctx->stmt);
   bind_all_parameters_from_object(each_ctx->ctx->stmt, yield_value);
 
-  while (stmt_iterate(each_ctx->ctx));
+  batch_iterate(each_ctx->ctx, each_ctx->mode, &rows);
   each_ctx->changes += sqlite3_changes(each_ctx->ctx->sqlite3_db);
+
+  if (each_ctx->mode != BATCH_EXECUTE) {
+    if (each_ctx->block_given)
+      rb_yield(rows);
+    else
+      rb_ary_push(each_ctx->results, rows);
+  }
+  RB_GC_GUARD(rows);
 
   return Qnil;
 }
 
-VALUE safe_batch_execute_each(query_ctx *ctx) {
-  struct batch_execute_each_ctx each_ctx = { ctx, 0 };
-  rb_block_call(ctx->params, ID_each, 0, 0, safe_batch_execute_each_iter, (VALUE)&each_ctx);
-  return INT2FIX(each_ctx.changes);
+static inline VALUE batch_run_each(query_ctx *ctx, enum batch_mode mode) {
+  struct batch_execute_each_ctx each_ctx = {
+    .ctx          = ctx,
+    .mode         = mode,
+    .block_given  = rb_block_given_p(),
+    .results      = ((mode != BATCH_EXECUTE) && !rb_block_given_p() ? rb_ary_new() : Qnil),
+    .changes      = 0
+  };
+  rb_block_call(ctx->params, ID_each, 0, 0, batch_run_each_iter, (VALUE)&each_ctx);
+
+  if (mode == BATCH_EXECUTE || each_ctx.block_given)
+    return INT2FIX(each_ctx.changes);
+  else
+    return each_ctx.results;
 }
 
-VALUE safe_batch_execute_proc(query_ctx *ctx) {
+static inline VALUE batch_run_proc(query_ctx *ctx, enum batch_mode mode) {
   VALUE params = Qnil;
+  int block_given = rb_block_given_p();
+  VALUE results = (mode != BATCH_EXECUTE) && !block_given ? rb_ary_new() : Qnil;
+  VALUE rows = Qnil;
   int changes = 0;
+
   while (1) {
     params = rb_funcall(ctx->params, ID_call, 0);
     if (NIL_P(params)) break;
@@ -485,25 +561,46 @@ VALUE safe_batch_execute_proc(query_ctx *ctx) {
     sqlite3_clear_bindings(ctx->stmt);
     bind_all_parameters_from_object(ctx->stmt, params);
 
-    while (stmt_iterate(ctx));
+    batch_iterate(ctx, mode, &rows);
     changes += sqlite3_changes(ctx->sqlite3_db);
+
+    if (mode != BATCH_EXECUTE) {
+      if (block_given)
+        rb_yield(rows);
+      else
+        rb_ary_push(results, rows);
+    }
   }
 
+  RB_GC_GUARD(rows);
+  RB_GC_GUARD(results);
   RB_GC_GUARD(params);
-  return INT2FIX(changes);
+
+  if (mode == BATCH_EXECUTE || block_given)
+    return INT2FIX(changes);
+  else
+    return results;
+}
+
+static inline VALUE batch_run(query_ctx *ctx, enum batch_mode mode) {
+  if (TYPE(ctx->params) == T_ARRAY)
+    return batch_run_array(ctx, mode);
+  
+  if (rb_respond_to(ctx->params, ID_each))
+    return batch_run_each(ctx, mode);
+  
+  if (rb_respond_to(ctx->params, ID_call))
+    return batch_run_proc(ctx, mode);
+  
+  rb_raise(cParameterError, "Invalid parameter source supplied to #batch_execute");
 }
 
 VALUE safe_batch_execute(query_ctx *ctx) {
-  if (TYPE(ctx->params) == T_ARRAY)
-    return safe_batch_execute_array(ctx);
-  
-  if (rb_respond_to(ctx->params, ID_each))
-    return safe_batch_execute_each(ctx);
-  
-  if (rb_respond_to(ctx->params, ID_call))
-    return safe_batch_execute_proc(ctx);
-  
-  rb_raise(cParameterError, "Invalid parameter source supplied to #batch_execute");
+  return batch_run(ctx, BATCH_EXECUTE);
+}
+
+VALUE safe_batch_query(query_ctx *ctx) {
+  return batch_run(ctx, BATCH_QUERY);
 }
 
 VALUE safe_query_columns(query_ctx *ctx) {

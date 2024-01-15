@@ -383,9 +383,9 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *   db.batch_execute(sql, callable) -> changes
  *   db.batch_execute(sql) { ... } -> changes
  *
- * Executes the given query for each list of parameters in params_array. If an
- * enumerable is given, it is iterated and each of its values is used as the
- * parameters for running the query. If a callable is given, it is called
+ * Executes the given query for each list of parameters in the paramter source.
+ * If an enumerable is given, it is iterated and each of its values is used as
+ * the parameters for running the query. If a callable is given, it is called
  * repeatedly and each of its return values is used as the parameters, until nil
  * is returned. If a block is given, the block is called for each iteration, and
  * its return value is used as parameters for the query, until nil is returned.
@@ -406,7 +406,7 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
  *     db.batch_execute('insert into foo values (?, ?, ?)') { records.shift }
  *
  * @param sql [String] query SQL
- * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] array of parameters to run query with
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
  * @return [Integer] Total number of changes effected
  */
 VALUE Database_batch_execute(int argc, VALUE *argv, VALUE self) {
@@ -436,6 +436,41 @@ VALUE Database_batch_execute(int argc, VALUE *argv, VALUE self) {
   query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+}
+
+/* call-seq:
+ *   db.batch_query(sql, params_array) -> rows
+ *   db.batch_query(sql, enumerable) -> rows
+ *   db.batch_query(sql, callable) -> rows
+ *   db.batch_query(sql, params_array) { |rows| ... } -> changes
+ *   db.batch_query(sql, enumerable) { |rows| ... } -> changes
+ *   db.batch_query(sql, callable) { |rows| ... } -> changes
+ *
+ * Executes the given query for each list of parameters in the given paramter
+ * source. If a block is given, it is called with the resulting rows for each
+ * invocation of the query, and the total number of changes is returned.
+ * Otherwise, an array containing the resulting rows for each invocation is
+ * returned.
+ *
+ *     records = [
+ *       [1, 2],
+ *       [3, 4]
+ *     ]
+ *     db.batch_query('insert into foo values (?, ?) returning bar, baz', records)
+ *     #=> [{ bar: 1, baz: 2 }, { bar: 3, baz: 4}]
+ * *
+ * @param sql [String] query SQL
+ * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
+ * @return [Array<Hash>Integer] Total number of changes effected
+ */
+VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
+  Database_t *db = self_to_open_database(self);
+  sqlite3_stmt *stmt;
+
+  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
+
+  return rb_ensure(SAFE(safe_batch_query), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
 /* call-seq:
@@ -884,6 +919,7 @@ void Init_ExtraliteDatabase(void) {
 
   rb_define_method(cDatabase, "execute", Database_execute, -1);
   rb_define_method(cDatabase, "batch_execute", Database_batch_execute, -1);
+  rb_define_method(cDatabase, "batch_query", Database_batch_query, 2);
   rb_define_method(cDatabase, "filename", Database_filename, -1);
   rb_define_method(cDatabase, "gvl_release_threshold", Database_gvl_release_threshold_get, 0);
   rb_define_method(cDatabase, "gvl_release_threshold=", Database_gvl_release_threshold_set, 1);

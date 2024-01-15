@@ -405,6 +405,101 @@ class DatabaseTest < MiniTest::Test
     ], @db.query('select * from foo')
   end
 
+  def test_batch_query_with_array
+    @db.query('create table foo (a, b, c)')
+    assert_equal [], @db.query('select * from foo')
+
+    data = [
+      [1, '2', 3],
+      ['4', 5, 6]
+    ]
+    results = @db.batch_query('insert into foo values (?, ?, ?) returning *', data)
+    assert_equal [
+      [{ a: 1, b: '2', c: 3 }],
+      [{ a: '4', b: 5, c: 6 }]
+    ], results
+
+    results = @db.batch_query('update foo set c = ? returning *', [42, 43])
+    assert_equal [
+      [{ a: 1, b: '2', c: 42 }, { a: '4', b: 5, c: 42 }],
+      [{ a: 1, b: '2', c: 43 }, { a: '4', b: 5, c: 43 }]
+    ], results
+
+    array = []
+    changes = @db.batch_query('update foo set c = ? returning *', [44, 45]) do |rows|
+      array << rows
+    end
+    assert_equal 4, changes
+    assert_equal [
+      [{ a: 1, b: '2', c: 44 }, { a: '4', b: 5, c: 44 }],
+      [{ a: 1, b: '2', c: 45 }, { a: '4', b: 5, c: 45 }]
+    ], array
+  end
+
+  def test_batch_query_with_enumerable
+    @db.query('create table foo (a integer primary key, b)')
+    assert_equal [], @db.query('select * from foo')
+
+    results = @db.batch_query('insert into foo (b) values (?) returning *', 11..13)
+    assert_equal [
+      [{ a: 1, b: 11 }],
+      [{ a: 2, b: 12 }],
+      [{ a: 3, b: 13 }]
+    ], results
+
+    results = @db.batch_query('update foo set b = ? returning *', [42, 43])
+    assert_equal [
+      [{ a: 1, b: 42 }, { a: 2, b: 42 }, { a: 3, b: 42 }],
+      [{ a: 1, b: 43 }, { a: 2, b: 43 }, { a: 3, b: 43 }]
+    ], results
+
+    array = []
+    changes = @db.batch_query('update foo set b = ? returning *', [44, 45]) do |rows|
+      array << rows
+    end
+    assert_equal 6, changes
+    assert_equal [
+      [{ a: 1, b: 44 }, { a: 2, b: 44 }, { a: 3, b: 44 }],
+      [{ a: 1, b: 45 }, { a: 2, b: 45 }, { a: 3, b: 45 }]
+    ], array
+  end
+
+  def parameter_source_proc(values)
+    proc { values.shift }
+  end
+
+  def test_batch_query_with_proc
+    @db.query('create table foo (a integer primary key, b)')
+    assert_equal [], @db.query('select * from foo')
+
+    pr = parameter_source_proc([5, 4, 3])
+    assert_kind_of Proc, pr
+    results = @db.batch_query('insert into foo (b) values (?) returning *', pr)
+    assert_equal [
+      [{ a: 1, b: 5 }],
+      [{ a: 2, b: 4 }],
+      [{ a: 3, b: 3 }]
+    ], results
+
+    pr = parameter_source_proc([42, 43])
+    results = @db.batch_query('update foo set b = ? returning *', pr)
+    assert_equal [
+      [{ a: 1, b: 42 }, { a: 2, b: 42 }, { a: 3, b: 42 }],
+      [{ a: 1, b: 43 }, { a: 2, b: 43 }, { a: 3, b: 43 }]
+    ], results
+
+    array = []
+    pr = parameter_source_proc([44, 45])
+    changes = @db.batch_query('update foo set b = ? returning *', pr) do |rows|
+      array << rows
+    end
+    assert_equal 6, changes
+    assert_equal [
+      [{ a: 1, b: 44 }, { a: 2, b: 44 }, { a: 3, b: 44 }],
+      [{ a: 1, b: 45 }, { a: 2, b: 45 }, { a: 3, b: 45 }]
+    ], array
+  end
+
   def test_interrupt
     t = Thread.new do
       sleep 0.5
