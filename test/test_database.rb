@@ -389,13 +389,14 @@ class DatabaseTest < MiniTest::Test
     ], @db.query('select * from foo')
   end
 
-  def test_batch_execute_with_block
+  def test_batch_execute_with_proc
     source = [42, 43, 44]
 
     @db.query('create table foo (a)')
     assert_equal [], @db.query('select * from foo')
 
-    changes = @db.batch_execute('insert into foo values (?)') { source.shift }
+    pr = proc { source.shift }
+    changes = @db.batch_execute('insert into foo values (?)', pr)
 
     assert_equal 3, changes
     assert_equal [
