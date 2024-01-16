@@ -1,14 +1,42 @@
+# 2.5 2024-01-16
+
+- Update bundled sqlite to version 3.45.0
+- Implement `Database#batch_query` and related methods
+  [53](https://github.com/digital-fabric/extralite/issues/53)
+- Accept more options in `Database#initialize`
+  [48](https://github.com/digital-fabric/extralite/issues/48)
+- Fix `Database#pragma` to return single value when reading pragma value
+- Accept database name in `Database#tables` method
+- Improve `Database#batch_execute` - now accepts Enumerable and Callable
+  parameters [52](https://github.com/digital-fabric/extralite/issues/52)
+- Rename `Database#execute_multi` to `Database#batch_execute`
+- Implement Query#clone
+  [51](https://github.com/digital-fabric/extralite/issues/51)
+- Add support for GC compaction
+- Remove support for Ruby 2.7
+- Implement Query#<< [49](https://github.com/digital-fabric/extralite/issues/49)
+- Allow passing parameters in array
+- Add support for ractors
+  [#50](https://github.com/digital-fabric/extralite/issues/50)
+
 # 2.4 2023-12-24
 
-- Implement GVL release threshold. [#46](https://github.com/digital-fabric/extralite/pull/46)
+- Implement GVL release threshold.
+  [#46](https://github.com/digital-fabric/extralite/pull/46)
 - Implement write barriers for better GC performance.
-- Add support for binding large numbers and symbols. [#43](https://github.com/digital-fabric/extralite/pull/43)
-- Implement Database#transaction. [#42](https://github.com/digital-fabric/extralite/pull/42)
-- Add support for binding BLOBs. [#40](https://github.com/digital-fabric/extralite/pull/40)
+- Add support for binding large numbers and symbols.
+  [#43](https://github.com/digital-fabric/extralite/pull/43)
+- Implement Database#transaction.
+  [#42](https://github.com/digital-fabric/extralite/pull/42)
+- Add support for binding BLOBs.
+  [#40](https://github.com/digital-fabric/extralite/pull/40)
 - Minor fixes and cleanup of C-code.
-- Fix `Database#inspect` for a closed database instance [#37](https://github.com/digital-fabric/extralite/issues/37)
-- Add support for binding named parameters from Struct and Data classes [#30](https://github.com/digital-fabric/extralite/pull/30)
-- Update bundled SQLite code to version 3.44.2 [#32](https://github.com/digital-fabric/extralite/pull/32)
+- Fix `Database#inspect` for a closed database instance
+  [#37](https://github.com/digital-fabric/extralite/issues/37)
+- Add support for binding named parameters from Struct and Data classes
+  [#30](https://github.com/digital-fabric/extralite/pull/30)
+- Update bundled SQLite code to version 3.44.2
+  [#32](https://github.com/digital-fabric/extralite/pull/32)
 
 # 2.3 2023-11-12
 
@@ -28,7 +56,8 @@
 
 - Fix Sequel migrations (#8)
 - Redesign prepared statement functionality (#24)
-  - Rewrite `Extralite::PreparedStatement` into `Extralite::Query` with breaking API changes
+  - Rewrite `Extralite::PreparedStatement` into `Extralite::Query` with breaking
+    API changes
   - Add `Extralite::Iterator` class for external iteration
   - Add `Query#each_xxx`, `Query#to_a_xxx` method
   - Add `Query#eof?` method
@@ -77,7 +106,8 @@
 # 1.20 2023-01-21
 
 - Fix compilation error (#15 @sitano)
-- Add status methods `Extralite.runtime_status`, `Database#status`, `PreparedStatement#status` (#14 @sitano)
+- Add status methods `Extralite.runtime_status`, `Database#status`,
+  `PreparedStatement#status` (#14 @sitano)
 - Add `Database#interrupt` (#13 @sitano)
 - Add `Database#backup` (#11 @sitano)
 - Derive `Extralite::Error` from `StandardError` (#10 @sitano)
@@ -199,4 +229,3 @@
 ## 0.1 2021-05-21
 
 - First release
-
