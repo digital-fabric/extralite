@@ -896,6 +896,53 @@ class DatabaseTest < MiniTest::Test
     assert_kind_of RuntimeError, exception
     assert_equal 'bar', exception.message
   end
+
+  def test_database_transaction_rollback!
+    db = Extralite::Database.new(':memory:')
+    db.execute('create table foo(x)')
+
+    exception = nil
+    begin
+      db.transaction do
+        db.execute('insert into foo values (42)')
+        db.rollback!
+      end
+    rescue => e
+      exception = e
+    end
+
+    assert_equal [], db.query('select * from foo')
+    assert_nil exception
+  end
+
+  def test_database_savepoint
+    db = Extralite::Database.new(':memory:')
+    db.execute('create table foo(x)')
+
+    db.transaction do
+      assert_equal [], db.query('select * from foo')
+
+      db.execute('insert into foo values (42)')
+      assert_equal [42], db.query_single_column('select x from foo')
+
+      db.savepoint(:a)
+
+      db.execute('insert into foo values (43)')
+      assert_equal [42, 43], db.query_single_column('select x from foo')
+      
+      db.savepoint(:b)
+
+      db.execute('insert into foo values (44)')
+      assert_equal [42, 43, 44], db.query_single_column('select x from foo')
+
+      db.rollback_to(:b)
+      assert_equal [42, 43], db.query_single_column('select x from foo')
+
+      db.release(:a)
+
+      assert_equal [42, 43], db.query_single_column('select x from foo')
+    end
+  end
 end
 
 class ScenarioTest < MiniTest::Test

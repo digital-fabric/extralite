@@ -60,6 +60,11 @@ module Extralite
       value.is_a?(Hash) ? pragma_set(value) : pragma_get(value)
     end
 
+    # Error class used to roll back a transaction without propagating an
+    # exception.
+    class Rollback < Error
+    end
+
     # Starts a transaction and runs the given block. If an exception is raised
     # in the block, the transaction is rolled back. Otherwise, the transaction
     # is commited after running the block.
@@ -76,11 +81,54 @@ module Extralite
     
       abort = false
       yield self
-    rescue
+    rescue => e
       abort = true
-      raise
+      raise unless e.is_a?(Rollback)
     ensure
       execute(abort ? 'rollback' : 'commit')
+    end
+
+    # Creates a savepoint with the given name.
+    #
+    # @param name [String, Symbol] savepoint name
+    # @return [Extralite::Database] database
+    def savepoint(name)
+      execute "savepoint #{name}"
+      self
+    end
+
+    # Release a savepoint with the given name.
+    #
+    # @param name [String, Symbol] savepoint name
+    # @return [Extralite::Database] database
+    def release(name)
+      execute "release #{name}"
+      self
+    end
+
+    # Rolls back changes to a savepoint with the given name.
+    #
+    # @param name [String, Symbol] savepoint name
+    # @return [Extralite::Database] database
+    def rollback_to(name)
+      execute "rollback to #{name}"
+      self
+    end
+
+    # Rolls back the currently active transaction. This method should only be
+    # called from within a block passed to Database#transaction. This method
+    # raises a Extralite::Rollback exception, which will stop execution of the
+    # transaction block without propagating the exception.
+    #
+    #   db.transaction do
+    #     db.execute('insert into foo (42)')
+    #     db.rollback!
+    #   end
+    #
+    # @param name [String, Symbol] savepoint name
+    # @return [Extralite::Database] database
+    def rollback!
+      raise Rollback
     end
 
     private

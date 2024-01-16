@@ -1,5 +1,7 @@
 - Transactions and savepoints:
 
+  - https://www.sqlite.org/lang_savepoint.html
+
   - `DB#savepoint(name)` - creates a savepoint
   - `DB#release(name)` - releases a savepoint
   - `DB#rollback` - raises `Extralite::Rollback`, which is rescued by `DB#transaction`
