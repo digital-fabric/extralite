@@ -199,14 +199,6 @@ void *prepare_multi_stmt_impl(void *ptr) {
   return NULL;
 }
 
-// int test_progress_handler(void *ptr) {
-//   printf("...progress_handler... %p\n", ptr);
-//   return 0;
-// }
-
-// sqlite3_progress_handler(db, 1, &test_progress_handler, NULL);
-// sqlite3_progress_handler(db, 0, NULL, NULL);
-
 /*
 This function prepares a statement from an SQL string containing one or more SQL
 statements. It will release the GVL while the statements are being prepared and
