@@ -1100,7 +1100,7 @@ class BackupTest < MiniTest::Test
   end
 end
 
-class GVLReleaseThresholdTest < Minitest::Test
+class ConcurrencyTest < Minitest::Test
   def setup
     @sql = <<~SQL
       WITH RECURSIVE r(i) AS (
@@ -1194,6 +1194,159 @@ class GVLReleaseThresholdTest < Minitest::Test
 
     db.gvl_release_threshold = nil
     assert_equal 1000, db.gvl_release_threshold
+  end
+
+  def test_progress_handler_simple
+    db = Extralite::Database.new(':memory:')
+
+    buf = []
+    db.on_progress(1) { buf << :progress }
+
+    result = db.query_single_row('select 1 as a, 2 as b, 3 as c')
+    assert_equal({ a: 1, b: 2, c: 3 }, result)
+    assert_equal 6, buf.size
+
+    buf = []
+    db.on_progress(2) { buf << :progress }
+
+    result = db.query_single_row('select 1 as a, 2 as b, 3 as c')
+    assert_equal({ a: 1, b: 2, c: 3 }, result)
+    assert_equal 3, buf.size
+  end
+
+  LONG_QUERY = <<~SQL
+    WITH RECURSIVE
+      fibo (curr, next)
+    AS
+    ( SELECT 1,1
+      UNION ALL
+      SELECT next, curr + next FROM fibo
+      LIMIT 10000000 )
+    SELECT curr, next FROM fibo LIMIT 1 OFFSET 10000000-1;
+  SQL
+
+  def test_progress_handler_timeout_interrupt
+    db = Extralite::Database.new(':memory:')
+    t0 = Time.now
+    db.on_progress(1000) do
+      Thread.pass
+      db.interrupt if Time.now - t0 >= 0.2
+    end
+
+    q = db.prepare(LONG_QUERY)
+    result = nil
+    err = nil
+    begin
+      result = q.next
+    rescue => e
+      err = e
+    end
+    t1 = Time.now
+
+    assert_nil result
+    assert_equal 1, ((t1 - t0) * 5).round.to_i
+    assert_kind_of Extralite::InterruptError, err
+
+    # try a second time, just to make sure no undefined state is left behind
+    t0 = Time.now
+    q = db.prepare(LONG_QUERY)
+    result = nil
+    err = nil
+    begin
+      result = q.next
+    rescue => e
+      err = e
+    end
+    t1 = Time.now
+
+    assert_nil result
+    assert_equal 1, ((t1 - t0) * 5).round.to_i
+    assert_kind_of Extralite::InterruptError, err
+  end
+
+  class CustomTimeoutError < RuntimeError
+  end
+
+  def test_progress_handler_timeout_raise
+    db = Extralite::Database.new(':memory:')
+    t0 = Time.now
+    db.on_progress(1000) do
+      Thread.pass
+      raise CustomTimeoutError if Time.now - t0 >= 0.2
+    end
+
+    q = db.prepare(LONG_QUERY)
+    result = nil
+    err = nil
+    begin
+      result = q.next
+    rescue => e
+      err = e
+    end
+    t1 = Time.now
+
+    assert_nil result
+    assert_equal 1, ((t1 - t0) * 5).round.to_i
+    assert_kind_of CustomTimeoutError, err
+
+    # try a second time, just to make sure no undefined state is left behind
+    t0 = Time.now
+    q = db.prepare(LONG_QUERY)
+    result = nil
+    err = nil
+    begin
+      result = q.next
+    rescue => e
+      err = e
+    end
+    t1 = Time.now
+
+    assert_nil result
+    assert_equal 1, ((t1 - t0) * 5).round.to_i
+    assert_kind_of CustomTimeoutError, err
+  end
+
+  def test_progress_handler_busy_timeout
+    fn = Tempfile.new('extralite_test_progress_handler_busy_timeout').path
+    db1 = Extralite::Database.new(fn)
+    db2 = Extralite::Database.new(fn)
+
+    db1.query('begin exclusive')
+    assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+
+    t0 = Time.now
+    db2.on_progress(1000) do
+      Thread.pass
+      raise CustomTimeoutError if Time.now - t0 >= 0.2
+    end
+
+    result = nil
+    err = nil
+    begin
+      result = db2.execute('begin exclusive')
+    rescue => e
+      err = e
+    end
+    t1 = Time.now
+
+    assert_nil result
+    assert_equal 1, ((t1 - t0) * 5).round.to_i
+    assert_kind_of CustomTimeoutError, err
+
+    # Try a second time, to ensure no undefined state remains behind
+    t0 = Time.now
+    result = nil
+    err = nil
+    begin
+      result = db2.execute('begin exclusive')
+    rescue => e
+      err = e
+    end
+    t1 = Time.now
+
+    assert_nil result
+    assert_equal 1, ((t1 - t0) * 5).round.to_i
+    assert_kind_of CustomTimeoutError, err
   end
 end
 

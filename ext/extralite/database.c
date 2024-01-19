@@ -32,11 +32,13 @@ static size_t Database_size(const void *ptr) {
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
   rb_gc_mark_movable(db->trace_proc);
+  rb_gc_mark_movable(db->progress_handler_proc);
 }
 
 static void Database_compact(void *ptr) {
   Database_t *db = ptr;
   db->trace_proc = rb_gc_location(db->trace_proc);
+  db->progress_handler_proc = rb_gc_location(db->progress_handler_proc);
 }
 
 static void Database_free(void *ptr) {
@@ -162,6 +164,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
 #endif
 
   db->trace_proc = Qnil;
+  db->progress_handler_proc = Qnil;
   db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
 
   if (!NIL_P(opts)) Database_apply_opts(self, db, opts);
@@ -210,7 +213,7 @@ VALUE Database_closed_p(VALUE self) {
 }
 
 inline enum gvl_mode Database_prepare_gvl_mode(Database_t *db) {
-  return GVL_RELEASE;
+  return db->gvl_release_threshold < 0 ? GVL_HOLD : GVL_RELEASE;
 }
 
 static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *)) {
@@ -865,6 +868,78 @@ VALUE Database_trace(VALUE self) {
   return self;
 }
 
+int Database_progress_handler(void *ptr) {
+  Database_t *db = (Database_t *)ptr;
+  rb_funcall(db->progress_handler_proc, ID_call, 0);
+  return 0;
+}
+
+int Database_busy_handler(void *ptr, int v) {
+  Database_t *db = (Database_t *)ptr;
+  if (!(v % db->progress_handler_period))
+    rb_funcall(db->progress_handler_proc, ID_call, 0);
+  return 1;
+}
+
+void Database_reset_progress_handler(VALUE self, Database_t *db) {
+  RB_OBJ_WRITE(self, &db->progress_handler_proc, Qnil);
+  sqlite3_progress_handler(db->sqlite3_db, 0, NULL, NULL);
+  sqlite3_busy_handler(db->sqlite3_db, NULL, NULL);
+}
+
+/* call-seq:
+ *   db.on_progress(period) { } -> db
+ *   db.on_progress(0) -> db
+ *
+ * Installs or removes a progress handler that will be executed periodically
+ * while a query is running. This method can be used to support switching
+ * between fibers and threads or implementing timeouts for running queries.
+ *
+ * The given period parameter specifies the approximate number of SQLite virtual
+ * machine instructions that are evaluated between successive invocations of the
+ * progress handler. A period of less than 1 removes the progress handler.
+ *
+ * The progress handler is called also when the database is busy. This lets the
+ * application perform work while waiting for the database to become unlocked,
+ * or implement a timeout. Note that setting the database's busy_timeout _after_
+ * setting a progress handler may lead to undefined behaviour in a concurrent
+ * application.
+ *
+ * When the progress handler is set, the gvl release threshold value is set to
+ * -1, which means that the GVL will not be released at all when preparing or
+ * running queries. It is the application's responsibility to let other threads
+ * or fibers run by calling e.g. Thread.pass:
+ * 
+ *     db.on_progress(1000) { Thread.pass }
+ *
+ * If the gvl release threshold is set to a value equal to or larger than 0
+ * after setting the progress handler, the progress handler will be reset.
+ *
+ * @param period [Integer] progress handler period @returns
+ * [Extralite::Database] database
+ */
+VALUE Database_on_progress(VALUE self, VALUE period) {
+  Database_t *db = self_to_open_database(self);
+  int period_int = NUM2INT(period);
+
+  if (period_int > 0 && rb_block_given_p()) {
+    RB_OBJ_WRITE(self, &db->progress_handler_proc, rb_block_proc());
+    db->gvl_release_threshold = -1;
+    db->progress_handler_period = period_int;
+
+    sqlite3_progress_handler(db->sqlite3_db, period_int, &Database_progress_handler, db);
+    sqlite3_busy_handler(db->sqlite3_db, &Database_busy_handler, db);
+  }
+  else {
+    RB_OBJ_WRITE(self, &db->progress_handler_proc, Qnil);
+    db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
+    sqlite3_progress_handler(db->sqlite3_db, 0, NULL, NULL);
+    sqlite3_busy_handler(db->sqlite3_db, NULL, NULL);
+  }
+
+  return self;
+}
+
 /* call-seq:
  *   db.errcode -> errcode
  *
@@ -945,9 +1020,10 @@ VALUE Database_gvl_release_threshold_set(VALUE self, VALUE value) {
         int value_int = NUM2INT(value);
         if (value_int < -1)
           rb_raise(eArgumentError, "Invalid GVL release threshold value (expect integer >= -1)");
+
+        if (value_int > -1 && !NIL_P(db->progress_handler_proc))
+          Database_reset_progress_handler(self, db);
         db->gvl_release_threshold = value_int;
-        // if (db->gvl_release_threshold > -1 && !NIL_P(db->progress_handler))
-        //   Database_reset_progress_handler(db);
         break;
       }
     case T_NIL:
@@ -994,6 +1070,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
   rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
   rb_define_method(cDatabase, "limit", Database_limit, -1);
+  rb_define_method(cDatabase, "on_progress", Database_on_progress, 1);
   rb_define_method(cDatabase, "prepare", Database_prepare, -1);
   rb_define_method(cDatabase, "query", Database_query_hash, -1);
   rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
