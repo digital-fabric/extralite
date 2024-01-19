@@ -43,7 +43,7 @@ extern VALUE SYM_single_column;
 
 typedef struct {
   sqlite3 *sqlite3_db;
-  VALUE   trace_block;
+  VALUE   trace_proc;
   int     gvl_release_threshold;
 } Database_t;
 

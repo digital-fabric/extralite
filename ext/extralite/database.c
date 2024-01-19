@@ -31,12 +31,12 @@ static size_t Database_size(const void *ptr) {
 
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
-  rb_gc_mark_movable(db->trace_block);
+  rb_gc_mark_movable(db->trace_proc);
 }
 
 static void Database_compact(void *ptr) {
   Database_t *db = ptr;
-  db->trace_block = rb_gc_location(db->trace_block);
+  db->trace_proc = rb_gc_location(db->trace_proc);
 }
 
 static void Database_free(void *ptr) {
@@ -161,7 +161,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   }
 #endif
 
-  db->trace_block = Qnil;
+  db->trace_proc = Qnil;
   db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
 
   if (!NIL_P(opts)) Database_apply_opts(self, db, opts);
@@ -223,7 +223,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   sql = rb_funcall(argv[0], ID_strip, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_call, 1, sql);
+  if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
   prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
@@ -861,7 +861,7 @@ VALUE Database_total_changes(VALUE self) {
 VALUE Database_trace(VALUE self) {
   Database_t *db = self_to_open_database(self);
 
-  RB_OBJ_WRITE(self, &db->trace_block, rb_block_given_p() ? rb_block_proc() : Qnil);
+  RB_OBJ_WRITE(self, &db->trace_proc, rb_block_given_p() ? rb_block_proc() : Qnil);
   return self;
 }
 
