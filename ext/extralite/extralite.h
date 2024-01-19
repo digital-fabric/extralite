@@ -125,14 +125,15 @@ VALUE Query_to_a_hash(VALUE self);
 VALUE Query_to_a_ary(VALUE self);
 VALUE Query_to_a_single_column(VALUE self);
 
-void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
-void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
+void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
+void prepare_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
 void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);
 void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);
 int stmt_iterate(query_ctx *ctx);
 VALUE cleanup_stmt(query_ctx *ctx);
 
 sqlite3 *Database_sqlite3_db(VALUE self);
+enum gvl_mode Database_prepare_gvl_mode(Database_t *db);
 Database_t *self_to_database(VALUE self);
 
 void *gvl_call(enum gvl_mode mode, void *(*fn)(void *), void *data);
