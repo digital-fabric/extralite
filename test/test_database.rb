@@ -1211,7 +1211,7 @@ class ConcurrencyTest < Minitest::Test
 
     result = db.query_single_row('select 1 as a, 2 as b, 3 as c')
     assert_equal({ a: 1, b: 2, c: 3 }, result)
-    assert_equal 2..4, buf.size
+    assert_in_range 2..4, buf.size
   end
 
   LONG_QUERY = <<~SQL
