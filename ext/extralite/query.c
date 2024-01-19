@@ -91,8 +91,8 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
 static inline void query_reset(Query_t *query) {
   if (!query->stmt)
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
-  if (query->db_struct->trace_block != Qnil)
-    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
+  if (query->db_struct->trace_proc != Qnil)
+    rb_funcall(query->db_struct->trace_proc, ID_call, 1, query->sql);
   sqlite3_reset(query->stmt);
   query->eof = 0;
 }
@@ -101,8 +101,8 @@ static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) 
   if (!query->stmt)
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
 
-  if (query->db_struct->trace_block != Qnil)
-    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
+  if (query->db_struct->trace_proc != Qnil)
+    rb_funcall(query->db_struct->trace_proc, ID_call, 1, query->sql);
 
   sqlite3_reset(query->stmt);
   query->eof = 0;
@@ -130,8 +130,8 @@ VALUE Query_reset(VALUE self) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   query_reset(query);
-  if (query->db_struct->trace_block != Qnil)
-    rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
+  if (query->db_struct->trace_proc != Qnil)
+    rb_funcall(query->db_struct->trace_proc, ID_call, 1, query->sql);
 
   return self;
 }
