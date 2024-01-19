@@ -97,7 +97,11 @@ enum gvl_mode {
 #define MULTI_ROW_P(mode) (mode == QUERY_MULTI_ROW)
 #define QUERY_CTX(self, db, stmt, params, mode, max_rows) \
   { self, db->sqlite3_db, stmt, params, mode, max_rows, 0, db->gvl_release_threshold, 0 }
+#define TRACE_SQL(db, sql) \
+    if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
+
 #define DEFAULT_GVL_RELEASE_THRESHOLD 1000
+
 
 extern rb_encoding *UTF8_ENCODING;
 
