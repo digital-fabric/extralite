@@ -23,6 +23,8 @@ VALUE SYM_read_only;
 VALUE SYM_synchronous;
 VALUE SYM_wal_journal_mode;
 
+#define DB_GVL_MODE(db) Database_prepare_gvl_mode(db)
+
 static size_t Database_size(const void *ptr) {
   return sizeof(Database_t);
 }
@@ -207,6 +209,10 @@ VALUE Database_closed_p(VALUE self) {
   return db->sqlite3_db ? Qfalse : Qtrue;
 }
 
+inline enum gvl_mode Database_prepare_gvl_mode(Database_t *db) {
+  return GVL_RELEASE;
+}
+
 static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *)) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
@@ -218,7 +224,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   if (db->trace_block != Qnil) rb_funcall(db->trace_block, ID_call, 1, sql);
-  prepare_multi_stmt(db->sqlite3_db, &stmt, sql);
+  prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
@@ -413,7 +419,7 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
 
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
+  prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
@@ -448,7 +454,7 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
+  prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
@@ -483,7 +489,7 @@ VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
+  prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query_ary), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
@@ -518,7 +524,7 @@ VALUE Database_batch_query_single_column(VALUE self, VALUE sql, VALUE parameters
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(db->sqlite3_db, &stmt, sql);
+  prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, QUERY_MULTI_ROW, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query_single_column), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
@@ -935,8 +941,15 @@ VALUE Database_gvl_release_threshold_set(VALUE self, VALUE value) {
 
   switch (TYPE(value)) {
     case T_FIXNUM:
-      db->gvl_release_threshold = NUM2INT(value);
-      break;
+      {
+        int value_int = NUM2INT(value);
+        if (value_int < -1)
+          rb_raise(eArgumentError, "Invalid GVL release threshold value (expect integer >= -1)");
+        db->gvl_release_threshold = value_int;
+        // if (db->gvl_release_threshold > -1 && !NIL_P(db->progress_handler))
+        //   Database_reset_progress_handler(db);
+        break;
+      }
     case T_NIL:
       db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
       break;

@@ -14,6 +14,8 @@ VALUE cQuery;
 ID ID_inspect;
 ID ID_slice;
 
+#define DB_GVL_MODE(query) Database_prepare_gvl_mode(query->db_struct)
+
 static size_t Query_size(const void *ptr) {
   return sizeof(Query_t);
 }
@@ -88,7 +90,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
 
 static inline void query_reset(Query_t *query) {
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
   if (query->db_struct->trace_block != Qnil)
     rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
   sqlite3_reset(query->stmt);
@@ -97,7 +99,7 @@ static inline void query_reset(Query_t *query) {
 
 static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
 
   if (query->db_struct->trace_block != Qnil)
     rb_funcall(query->db_struct->trace_block, ID_call, 1, query->sql);
@@ -437,7 +439,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -481,7 +483,7 @@ VALUE Query_batch_query(VALUE self, VALUE parameters) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -525,7 +527,7 @@ VALUE Query_batch_query_ary(VALUE self, VALUE parameters) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -569,7 +571,7 @@ VALUE Query_batch_query_single_column(VALUE self, VALUE parameters) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -670,7 +672,7 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
 
   int value = sqlite3_stmt_status(query->stmt, NUM2INT(op), RTEST(reset) ? 1 : 0);
   return INT2NUM(value);

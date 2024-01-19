@@ -199,15 +199,23 @@ void *prepare_multi_stmt_impl(void *ptr) {
   return NULL;
 }
 
+// int test_progress_handler(void *ptr) {
+//   printf("...progress_handler... %p\n", ptr);
+//   return 0;
+// }
+
+// sqlite3_progress_handler(db, 1, &test_progress_handler, NULL);
+// sqlite3_progress_handler(db, 0, NULL, NULL);
+
 /*
 This function prepares a statement from an SQL string containing one or more SQL
 statements. It will release the GVL while the statements are being prepared and
 executed. All statements excluding the last one are executed. The last statement
 is not executed, but instead handed back to the caller for looping over results.
 */
-void prepare_multi_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+void prepare_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   prepare_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
-  gvl_call(GVL_RELEASE, prepare_multi_stmt_impl, (void *)&ctx);
+  gvl_call(mode, prepare_multi_stmt_impl, (void *)&ctx);
   RB_GC_GUARD(sql);
 
   switch (ctx.rc) {
@@ -247,9 +255,9 @@ end:
   return NULL;
 }
 
-void prepare_single_stmt(sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
   prepare_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
-  gvl_call(GVL_RELEASE, prepare_single_stmt_impl, (void *)&ctx);
+  gvl_call(mode, prepare_single_stmt_impl, (void *)&ctx);
   RB_GC_GUARD(sql);
 
   switch (ctx.rc) {
