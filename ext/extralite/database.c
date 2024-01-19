@@ -223,7 +223,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   sql = rb_funcall(argv[0], ID_strip, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
+  TRACE_SQL(db, sql);
   prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
