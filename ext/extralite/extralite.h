@@ -46,7 +46,6 @@ typedef struct {
   VALUE   trace_proc;
   VALUE   progress_handler_proc;
   int     gvl_release_threshold;
-  int     progress_handler_period;
 } Database_t;
 
 typedef struct {

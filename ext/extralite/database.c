@@ -876,8 +876,7 @@ int Database_progress_handler(void *ptr) {
 
 int Database_busy_handler(void *ptr, int v) {
   Database_t *db = (Database_t *)ptr;
-  if (!(v % db->progress_handler_period))
-    rb_funcall(db->progress_handler_proc, ID_call, 0);
+  rb_funcall(db->progress_handler_proc, ID_call, 0);
   return 1;
 }
 
@@ -910,13 +909,34 @@ void Database_reset_progress_handler(VALUE self, Database_t *db) {
  * running queries. It is the application's responsibility to let other threads
  * or fibers run by calling e.g. Thread.pass:
  * 
- *     db.on_progress(1000) { Thread.pass }
- *
+ *     db.on_progress(1000) do
+ *       do_something_interesting
+ *       Thread.pass # let other threads run
+ *     end
+ * 
+ * Note that the progress handler is set globally for the database and that 
+ * Extralite does provide any hooks for telling which queries are currently
+ * running or at what time they were started. This means that you'll need
+ * to wrap the stock #query_xxx and #execute methods with your own code that
+ * calculates timeouts, for example:
+ * 
+ *     def setup_progress_handler
+ *       @db.on_progress(1000) do
+ *         raise TimeoutError if Time.now - @t0 >= @timeout
+ *         Thread.pass
+ *       end
+ *     end
+ * 
+ *     def query(sql, *)
+ *       @t0 = Time.now
+ *       @db.query(sql, *)
+ *     end
+ * 
  * If the gvl release threshold is set to a value equal to or larger than 0
  * after setting the progress handler, the progress handler will be reset.
  *
- * @param period [Integer] progress handler period @returns
- * [Extralite::Database] database
+ * @param period [Integer] progress handler period
+ * @returns [Extralite::Database] database
  */
 VALUE Database_on_progress(VALUE self, VALUE period) {
   Database_t *db = self_to_open_database(self);
@@ -925,7 +945,6 @@ VALUE Database_on_progress(VALUE self, VALUE period) {
   if (period_int > 0 && rb_block_given_p()) {
     RB_OBJ_WRITE(self, &db->progress_handler_proc, rb_block_proc());
     db->gvl_release_threshold = -1;
-    db->progress_handler_period = period_int;
 
     sqlite3_progress_handler(db->sqlite3_db, period_int, &Database_progress_handler, db);
     sqlite3_busy_handler(db->sqlite3_db, &Database_busy_handler, db);
