@@ -37,6 +37,11 @@ class QueryTest < MiniTest::Test
     results = q.bind(foo: 'c').to_a_ary
 
     assert_equal [['a', 'b', 'c']], results
+
+    # try again with the same parameters
+    results = q.to_a_ary
+
+    assert_equal [['a', 'b', 'c']], results
   end
 
   def test_query_next
