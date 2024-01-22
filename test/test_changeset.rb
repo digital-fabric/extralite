@@ -7,11 +7,10 @@ require 'tempfile'
 
 class ChangesetTest < MiniTest::Test
   def setup
-    fn = Tempfile.new('extralite_test_changeset').path
-    @db = Extralite::Database.new(fn)
+    @db = Extralite::Database.new(':memory:')
     skip if !@db.respond_to?(:track_changes)
 
-    @db.query('create table if not exists t (x integer primary key, y, z)')
+    @db.execute('create table if not exists t (x integer primary key, y, z)')
   end
 
   def test_each
@@ -75,5 +74,57 @@ class ChangesetTest < MiniTest::Test
     assert_equal [
       [:delete, 't', [1, 22.22, 3], nil]
     ], changeset.to_a
+  end
+
+  def test_apply
+    changeset = Extralite::Changeset.new
+
+    changeset.track(@db, [:t]) do
+      @db.execute('insert into t values (1, 2, 3)')
+      @db.execute('insert into t values (4, 5, 6)')
+    end
+
+    db2 = Extralite::Database.new(':memory:')
+    db2.execute('create table if not exists t (x integer primary key, y, z)')
+
+    changeset.apply(db2)
+
+    assert_equal [
+      { x: 1, y: 2, z: 3 },
+      { x: 4, y: 5, z: 6 }
+    ], db2.query('select * from t')
+  end
+
+  def test_invert
+    changeset = Extralite::Changeset.new
+
+    changeset.track(@db, [:t]) do
+      @db.execute('insert into t values (1, 2, 3)')
+      @db.execute('insert into t values (4, 5, 6)')
+    end
+
+    db2 = Extralite::Database.new(':memory:')
+    db2.execute('create table if not exists t (x integer primary key, y, z)')
+
+    changeset.apply(db2)
+
+    assert_equal [
+      { x: 1, y: 2, z: 3 },
+      { x: 4, y: 5, z: 6 }
+    ], db2.query('select * from t')
+
+    db2.execute('insert into t values (7, 8, 9)')
+    inverted = changeset.invert
+
+    assert_kind_of Extralite::Changeset, inverted
+    refute_equal inverted, changeset
+
+    assert_equal [
+      [:delete, 't', [1, 2, 3], nil],
+      [:delete, 't', [4, 5, 6], nil],
+    ], inverted.to_a
+
+    inverted.apply(@db)
+    assert_equal [], @db.query('select * from t')
   end
 end
