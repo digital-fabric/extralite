@@ -64,7 +64,7 @@ static inline VALUE tbl_str(VALUE tbl) {
   }
 }
 
-inline void Changeset_track_attach(sqlite3 *db, sqlite3_session *session, VALUE tables) {
+static inline void Changeset_track_attach(sqlite3 *db, sqlite3_session *session, VALUE tables) {
   long len = RARRAY_LEN(tables);
   VALUE name = Qnil;
   for (long i = 0; i < len; i++) {
@@ -171,7 +171,7 @@ static inline VALUE op_symbol(int op) {
   }
 }
 
-inline VALUE convert_value(sqlite3_value *value) {
+static inline VALUE convert_value(sqlite3_value *value) {
   if (!value) return Qnil;
 
   int type = sqlite3_value_type(value);
