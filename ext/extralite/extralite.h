@@ -74,7 +74,6 @@ typedef struct {
 
 #ifdef HAVE_SQLITE3CHANGESET_NEW
 typedef struct {
-  sqlite3_session *session;
   int             changeset_len;
   void            *changeset_ptr;
 } Changeset_t;
