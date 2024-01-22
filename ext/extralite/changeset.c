@@ -249,7 +249,7 @@ VALUE cleanup_iter(struct each_ctx *ctx) {
   return Qnil;
 }
 
-void ensure_changeset_from_session(Changeset_t *changeset) {
+void verify_changeset(Changeset_t *changeset) {
   if (!changeset->changeset_ptr) {
     if (!changeset->session)
       rb_raise(cError, "Changeset not available");
@@ -266,7 +266,7 @@ void ensure_changeset_from_session(Changeset_t *changeset) {
 
 VALUE Changeset_each(VALUE self) {
   Changeset_t *changeset = self_to_changeset(self);
-  ensure_changeset_from_session(changeset);
+  verify_changeset(changeset);
 
   struct each_ctx ctx = { .iter = NULL };
   int rc = sqlite3changeset_start(&ctx.iter, changeset->changeset_len, changeset->changeset_ptr);
@@ -279,7 +279,7 @@ VALUE Changeset_each(VALUE self) {
 
 VALUE Changeset_to_a(VALUE self) {
   Changeset_t *changeset = self_to_changeset(self);
-  ensure_changeset_from_session(changeset);
+  verify_changeset(changeset);
 
   struct each_ctx ctx = { .iter = NULL };
   int rc = sqlite3changeset_start(&ctx.iter, changeset->changeset_len, changeset->changeset_ptr);
@@ -289,6 +289,51 @@ VALUE Changeset_to_a(VALUE self) {
   return rb_ensure(SAFE(safe_to_a), (VALUE)&ctx, SAFE(cleanup_iter), (VALUE)&ctx);
 }
 
+// copied from: https://sqlite.org/sessionintro.html
+static int xConflict(void *pCtx, int eConflict, sqlite3_changeset_iter *pIter){
+  int ret = (long)pCtx;
+  return ret;
+}
+
+VALUE Changeset_apply(VALUE self, VALUE db) {
+  Changeset_t *changeset = self_to_changeset(self);
+  verify_changeset(changeset);
+
+  Database_t *db_struct = self_to_database(db);
+  sqlite3 *sqlite3_db = db_struct->sqlite3_db;
+
+  int rc = sqlite3changeset_apply(
+    sqlite3_db,
+    changeset->changeset_len,
+    changeset->changeset_ptr,
+    NULL,
+    xConflict,
+    (void*)1
+  );
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Error while applying changeset: %s", sqlite3_errstr(rc));
+
+  return self;
+}
+
+VALUE Changeset_invert(VALUE self) {
+  Changeset_t *changeset = self_to_changeset(self);
+  verify_changeset(changeset);
+
+  VALUE inverted = rb_funcall(cChangeset, ID_new, 0);
+  Changeset_t *inverted_changeset = self_to_changeset(inverted);
+
+  int rc = sqlite3changeset_invert(
+    changeset->changeset_len, changeset->changeset_ptr,
+    &inverted_changeset->changeset_len, &inverted_changeset->changeset_ptr
+  );
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Error while inverting changeset: %s", sqlite3_errstr(rc));
+
+  RB_GC_GUARD(inverted);
+  return inverted;
+}
+
 void Init_ExtraliteChangeset(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -296,7 +341,10 @@ void Init_ExtraliteChangeset(void) {
   rb_define_alloc_func(cChangeset, Changeset_allocate);
 
   rb_define_method(cChangeset, "initialize", Changeset_initialize, 0);
+
+  rb_define_method(cChangeset, "apply", Changeset_apply, 1);
   rb_define_method(cChangeset, "each", Changeset_each, 0);
+  rb_define_method(cChangeset, "invert", Changeset_invert, 0);
   rb_define_method(cChangeset, "to_a", Changeset_to_a, 0);
   rb_define_method(cChangeset, "track", Changeset_track, 2);
 
