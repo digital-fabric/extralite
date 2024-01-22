@@ -23,6 +23,7 @@
 extern VALUE cDatabase;
 extern VALUE cQuery;
 extern VALUE cIterator;
+extern VALUE cChangeset;
 extern VALUE cBlob;
 
 extern VALUE cError;
@@ -36,9 +37,11 @@ extern ID ID_each;
 extern ID ID_keys;
 extern ID ID_new;
 extern ID ID_strip;
+extern ID ID_to_s;
+extern ID ID_track;
 
-extern VALUE SYM_hash;
 extern VALUE SYM_ary;
+extern VALUE SYM_hash;
 extern VALUE SYM_single_column;
 
 typedef struct {
@@ -68,6 +71,14 @@ typedef struct {
   VALUE               query;
   enum iterator_mode  mode;
 } Iterator_t;
+
+#ifdef HAVE_SQLITE3CHANGESET_NEW
+typedef struct {
+  sqlite3_session *session;
+  int             changeset_len;
+  void            *changeset_ptr;
+} Changeset_t;
+#endif
 
 enum query_mode {
   QUERY_YIELD,

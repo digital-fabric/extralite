@@ -17,6 +17,8 @@ ID ID_each;
 ID ID_keys;
 ID ID_new;
 ID ID_strip;
+ID ID_to_s;
+ID ID_track;
 
 VALUE SYM_gvl_release_threshold;
 VALUE SYM_read_only;
@@ -868,6 +870,24 @@ VALUE Database_trace(VALUE self) {
   return self;
 }
 
+#ifdef HAVE_SQLITE3CHANGESET_NEW
+/*
+*/
+VALUE Database_track_changes(int argc, VALUE *argv, VALUE self) {
+  // make sure database is open
+  self_to_open_database(self);
+
+  VALUE changeset = rb_funcall(cChangeset, ID_new, 0);
+  VALUE tables = rb_ary_new_from_values(argc, argv);
+
+  rb_funcall(changeset, ID_track, 2, self, tables);
+
+  RB_GC_GUARD(changeset);
+  RB_GC_GUARD(tables);
+  return changeset;
+}
+#endif
+
 int Database_progress_handler(void *ptr) {
   Database_t *db = (Database_t *)ptr;
   rb_funcall(db->progress_handler_proc, ID_call, 0);
@@ -1101,6 +1121,11 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "status", Database_status, -1);
   rb_define_method(cDatabase, "total_changes", Database_total_changes, 0);
   rb_define_method(cDatabase, "trace", Database_trace, 0);
+
+  #ifdef HAVE_SQLITE3CHANGESET_NEW
+  rb_define_method(cDatabase, "track_changes", Database_track_changes, -1);
+  #endif
+  
   rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
@@ -1123,6 +1148,8 @@ void Init_ExtraliteDatabase(void) {
   ID_keys   = rb_intern("keys");
   ID_new    = rb_intern("new");
   ID_strip  = rb_intern("strip");
+  ID_to_s   = rb_intern("to_s");
+  ID_track  = rb_intern("track");
 
   SYM_gvl_release_threshold = ID2SYM(rb_intern("gvl_release_threshold"));
   SYM_read_only             = ID2SYM(rb_intern("read_only"));
