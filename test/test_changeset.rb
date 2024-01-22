@@ -151,4 +151,11 @@ class ChangesetTest < MiniTest::Test
       [:insert, 't', nil, [4, 5, 6]]
     ], c2.to_a
   end
+
+  def test_empty_blob
+    changeset = Extralite::Changeset.new
+    changeset.load('')
+
+    assert_raises(Extralite::Error) { changeset.to_a }
+  end
 end
