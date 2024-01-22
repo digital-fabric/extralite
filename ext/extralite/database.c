@@ -871,10 +871,21 @@ VALUE Database_trace(VALUE self) {
 }
 
 #ifdef HAVE_SQLITE3CHANGESET_NEW
-/*
+/* Tracks changes to the database and returns a changeset. The changeset can
+ * then be used to store the changes to a file, apply them to another database,
+ * or undo the changes. The given table names specify which tables should be
+ * tracked for changes. Passing a value of nil causes all tables to be tracked.
+ * 
+ *   changeset = db.track_changes(:foo, :bar) do
+ *     perform_a_bunch_of_queries
+ *   end
+ * 
+ *   File.open('my.changes', 'w+') { |f| f << changeset.to_blob }
+ * 
+ * @param table [String, Symbol] table to track
+ * @return [Extralite::Changeset] changeset
 */
 VALUE Database_track_changes(int argc, VALUE *argv, VALUE self) {
-  // make sure database is open
   self_to_open_database(self);
 
   VALUE changeset = rb_funcall(cChangeset, ID_new, 0);
