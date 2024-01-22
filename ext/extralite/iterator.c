@@ -19,13 +19,18 @@ static size_t Iterator_size(const void *ptr) {
 
 static void Iterator_mark(void *ptr) {
   Iterator_t *iterator = ptr;
-  rb_gc_mark(iterator->query);
+  rb_gc_mark_movable(iterator->query);
+}
+
+static void Iterator_compact(void *ptr) {
+  Iterator_t *iterator = ptr;
+  iterator->query = rb_gc_location(iterator->query);
 }
 
 static const rb_data_type_t Iterator_type = {
     "Iterator",
-    {Iterator_mark, free, Iterator_size,},
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY
+    {Iterator_mark, free, Iterator_size, Iterator_compact},
+    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 
 static VALUE Iterator_allocate(VALUE klass) {
