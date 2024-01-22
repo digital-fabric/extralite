@@ -17,11 +17,6 @@ static size_t Changeset_size(const void *ptr) {
   return sizeof(Changeset_t);
 }
 
-static void Changeset_mark(void *ptr) {
-  // Changeset_t *changeset = ptr;
-  // rb_gc_mark_movable(changeset->db);
-}
-
 static void Changeset_free(void *ptr) {
   Changeset_t *changeset = ptr;
   if (changeset->changeset_ptr)
@@ -31,7 +26,7 @@ static void Changeset_free(void *ptr) {
 
 static const rb_data_type_t Changeset_type = {
     "Changeset",
-    {Changeset_mark, Changeset_free, Changeset_size,},
+    {0, Changeset_free, Changeset_size,},
     0, 0, RUBY_TYPED_FREE_IMMEDIATELY
 };
 
@@ -48,6 +43,10 @@ static inline Changeset_t *self_to_changeset(VALUE obj) {
   return changeset;
 }
 
+/* Initializes an empty changeset.
+ *
+ * @return [void]
+ */
 VALUE Changeset_initialize(VALUE self) {
   Changeset_t *changeset = self_to_changeset(self);
   changeset->changeset_len = 0;
@@ -65,7 +64,7 @@ static inline VALUE tbl_str(VALUE tbl) {
   }
 }
 
-void Changeset_track_attach(sqlite3 *db, sqlite3_session *session, VALUE tables) {
+inline void Changeset_track_attach(sqlite3 *db, sqlite3_session *session, VALUE tables) {
   long len = RARRAY_LEN(tables);
   VALUE name = Qnil;
   for (long i = 0; i < len; i++) {
@@ -114,6 +113,20 @@ VALUE cleanup_track(struct track_ctx *ctx) {
   return Qnil;
 }
 
+/* Tracks changes in the given block and collects them into the changeset.
+ * Changes are tracked only for the given tables. If nil is supplied as the
+ * given tables, changes are tracked for all tables.
+ * 
+ *     # track changes for the foo and bar tables
+ *     changeset.track(db, [:foo, :bar]) do
+ *       run_some_queries
+ *     end
+ *     store_changes(changeset.to_blob)
+ *
+ * @param db [Extralite::Database] database to track
+ * @param tables [Array<String, Symbol>, nil] tables to track (or nil for all tables)
+ * @return [Extralite::Changeset] changeset
+ */
 VALUE Changeset_track(VALUE self, VALUE db, VALUE tables) {
   Changeset_t *changeset = self_to_changeset(self);
   Database_t *db_struct = self_to_database(db);
@@ -158,7 +171,7 @@ static inline VALUE op_symbol(int op) {
   }
 }
 
-VALUE convert_value(sqlite3_value *value) {
+inline VALUE convert_value(sqlite3_value *value) {
   if (!value) return Qnil;
 
   int type = sqlite3_value_type(value);
@@ -280,6 +293,17 @@ inline void verify_changeset(Changeset_t *changeset) {
     rb_raise(cError, "Changeset not available");
 }
 
+/* Iterates through the changeset, providing each change to the given block.
+ * Each change entry is an array containing the operation (:insert / :update /
+ * :delete), the table name, an array containing the old values, and an array
+ * containing the new values.
+ * 
+ *     changeset.each do |(op, table, old_values, new_values)|
+ *       ...
+ *     end
+ *
+ * @return [Extralite::Changeset] changeset
+ */
 VALUE Changeset_each(VALUE self) {
   Changeset_t *changeset = self_to_changeset(self);
   verify_changeset(changeset);
@@ -293,6 +317,13 @@ VALUE Changeset_each(VALUE self) {
   return self;
 }
 
+/* Returns an array containing all changes in the changeset. Each change entry
+ * is an array containing the operation (:insert / :update / :delete), the table
+ * name, an array containing the old values, and an array containing the new
+ * values.
+ * 
+ * @return [Array<Array>] changes in the changeset
+ */
 VALUE Changeset_to_a(VALUE self) {
   Changeset_t *changeset = self_to_changeset(self);
   verify_changeset(changeset);
@@ -311,6 +342,11 @@ static int xConflict(void *pCtx, int eConflict, sqlite3_changeset_iter *pIter){
   return ret;
 }
 
+/* Applies the changeset to the given database.
+ * 
+ * @param db [Extralite::Database] database to apply changes to
+ * @return [Extralite::Changeset] changeset
+ */
 VALUE Changeset_apply(VALUE self, VALUE db) {
   Changeset_t *changeset = self_to_changeset(self);
   verify_changeset(changeset);
@@ -332,6 +368,14 @@ VALUE Changeset_apply(VALUE self, VALUE db) {
   return self;
 }
 
+/* Returns an inverted changeset. The inverted changeset can be used to undo the
+ * changes in the original changeset.
+ *
+ *     # undo changes
+ *     changeset.invert.apply(db)
+ * 
+ * @return [Extralite::Changeset] inverted changeset
+ */
 VALUE Changeset_invert(VALUE self) {
   Changeset_t *changeset = self_to_changeset(self);
   verify_changeset(changeset);
@@ -350,6 +394,13 @@ VALUE Changeset_invert(VALUE self) {
   return inverted;
 }
 
+/* Returns a string BLOB containing the changeset in serialized form. The
+ * changeset BLOB can be stored to file for later retrieval.
+ *
+ *     File.open('my.changes', 'w+') { |f| f << changeset.to_blob }
+ * 
+ * @return [String] changeset BLOB
+ */
 VALUE Changeset_to_blob(VALUE self) {
   Changeset_t *changeset = self_to_changeset(self);
 
@@ -359,6 +410,16 @@ VALUE Changeset_to_blob(VALUE self) {
     return rb_str_new("", 0);
 }
 
+/* Loads a changeset from the given string. This method can be used to load a
+ * changeset from a file in order to apply it to a database.
+ *
+ *     changeset = Extralite::Changeset.new
+ *     changeset.load(IO.read('my.changes'))
+ *     changeset.apply(db)
+ * 
+ * @param blob [String] changeset BLOB
+ * @return [Extralite::Changeset] changeset
+ */
 VALUE Changeset_load(VALUE self, VALUE blob) {
   Changeset_t *changeset = self_to_changeset(self);
   if (changeset->changeset_ptr) {

@@ -895,6 +895,47 @@ db.backup('backup.db') do |remaining, total|
 end
 ```
 
+### Working with Changesets
+
+Changesets can be used to track and persist changes to data in a database. They
+can also be used to apply the same changes to another database, or to undo them.
+To track changes to a database, use the `#track_changes` method:
+
+```ruby
+# track changes to the foo and bar tables:
+changeset = db.track_changes(:foo, :bar) do
+  insert_a_bunch_of_records(db)
+end
+
+# to track changes to all tables, pass nil:
+changeset = db.track_changes(nil) do
+  insert_a_bunch_of_records(db)
+end
+```
+
+You can then apply the same changes to another database:
+
+```ruby
+changeset.apply(some_other_db)
+```
+
+To undo the changes, obtain an inverted changeset and apply it to the database:
+
+```ruby
+changeset.invert.apply(db)
+```
+
+You can also save and load the changeset:
+
+```ruby
+# save the changeset
+IO.write('my.changes', changeset.to_blob)
+
+# load the changeset
+changeset = Extralite::Changeset.new
+changeset.load(IO.read('my.changes'))
+```
+
 ### Retrieving Status Information
 
 Extralite provides methods for retrieving status information about the sqlite
