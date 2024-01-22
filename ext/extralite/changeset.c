@@ -24,8 +24,6 @@ static void Changeset_mark(void *ptr) {
 
 static void Changeset_free(void *ptr) {
   Changeset_t *changeset = ptr;
-  if (changeset->session)
-    sqlite3session_delete(changeset->session);
   if (changeset->changeset_ptr)
     sqlite3_free(changeset->changeset_ptr);
   free(ptr);
@@ -39,7 +37,6 @@ static const rb_data_type_t Changeset_type = {
 
 static VALUE Changeset_allocate(VALUE klass) {
   Changeset_t *changeset = ALLOC(Changeset_t);
-  changeset->session = NULL;
   changeset->changeset_len = 0;
   changeset->changeset_ptr = NULL;
   return TypedData_Wrap_Struct(klass, &Changeset_type, changeset);
@@ -53,11 +50,8 @@ static inline Changeset_t *self_to_changeset(VALUE obj) {
 
 VALUE Changeset_initialize(VALUE self) {
   Changeset_t *changeset = self_to_changeset(self);
-
-  changeset->session = NULL;
   changeset->changeset_len = 0;
   changeset->changeset_ptr = NULL;
-
   return Qnil;
 }
 
@@ -83,34 +77,66 @@ void Changeset_track_attach(sqlite3 *db, sqlite3_session *session, VALUE tables)
   RB_GC_GUARD(name);
 }
 
+struct track_ctx {
+  Changeset_t     *changeset;
+  sqlite3         *sqlite3_db;
+  sqlite3_session *session;
+  VALUE           db;
+  VALUE           tables;
+};
+
+VALUE safe_track(struct track_ctx *ctx) {
+  int rc;
+
+  if (!NIL_P(ctx->tables))
+    Changeset_track_attach(ctx->sqlite3_db, ctx->session, ctx->tables);
+  else {
+    rc = sqlite3session_attach(ctx->session, NULL);
+    if (rc != SQLITE_OK)
+      rb_raise(cError, "Error while attaching all tables: %s", sqlite3_errstr(rc));
+  }
+
+  rb_yield(ctx->db);
+
+  rc = sqlite3session_changeset(
+    ctx->session,
+    &ctx->changeset->changeset_len,
+    &ctx->changeset->changeset_ptr
+  );
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Error while collecting changeset from session: %s", sqlite3_errstr(rc));
+
+  return Qnil;
+}
+
+VALUE cleanup_track(struct track_ctx *ctx) {
+  sqlite3session_delete(ctx->session);
+  return Qnil;
+}
+
 VALUE Changeset_track(VALUE self, VALUE db, VALUE tables) {
   Changeset_t *changeset = self_to_changeset(self);
   Database_t *db_struct = self_to_database(db);
   sqlite3 *sqlite3_db = db_struct->sqlite3_db;
 
-  if (changeset->session) {
-    sqlite3session_delete(changeset->session);
-    changeset->session = NULL;
-  }
   if (changeset->changeset_ptr) {
     sqlite3_free(changeset->changeset_ptr);
     changeset->changeset_len = 0;
     changeset->changeset_ptr = NULL;
   }
 
-  int rc = sqlite3session_create(sqlite3_db, "main", &changeset->session);
+  struct track_ctx ctx = {
+    .changeset = changeset,
+    .sqlite3_db = sqlite3_db,
+    .session = NULL,
+    .db = db,
+    .tables = tables
+  };
+  int rc = sqlite3session_create(sqlite3_db, "main", &ctx.session);
   if (rc != SQLITE_OK)
     rb_raise(cError, "Error while creating session: %s", sqlite3_errstr(rc));
 
-  if (!NIL_P(tables))
-    Changeset_track_attach(sqlite3_db, changeset->session, tables);
-  else {
-    rc = sqlite3session_attach(changeset->session, NULL);
-    if (rc != SQLITE_OK)
-      rb_raise(cError, "Error while attaching all tables: %s", sqlite3_errstr(rc));
-  }
-
-  rb_yield(db);
+  rb_ensure(SAFE(safe_track), (VALUE)&ctx, SAFE(cleanup_track), (VALUE)&ctx);
 
   return self;
 }
@@ -249,19 +275,9 @@ VALUE cleanup_iter(struct each_ctx *ctx) {
   return Qnil;
 }
 
-void verify_changeset(Changeset_t *changeset) {
-  if (!changeset->changeset_ptr) {
-    if (!changeset->session)
-      rb_raise(cError, "Changeset not available");
-    
-    int rc = sqlite3session_changeset(
-      changeset->session,
-      &changeset->changeset_len,
-      &changeset->changeset_ptr
-    );
-    if (rc != SQLITE_OK)
-      rb_raise(cError, "Error while collecting changeset from session: %s", sqlite3_errstr(rc));
-  }
+inline void verify_changeset(Changeset_t *changeset) {
+  if (!changeset->changeset_ptr)
+    rb_raise(cError, "Changeset not available");
 }
 
 VALUE Changeset_each(VALUE self) {
@@ -334,6 +350,30 @@ VALUE Changeset_invert(VALUE self) {
   return inverted;
 }
 
+VALUE Changeset_to_blob(VALUE self) {
+  Changeset_t *changeset = self_to_changeset(self);
+
+  if (changeset->changeset_ptr)
+    return rb_str_new(changeset->changeset_ptr, changeset->changeset_len);
+  else
+    return rb_str_new("", 0);
+}
+
+VALUE Changeset_load(VALUE self, VALUE blob) {
+  Changeset_t *changeset = self_to_changeset(self);
+  if (changeset->changeset_ptr) {
+    sqlite3_free(changeset->changeset_ptr);
+    changeset->changeset_ptr = NULL;
+    changeset->changeset_len = 0;
+  }
+
+  changeset->changeset_len = RSTRING_LEN(blob);
+  changeset->changeset_ptr = sqlite3_malloc(changeset->changeset_len);
+  memcpy(changeset->changeset_ptr, RSTRING_PTR(blob), changeset->changeset_len);
+
+  return self;
+}
+
 void Init_ExtraliteChangeset(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -345,7 +385,9 @@ void Init_ExtraliteChangeset(void) {
   rb_define_method(cChangeset, "apply", Changeset_apply, 1);
   rb_define_method(cChangeset, "each", Changeset_each, 0);
   rb_define_method(cChangeset, "invert", Changeset_invert, 0);
+  rb_define_method(cChangeset, "load", Changeset_load, 1);
   rb_define_method(cChangeset, "to_a", Changeset_to_a, 0);
+  rb_define_method(cChangeset, "to_blob", Changeset_to_blob, 0);
   rb_define_method(cChangeset, "track", Changeset_track, 2);
 
   SYM_delete = ID2SYM(rb_intern("delete"));

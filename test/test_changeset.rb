@@ -127,4 +127,28 @@ class ChangesetTest < MiniTest::Test
     inverted.apply(@db)
     assert_equal [], @db.query('select * from t')
   end
+
+  def test_blob
+    changeset = Extralite::Changeset.new
+    assert_equal "", changeset.to_blob
+
+    changeset.track(@db, [:t]) do
+      @db.execute('insert into t values (1, 2, 3)')
+      @db.execute('insert into t values (4, 5, 6)')
+    end
+
+    blob = changeset.to_blob
+    assert_kind_of String, blob
+    assert_equal Encoding::ASCII_8BIT, blob.encoding
+    assert !blob.empty?
+
+    c2 = Extralite::Changeset.new
+    c2.load(blob)
+    assert_equal c2.to_blob, blob
+
+    assert_equal [
+      [:insert, 't', nil, [1, 2, 3]],
+      [:insert, 't', nil, [4, 5, 6]]
+    ], c2.to_a
+  end
 end
