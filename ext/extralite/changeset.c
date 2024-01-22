@@ -160,52 +160,53 @@ VALUE convert_value(sqlite3_value *value) {
   }
 }
 
-VALUE safe_each(struct each_ctx *ctx) {
+VALUE changeset_iter_info(sqlite3_changeset_iter *iter) {
   VALUE op = Qnil;
   VALUE tbl = Qnil;
   VALUE old_values = Qnil;
   VALUE new_values = Qnil;
   VALUE converted = Qnil;
+  VALUE row = rb_ary_new2(4);
+  
+  const char *tbl_name;
+  int column_count;
+  int op_int;
 
-  while (sqlite3changeset_next(ctx->iter) == SQLITE_ROW) {
-    const char *tbl_name;
-    int column_count;
-    int op_int;
+  int rc = sqlite3changeset_op(iter, &tbl_name, &column_count, &op_int, NULL);
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Error while iterating (sqlite3changeset_op): %s", sqlite3_errstr(rc));
 
-    int rc = sqlite3changeset_op(ctx->iter, &tbl_name, &column_count, &op_int, NULL);
-    if (rc != SQLITE_OK)
-      rb_raise(cError, "Error while iterating (sqlite3changeset_op): %s", sqlite3_errstr(rc));
+  op = op_symbol(op_int);
+  tbl = rb_str_new_cstr(tbl_name);
 
-    op = op_symbol(op_int);
-    tbl = rb_str_new_cstr(tbl_name);
-    old_values = Qnil;
-    new_values = Qnil;
+  if (op_int == SQLITE_UPDATE || op_int == SQLITE_DELETE) {
     sqlite3_value *value = NULL;
-
-    if (op_int == SQLITE_UPDATE || op_int == SQLITE_DELETE) {
-      old_values = rb_ary_new2(column_count);
-      for (int i = 0; i < column_count; i++) {
-        rc = sqlite3changeset_old(ctx->iter, i, &value);
-        if (rc != SQLITE_OK)
-          rb_raise(cError, "Error while iterating (sqlite3changeset_old): %s", sqlite3_errstr(rc));
-        converted = convert_value(value);
-        rb_ary_push(old_values, converted);
-      }
+    old_values = rb_ary_new2(column_count);
+    for (int i = 0; i < column_count; i++) {
+      rc = sqlite3changeset_old(iter, i, &value);
+      if (rc != SQLITE_OK)
+        rb_raise(cError, "Error while iterating (sqlite3changeset_old): %s", sqlite3_errstr(rc));
+      converted = convert_value(value);
+      rb_ary_push(old_values, converted);
     }
-
-    if (op_int == SQLITE_UPDATE || op_int == SQLITE_INSERT) {
-      new_values = rb_ary_new2(column_count);
-      for (int i = 0; i < column_count; i++) {
-        rc = sqlite3changeset_new(ctx->iter, i, &value);
-        if (rc != SQLITE_OK)
-          rb_raise(cError, "Error while iterating (sqlite3changeset_new): %s", sqlite3_errstr(rc));
-        converted = convert_value(value);
-        rb_ary_push(new_values, converted);
-      }
-    }
-
-    rb_yield_values(4, op, tbl, old_values, new_values);
   }
+
+  if (op_int == SQLITE_UPDATE || op_int == SQLITE_INSERT) {
+    sqlite3_value *value = NULL;
+    new_values = rb_ary_new2(column_count);
+    for (int i = 0; i < column_count; i++) {
+      rc = sqlite3changeset_new(iter, i, &value);
+      if (rc != SQLITE_OK)
+        rb_raise(cError, "Error while iterating (sqlite3changeset_new): %s", sqlite3_errstr(rc));
+      converted = convert_value(value);
+      rb_ary_push(new_values, converted);
+    }
+  }
+
+  rb_ary_push(row, op);
+  rb_ary_push(row, tbl);
+  rb_ary_push(row, old_values);
+  rb_ary_push(row, new_values);
 
   RB_GC_GUARD(op);
   RB_GC_GUARD(tbl);
@@ -213,10 +214,34 @@ VALUE safe_each(struct each_ctx *ctx) {
   RB_GC_GUARD(new_values);
   RB_GC_GUARD(converted);
 
+  return row;
+}
+
+VALUE safe_each(struct each_ctx *ctx) {
+  VALUE row = Qnil;
+  while (sqlite3changeset_next(ctx->iter) == SQLITE_ROW) {
+    row = changeset_iter_info(ctx->iter);
+    rb_yield_splat(row);
+  }
+
+  RB_GC_GUARD(row);
   return Qnil;
 }
 
-VALUE cleanup_each(struct each_ctx *ctx) {
+VALUE safe_to_a(struct each_ctx *ctx) {
+  VALUE row = Qnil;
+  VALUE array = rb_ary_new();
+  while (sqlite3changeset_next(ctx->iter) == SQLITE_ROW) {
+    row = changeset_iter_info(ctx->iter);
+    rb_ary_push(array, row);
+  }
+
+  RB_GC_GUARD(row);
+  RB_GC_GUARD(array);
+  return array;
+}
+
+VALUE cleanup_iter(struct each_ctx *ctx) {
   int rc = sqlite3changeset_finalize(ctx->iter);
   if (rc != SQLITE_OK)
     rb_raise(cError, "Error while finalizing changeset iterator: %s", sqlite3_errstr(rc));
@@ -224,8 +249,7 @@ VALUE cleanup_each(struct each_ctx *ctx) {
   return Qnil;
 }
 
-VALUE Changeset_each(VALUE self) {
-  Changeset_t *changeset = self_to_changeset(self);
+void ensure_changeset_from_session(Changeset_t *changeset) {
   if (!changeset->changeset_ptr) {
     if (!changeset->session)
       rb_raise(cError, "Changeset not available");
@@ -238,14 +262,31 @@ VALUE Changeset_each(VALUE self) {
     if (rc != SQLITE_OK)
       rb_raise(cError, "Error while collecting changeset from session: %s", sqlite3_errstr(rc));
   }
+}
+
+VALUE Changeset_each(VALUE self) {
+  Changeset_t *changeset = self_to_changeset(self);
+  ensure_changeset_from_session(changeset);
 
   struct each_ctx ctx = { .iter = NULL };
   int rc = sqlite3changeset_start(&ctx.iter, changeset->changeset_len, changeset->changeset_ptr);
   if (rc!=SQLITE_OK)
     rb_raise(cError, "Error while starting iterator: %s", sqlite3_errstr(rc));
 
-  rb_ensure(SAFE(safe_each), (VALUE)&ctx, SAFE(cleanup_each), (VALUE)&ctx);
+  rb_ensure(SAFE(safe_each), (VALUE)&ctx, SAFE(cleanup_iter), (VALUE)&ctx);
   return self;
+}
+
+VALUE Changeset_to_a(VALUE self) {
+  Changeset_t *changeset = self_to_changeset(self);
+  ensure_changeset_from_session(changeset);
+
+  struct each_ctx ctx = { .iter = NULL };
+  int rc = sqlite3changeset_start(&ctx.iter, changeset->changeset_len, changeset->changeset_ptr);
+  if (rc!=SQLITE_OK)
+    rb_raise(cError, "Error while starting iterator: %s", sqlite3_errstr(rc));
+
+  return rb_ensure(SAFE(safe_to_a), (VALUE)&ctx, SAFE(cleanup_iter), (VALUE)&ctx);
 }
 
 void Init_ExtraliteChangeset(void) {
@@ -256,6 +297,7 @@ void Init_ExtraliteChangeset(void) {
 
   rb_define_method(cChangeset, "initialize", Changeset_initialize, 0);
   rb_define_method(cChangeset, "each", Changeset_each, 0);
+  rb_define_method(cChangeset, "to_a", Changeset_to_a, 0);
   rb_define_method(cChangeset, "track", Changeset_track, 2);
 
   SYM_delete = ID2SYM(rb_intern("delete"));
