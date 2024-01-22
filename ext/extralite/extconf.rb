@@ -86,7 +86,7 @@ else
     have_func('sqlite3_load_extension')
     have_func('sqlite3_prepare_v2')
     have_func('sqlite3_error_offset')
-    have_func('sqlite3changeset_new')
+    have_func('sqlite3session_changeset')
 
 
     $defs << "-DEXTRALITE_NO_BUNDLE"
