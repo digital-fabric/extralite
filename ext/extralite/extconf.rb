@@ -52,43 +52,47 @@ else
     $CFLAGS << ' -W3'
   end
 
-  if RUBY_VERSION < '2.7'
-    $CFLAGS << ' -DTAINTING_SUPPORT'
-  end
-
   # @!visibility private
   def asplode missing
     if RUBY_PLATFORM =~ /mingw|mswin/
       abort "#{missing} is missing. Install SQLite3 from " +
       "http://www.sqlite.org/ first."
     else
-      abort <<-error
-      #{missing} is missing. Try 'brew install sqlite3',
-      'yum install sqlite-devel' or 'apt-get install libsqlite3-dev'
-      and check your shared library search path (the
-        location where your sqlite3 shared library is located).
-        error
-      end
+      abort <<~error
+        #{missing} is missing. Try 'brew install sqlite3',
+        'yum install sqlite-devel' or 'apt-get install libsqlite3-dev'
+        and check your shared library search path (the location where
+        your sqlite3 shared library is located).
+      error
     end
-
-    asplode('sqlite3.h')  unless find_header  'sqlite3.h'
-    find_library 'pthread', 'pthread_create' # 1.8 support. *shrug*
-
-    have_library 'dl' # for static builds
-
-    if with_config('sqlcipher')
-      asplode('sqlcipher') unless find_library 'sqlcipher', 'sqlite3_libversion_number'
-    else
-      asplode('sqlite3') unless find_library 'sqlite3', 'sqlite3_libversion_number'
-    end
-
-    have_func('sqlite3_enable_load_extension')
-    have_func('sqlite3_load_extension')
-    have_func('sqlite3_prepare_v2')
-    have_func('sqlite3_error_offset')
-
-    $defs << "-DEXTRALITE_NO_BUNDLE"
-
-    dir_config('extralite_ext')
-    create_makefile('extralite_ext')
   end
+
+  asplode('sqlite3.h') unless find_header('sqlite3.h')
+  # find_library 'pthread', 'pthread_create' # 1.8 support. *shrug*
+
+  have_library 'dl' # for static builds
+
+  if with_config('sqlcipher')
+    asplode('sqlcipher') unless find_library 'sqlcipher', 'sqlite3_libversion_number'
+  else
+    asplode('sqlite3') unless find_library 'sqlite3', 'sqlite3_libversion_number'
+  end
+
+  have_func('sqlite3_enable_load_extension')
+  have_func('sqlite3_load_extension')
+  have_func('sqlite3_prepare_v2')
+  have_func('sqlite3_error_offset')
+  have_func('sqlite3session_changeset')
+
+  if have_type('sqlite3_session', 'sqlite.h')
+    $defs << '-DEXTRALITE_ENABLE_CHANGESET'
+  end
+  # have_macro('__SQLITESESSION_H_')
+  # have_macro('SQLITE3_H')
+
+
+  $defs << "-DEXTRALITE_NO_BUNDLE"
+
+  dir_config('extralite_ext')
+  create_makefile('extralite_ext')
+end
