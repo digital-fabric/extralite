@@ -1,3 +1,13 @@
+# 2.6 2024-01-23
+
+- Implement changeset API
+  [#58](https://github.com/digital-fabric/extralite/issues/58)
+- Reorganize README, update benchmarks
+  [#63](https://github.com/digital-fabric/extralite/issues/63)
+- Implement progress handler API
+  [#62](https://github.com/digital-fabric/extralite/issues/62)
+- Implement savepoint methods
+
 # 2.5 2024-01-16
 
 - Update bundled sqlite to version 3.45.0
