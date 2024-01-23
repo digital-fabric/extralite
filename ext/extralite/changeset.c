@@ -1,3 +1,4 @@
+#ifdef EXTRALITE_ENABLE_CHANGESET
 #include <stdio.h>
 #include "extralite.h"
 
@@ -64,7 +65,7 @@ static inline VALUE tbl_str(VALUE tbl) {
   }
 }
 
-static inline void Changeset_track_attach(sqlite3 *db, sqlite3_session *session, VALUE tables) {
+static inline void Changeset_track_attach(sqlite3 *db, struct sqlite3_session *session, VALUE tables) {
   long len = RARRAY_LEN(tables);
   VALUE name = Qnil;
   for (long i = 0; i < len; i++) {
@@ -459,3 +460,4 @@ void Init_ExtraliteChangeset(void) {
   rb_gc_register_mark_object(SYM_insert);
   rb_gc_register_mark_object(SYM_update);
 }
+#endif

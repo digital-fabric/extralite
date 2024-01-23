@@ -72,7 +72,7 @@ typedef struct {
   enum iterator_mode  mode;
 } Iterator_t;
 
-#ifdef HAVE_SQLITE3CHANGESET_NEW
+#ifdef EXTRALITE_ENABLE_CHANGESET
 typedef struct {
   int             changeset_len;
   void            *changeset_ptr;
