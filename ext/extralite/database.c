@@ -78,12 +78,10 @@ inline sqlite3 *Database_sqlite3_db(VALUE self) {
   return self_to_database(self)->sqlite3_db;
 }
 
-/* call-seq:
- *   Extralite.sqlite3_version -> version
+/* Returns the sqlite3 library version used by Extralite.
  *
- * Returns the sqlite3 version used by Extralite.
+ * @return [String] SQLite version
  */
-
 VALUE Extralite_sqlite3_version(VALUE self) {
   return rb_str_new_cstr(sqlite3_version);
 }
@@ -827,12 +825,20 @@ VALUE Database_limit(int argc, VALUE *argv, VALUE self) {
   return INT2NUM(value);
 }
 
-/* call-seq:
- *   db.busy_timeout=(sec) -> db
- *   db.busy_timeout=nil -> db
+/* call-seq: db.busy_timeout=(sec) -> db db.busy_timeout=nil -> db
  *
  * Sets the busy timeout for the database, in seconds or fractions thereof. To
- * disable the busy timeout, set it to 0 or nil.
+ * disable the busy timeout, set it to 0 or nil. When the busy timeout is set to
+ * a value larger than zero, running a query when the database is locked will
+ * cause the program to wait for the database to become available. If the
+ * database is still locked when the timeout period has elapsed, the query will
+ * fail with a `Extralite::BusyError` exception.
+ * 
+ * Setting the busy timeout allows other threads to run while waiting for the
+ * database to become available. See also `#on_progress`.
+ *
+ * @param sec [Number, nil] timeout value
+ * @return [Extralite::Database] database
  */
 VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
   Database_t *db = self_to_open_database(self);
@@ -848,6 +854,8 @@ VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
  *   db.total_changes -> value
  *
  * Returns the total number of changes made to the database since opening it.
+ * 
+ * @return [Integer] total changes
  */
 VALUE Database_total_changes(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -862,6 +870,8 @@ VALUE Database_total_changes(VALUE self) {
  *
  * Installs or removes a block that will be invoked for every SQL statement
  * executed.
+ * 
+ * @return [Extralite::Database] database
  */
 VALUE Database_trace(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -876,11 +886,11 @@ VALUE Database_trace(VALUE self) {
  * or undo the changes. The given table names specify which tables should be
  * tracked for changes. Passing a value of nil causes all tables to be tracked.
  * 
- *   changeset = db.track_changes(:foo, :bar) do
- *     perform_a_bunch_of_queries
- *   end
+ *     changeset = db.track_changes(:foo, :bar) do
+ *       perform_a_bunch_of_queries
+ *     end
  * 
- *   File.open('my.changes', 'w+') { |f| f << changeset.to_blob }
+ *     File.open('my.changes', 'w+') { |f| f << changeset.to_blob }
  * 
  * @param table [String, Symbol] table to track
  * @return [Extralite::Changeset] changeset
@@ -994,6 +1004,8 @@ VALUE Database_on_progress(VALUE self, VALUE period) {
  *   db.errcode -> errcode
  *
  * Returns the last error code for the database.
+ * 
+ * @return [Integer] last error code
  */
 VALUE Database_errcode(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -1005,6 +1017,8 @@ VALUE Database_errcode(VALUE self) {
  *   db.errmsg -> errmsg
  *
  * Returns the last error message for the database.
+ * 
+ * @return [String] last error message
  */
 VALUE Database_errmsg(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -1016,7 +1030,10 @@ VALUE Database_errmsg(VALUE self) {
 /* call-seq:
  *   db.error_offset -> ofs
  *
- * Returns the offset for the last error
+ * Returns the offset for the last error. This is useful for indicating where in
+ * the SQL string an error was encountered.
+ * 
+ * @return [Integer] offset in the last submitted SQL string
  */
 VALUE Database_error_offset(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -1052,14 +1069,24 @@ VALUE Database_gvl_release_threshold_get(VALUE self) {
   return INT2NUM(db->gvl_release_threshold);
 }
 
-/* Sets the database's GVL release threshold. To always hold the GVL while
- * running a query, set the threshold to 0. To release the GVL on each record,
- * set the threshold to 1. Larger values mean the GVL will be released less
- * often, e.g. a value of 10 means the GVL will be released every 10 records
- * iterated. A value of nil sets the threshold to the default value, which is
+/* Sets the database's GVL release threshold. The release policy changes
+ * according to the given value:
+ * 
+ * - Less than 0: the GVL is never released while running queries. This is the
+ *   policy used when a progress handler is set. For more information see
+ *   `#on_progress`.
+ * - 0: The GVL is released while preparing queries, but held when iterating
+ *   through records.
+ * - Greater than 0: the GVL is released while preparing queries, and released
+ *   periodically while iterating through records, according to the given
+ *   period. A value of 1 will release the GVL on every iterated record. A value
+ *   of 100 will release the GVL once for every 100 records.
+ *
+ * A value of nil sets the threshold to the default value, which is
  * currently 1000.
  *
- * @return [Integer, nil] New GVL release threshold
+ * @param [Integer, nil] GVL release threshold
+ * @return [Integer] GVL release threshold
  */
 VALUE Database_gvl_release_threshold_set(VALUE self, VALUE value) {
   Database_t *db = self_to_open_database(self);

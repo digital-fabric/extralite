@@ -48,12 +48,13 @@ latest features and enhancements.
 - [Prepared queries](#prepared-queries).
 - [Parameter binding](#parameter-binding).
 - [Batch execution](#batch-execution-of-queries) of queries.
-- Support for [transactions and savepoints](#transactions-and-savepoints).
-- Support for loading [SQLite extensions](https://github.com/nalgeon/sqlean).
-- Advanced features: [backups](#creating-backups), [status
-  information](#retrieving-status-information),
-  [changesets](#working-with-changesets), [database
-  limits](#working-with-database-limits) and [tracing](#tracing-sql-statements).
+- [transactions and savepoints](#transactions-and-savepoints).
+- Advanced features: load [SQLite extensions](#loading-extensions), create
+  [backups](#creating-backups), retrieve [status
+  information](#retrieving-status-information), work with
+  [changesets](#working-with-changesets), interrogate [database
+  limits](#working-with-database-limits),  [trace](#tracing-sql-statements)
+  queries.
 - [Sequel](#usage-with-sequel) adapter.
 
 ## Table of Content

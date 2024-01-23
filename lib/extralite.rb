@@ -29,7 +29,7 @@ module Extralite
   class ParameterError < Error
   end
 
-  # An SQLite database
+  # This class encapsulates an SQLite database connection.
   class Database
     # @!visibility private
     TABLES_SQL = <<~SQL
@@ -49,7 +49,8 @@ module Extralite
       query_single_column(format(TABLES_SQL, db: db))
     end
 
-    # Gets or sets one or more pragmas:
+    # Gets or sets one or more database pragmas. For a list of available pragmas
+    # see: https://sqlite.org/pragma.html#toc
     #
     #     db.pragma(:cache_size) # get
     #     db.pragma(cache_size: -2000) # set
@@ -74,7 +75,10 @@ module Extralite
     #       raise if db.query_single_value('select x from bar') > 42
     #     end
     #
-    # @param mode [Symbol, String] transaction mode (deferred, immediate or exclusive). Defaults to immediate.
+    # For more information on transactions see:
+    # https://sqlite.org/lang_transaction.html
+    #
+    # @param mode [Symbol, String] transaction mode (deferred, immediate or exclusive).
     # @return [Any] the given block's return value
     def transaction(mode = :immediate)
       execute "begin #{mode} transaction"
@@ -88,7 +92,13 @@ module Extralite
       execute(abort ? 'rollback' : 'commit')
     end
 
-    # Creates a savepoint with the given name.
+    # Creates a savepoint with the given name. For more information on
+    # savepoints see: https://sqlite.org/lang_savepoint.html
+    #
+    #     db.savepoint(:savepoint1)
+    #     db.execute('insert into foo values (42)')
+    #     db.rollback_to(:savepoint1)
+    #     db.release(:savepoint1)
     #
     # @param name [String, Symbol] savepoint name
     # @return [Extralite::Database] database
@@ -97,7 +107,8 @@ module Extralite
       self
     end
 
-    # Release a savepoint with the given name.
+    # Release a savepoint with the given name. For more information on
+    # savepoints see: https://sqlite.org/lang_savepoint.html
     #
     # @param name [String, Symbol] savepoint name
     # @return [Extralite::Database] database
@@ -106,7 +117,8 @@ module Extralite
       self
     end
 
-    # Rolls back changes to a savepoint with the given name.
+    # Rolls back changes to a savepoint with the given name. For more
+    # information on savepoints see: https://sqlite.org/lang_savepoint.html
     #
     # @param name [String, Symbol] savepoint name
     # @return [Extralite::Database] database
@@ -116,14 +128,14 @@ module Extralite
     end
 
     # Rolls back the currently active transaction. This method should only be
-    # called from within a block passed to Database#transaction. This method
+    # called from within a block passed to `Database#transaction`. This method
     # raises a Extralite::Rollback exception, which will stop execution of the
     # transaction block without propagating the exception.
     #
-    #   db.transaction do
-    #     db.execute('insert into foo (42)')
-    #     db.rollback!
-    #   end
+    #     db.transaction do
+    #       db.execute('insert into foo (42)')
+    #       db.rollback!
+    #     end
     #
     # @param name [String, Symbol] savepoint name
     # @return [Extralite::Database] database
