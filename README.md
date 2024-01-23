@@ -805,6 +805,7 @@ end
 
 # In this example, we just return nil on timeout
 def run_query_with_timeout(sql, timeout)
+  @t0 = Time.now
   @db.query(sql)
 rescue TimeoutError
   nil
@@ -832,14 +833,25 @@ db.on_progress(100) { sleep(0) }
 ```
 
 For Polyphony-based apps, you can also call `snooze` to allow other fibers to
-run while a query is progressing. Note that if your Polyphony app is
-multi-threaded, you'll also need to call `Thread.pass` in order to allow other
-threads to run:
+run while a query is progressing. If your Polyphony app is multi-threaded,
+you'll also need to call `Thread.pass` in order to allow other threads to run:
 
 ```ruby
 db.on_progress(100) do
   snooze
   Thread.pass
+end
+```
+
+Note that with Polyphony, once you install the progress handler, you can just
+use the regular `#move_on_after` and `#cancel_after` methods to implement
+timeouts for queries:
+
+```ruby
+db.on_progress(100) { snooze }
+
+cancel_after(3) do
+  db.query(long_running_query)
 end
 ```
 
@@ -896,6 +908,10 @@ end
 ```
 
 ### Working with Changesets
+
+__Note__: as the session extension is by default disabled in SQLite
+distributions, support for changesets is currently only available withthe
+bundled version of Extralite, `extralite-bundle`.
 
 Changesets can be used to track and persist changes to data in a database. They
 can also be used to apply the same changes to another database, or to undo them.
