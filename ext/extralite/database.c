@@ -870,7 +870,7 @@ VALUE Database_trace(VALUE self) {
   return self;
 }
 
-#ifdef HAVE_SQLITE3CHANGESET_NEW
+#ifdef EXTRALITE_ENABLE_CHANGESET
 /* Tracks changes to the database and returns a changeset. The changeset can
  * then be used to store the changes to a file, apply them to another database,
  * or undo the changes. The given table names specify which tables should be
@@ -1133,7 +1133,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "total_changes", Database_total_changes, 0);
   rb_define_method(cDatabase, "trace", Database_trace, 0);
 
-  #ifdef HAVE_SQLITE3CHANGESET_NEW
+  #ifdef EXTRALITE_ENABLE_CHANGESET
   rb_define_method(cDatabase, "track_changes", Database_track_changes, -1);
   #endif
   
