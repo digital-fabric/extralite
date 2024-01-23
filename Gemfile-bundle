@@ -2,4 +2,4 @@ source 'https://rubygems.org'
 
 gemspec name: 'extralite'
 
-gem "extralite-bundle", git: "file://#{File.expand_path(__dir__)}", ref: `git rev-parse --abbrev-ref HEAD`.strip
+gem 'extralite-bundle', git: "file://#{File.expand_path(__dir__)}", ref: `git rev-parse --abbrev-ref HEAD`.strip

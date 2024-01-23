@@ -429,7 +429,7 @@ class QueryTest < MiniTest::Test
   end
 
   def test_parameter_binding_from_struct
-    foo_bar = Struct.new(:":foo", :bar)
+    foo_bar = Struct.new(:':foo', :bar)
     value = foo_bar.new(41, 42)
     assert_equal 41, @db.prepare('select :foo').bind(value).next_single_column
     assert_equal 42, @db.prepare('select :bar').bind(value).next_single_column
@@ -439,8 +439,8 @@ class QueryTest < MiniTest::Test
   def test_parameter_binding_from_data_class
     skip "Data isn't supported in Ruby < 3.2" if RUBY_VERSION < '3.2'
 
-    foo_bar = Data.define(:":foo", :bar)
-    value = foo_bar.new(":foo": 41, bar: 42)
+    foo_bar = Data.define(:':foo', :bar)
+    value = foo_bar.new(':foo': 41, bar: 42)
     assert_equal 42, @db.prepare('select :bar').bind(value).next_single_column
     assert_nil @db.prepare('select :baz').bind(value).next_single_column
   end

@@ -6,5 +6,5 @@ Gem::Specification.new do |s|
   s.files.reject! { |fn| fn =~ /^ext\/sqlite3/ }
   s.name        = 'extralite'
   s.summary     = 'Extra-lightweight SQLite3 wrapper for Ruby'
-  s.extensions  = ["ext/extralite/extconf.rb"]
+  s.extensions  = ['ext/extralite/extconf.rb']
 end

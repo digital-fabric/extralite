@@ -130,7 +130,7 @@ class ChangesetTest < MiniTest::Test
 
   def test_blob
     changeset = Extralite::Changeset.new
-    assert_equal "", changeset.to_blob
+    assert_equal '', changeset.to_blob
 
     changeset.track(@db, [:t]) do
       @db.execute('insert into t values (1, 2, 3)')

@@ -5,5 +5,5 @@ Gem::Specification.new do |s|
 
   s.name        = 'extralite-bundle'
   s.summary     = 'Extra-lightweight SQLite3 wrapper for Ruby with bundled SQLite3'
-  s.extensions  = ["ext/extralite/extconf-bundle.rb"]
+  s.extensions  = ['ext/extralite/extconf-bundle.rb']
 end

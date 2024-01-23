@@ -8,13 +8,13 @@ def common_spec(s)
   s.files       = `git ls-files`.split
   s.homepage    = 'https://github.com/digital-fabric/extralite'
   s.metadata    = {
-    "homepage_uri" => "https://github.com/digital-fabric/extralite",
-    "documentation_uri" => "https://www.rubydoc.info/gems/extralite",
-    "changelog_uri" => "https://github.com/digital-fabric/extralite/blob/master/CHANGELOG.md"
+    'homepage_uri' => 'https://github.com/digital-fabric/extralite',
+    'documentation_uri' => 'https://www.rubydoc.info/gems/extralite',
+    'changelog_uri' => 'https://github.com/digital-fabric/extralite/blob/master/CHANGELOG.md'
   }
-  s.rdoc_options = ["--title", "Extralite", "--main", "README.md"]
-  s.extra_rdoc_files = ["README.md"]
-  s.require_paths = ["lib"]
+  s.rdoc_options = ['--title', 'Extralite', '--main', 'README.md']
+  s.extra_rdoc_files = ['README.md']
+  s.require_paths = ['lib']
   s.required_ruby_version = '>= 3.0'
 
   s.add_development_dependency  'rake-compiler',        '1.1.6'

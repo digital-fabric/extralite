@@ -35,28 +35,27 @@ else
   end
 
   if with_config('sqlcipher')
-    pkg_config("sqlcipher")
+    pkg_config('sqlcipher')
   else
-    pkg_config("sqlite3")
+    pkg_config('sqlite3')
   end
 
   # --with-sqlite3-{dir,include,lib}
   if with_config('sqlcipher')
     $CFLAGS << ' -DUSING_SQLCIPHER'
-    dir_config("sqlcipher", cppflags, ldflags)
+    dir_config('sqlcipher', cppflags, ldflags)
   else
-    dir_config("sqlite3", cppflags, ldflags)
+    dir_config('sqlite3', cppflags, ldflags)
   end
 
-  if RbConfig::CONFIG["host_os"] =~ /mswin/
+  if RbConfig::CONFIG['host_os'] =~ /mswin/
     $CFLAGS << ' -W3'
   end
 
   # @!visibility private
   def asplode missing
     if RUBY_PLATFORM =~ /mingw|mswin/
-      abort "#{missing} is missing. Install SQLite3 from " +
-      "http://www.sqlite.org/ first."
+      abort "#{missing} is missing. Install SQLite3 from http://www.sqlite.org/ first."
     else
       abort <<~error
         #{missing} is missing. Try 'brew install sqlite3',
@@ -87,11 +86,8 @@ else
   if have_type('sqlite3_session', 'sqlite.h')
     $defs << '-DEXTRALITE_ENABLE_CHANGESET'
   end
-  # have_macro('__SQLITESESSION_H_')
-  # have_macro('SQLITE3_H')
 
-
-  $defs << "-DEXTRALITE_NO_BUNDLE"
+  $defs << '-DEXTRALITE_NO_BUNDLE'
 
   dir_config('extralite_ext')
   create_makefile('extralite_ext')

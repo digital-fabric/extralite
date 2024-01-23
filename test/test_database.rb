@@ -174,7 +174,7 @@ class DatabaseTest < MiniTest::Test
   end
 
   def test_parameter_binding_from_struct
-    foo_bar = Struct.new(:":foo", :bar)
+    foo_bar = Struct.new(:':foo', :bar)
     value = foo_bar.new(41, 42)
     assert_equal 41, @db.query_single_value('select :foo', value)
     assert_equal 42, @db.query_single_value('select :bar', value)
@@ -184,8 +184,8 @@ class DatabaseTest < MiniTest::Test
   def test_parameter_binding_from_data_class
     skip "Data isn't supported in Ruby < 3.2" if RUBY_VERSION < '3.2'
 
-    foo_bar = Data.define(:":foo", :bar)
-    value = foo_bar.new(":foo": 41, bar: 42)
+    foo_bar = Data.define(:':foo', :bar)
+    value = foo_bar.new(':foo': 41, bar: 42)
     assert_equal 42, @db.query_single_value('select :bar', value)
     assert_nil @db.query_single_value('select :baz', value)
   end
@@ -1380,26 +1380,26 @@ class RactorTest < Minitest::Test
       db = Ractor.receive
       Ractor.yield db.object_id
       begin
-        db.execute("create table foo (b)")
-        raise "Should have raised an exception in db.execute()"
+        db.execute('create table foo (b)')
+        raise 'Should have raised an exception in db.execute()'
       rescue => e
         Ractor.yield e
       end
     end
     sleep 0.1
     db_creator = Ractor.new(db_receiver) do |db_receiver|
-      db = Extralite::Database.new(":memory:")
+      db = Extralite::Database.new(':memory:')
       Ractor.yield db.object_id
       db_receiver.send(db)
       sleep 0.1
-      db.execute("create table foo (a)")
+      db.execute('create table foo (a)')
     end
     first_oid = db_creator.take
     second_oid = db_receiver.take
     refute_equal first_oid, second_oid
     ex = db_receiver.take
     assert_kind_of Extralite::Error, ex
-    assert_equal "Database is closed", ex.message
+    assert_equal 'Database is closed', ex.message
   end
 
   STRESS_DB_NAME = Tempfile.new('extralite_test_ractor_stress').path
@@ -1411,22 +1411,22 @@ class RactorTest < Minitest::Test
     Ractor.make_shareable(STRESS_DB_NAME)
 
     db = Extralite::Database.new(STRESS_DB_NAME)
-    db.execute("PRAGMA journal_mode=WAL") # A little slow without this
-    db.execute("create table stress_test (a integer primary_key, b text)")
+    db.execute('PRAGMA journal_mode=WAL') # A little slow without this
+    db.execute('create table stress_test (a integer primary_key, b text)')
     random = Random.new.freeze
     ractors = (0..9).map do |ractor_number|
-      Ractor.new(random, ractor_number) do |random, ractor_number|
+      Ractor.new(random, ractor_number) do |r, n|
         db_in_ractor = Extralite::Database.new(STRESS_DB_NAME)
         db_in_ractor.busy_timeout = 3
         10.times do |i|
-          db_in_ractor.execute("insert into stress_test(a, b) values (#{ractor_number * 100 + i}, '#{random.rand}')")
+          db_in_ractor.execute('insert into stress_test(a, b) values (?, ?)', n * 100 + i, r.rand)
         end
       end
     end
     ractors.each { |r| r.take }
     final_check = Ractor.new do
       db_in_ractor = Extralite::Database.new(STRESS_DB_NAME)
-      count = db_in_ractor.query_single_value("select count(*) from stress_test")
+      count = db_in_ractor.query_single_value('select count(*) from stress_test')
       Ractor.yield count
     end
     count = final_check.take
