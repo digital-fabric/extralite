@@ -37,21 +37,24 @@ latest features and enhancements.
 
 ## Features
 
-- Best-in-class performance (up to 14X the performance of the
+- Best-in-class [performance](#performance) (up to 14X the performance of the
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem).
 - Support for [concurrency](#concurrency) out of the box for multi-threaded
-  apps.
-- A variety of methods for retrieving data - hashes, array, single rows, single
+  and multi-fibered apps.
+- A variety of methods for [retrieving data](#basic-usage) - hashes, array, single rows, single
   values.
-- Support for external iteration, allowing iterating through single records or
-  batches of records.
-- Prepared queries.
-- Parameter binding.
-- Batch execution of queries.
-- Support for transactions and savepoints.
+- Support for [external iteration](#iterating-over-records-in-a-prepared-query),
+  allowing iterating through single records or batches of records.
+- [Prepared queries](#prepared-queries).
+- [Parameter binding](#parameter-binding).
+- [Batch execution](#batch-execution-of-queries) of queries.
+- Support for [transactions and savepoints](#transactions-and-savepoints).
 - Support for loading [SQLite extensions](https://github.com/nalgeon/sqlean).
-- APIs for doing database backups.
-- Sequel adapter.
+- Advanced features: [backups](#creating-backups), [status
+  information](#retrieving-status-information),
+  [changesets](#working-with-changesets), [database
+  limits](#working-with-database-limits) and [tracing](#tracing-sql-statements).
+- [Sequel](#usage-with-sequel) adapter.
 
 ## Table of Content
 
