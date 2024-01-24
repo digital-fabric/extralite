@@ -365,6 +365,11 @@ instantiate an iterator explicitly:
 iterator = Extralite::Iterator(query, :hash)
 ```
 
+### Value Conversion in Prepared Queries
+
+Prepared queries can automatically convert their result sets to arbitrary Ruby
+objects. This is useful when you need to transform values, such as 
+
 ## Batch Execution of Queries
 
 Extralite provides methods for batch execution of queries, with multiple sets of

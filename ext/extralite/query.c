@@ -179,7 +179,7 @@ VALUE Query_eof_p(VALUE self) {
 
 #define MAX_ROWS(max_rows) (max_rows == SINGLE_ROW ? 1 : max_rows)
 
-static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(query_ctx *), int convert) {
+static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(query_ctx *), int transform) {
   Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
@@ -192,7 +192,7 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
     query->stmt,
     Qnil,
     query->transform_proc,
-    convert ? query->transform_mode : TRANSFORM_NONE,
+    transform ? query->transform_mode : TRANSFORM_NONE,
     QUERY_MODE(max_rows == SINGLE_ROW ? QUERY_SINGLE_ROW : QUERY_MULTI_ROW),
     MAX_ROWS(max_rows)
   );
@@ -204,8 +204,8 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
 #define MAX_ROWS_FROM_ARGV(argc, argv) (argc == 1 ? FIX2INT(argv[0]) : SINGLE_ROW)
 
 /* Returns the next 1 or more rows from the associated query's result set as a
- * hash, unless a conversion block is set, in which case records are converted.
- * See also `#convert`.
+ * hash, unless a transform block is set, in which case records are transformed.
+ * See also `#transform_argv` and `#transform_hash`.
  *
  * If no row count is given, a single row is returned. If a row count is given,
  * an array containing up to the `row_count` rows is returned. If `row_count` is
@@ -248,7 +248,7 @@ VALUE Query_next_hash(int argc, VALUE *argv, VALUE self) {
  */
 VALUE Query_next_ary(int argc, VALUE *argv, VALUE self) {
   rb_check_arity(argc, 0, 1);
-  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_ary, TRANSFORM_NONE);
+  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_ary, 0);
 }
 
 /* Returns the next 1 or more rows from the associated query's result set as an
@@ -270,12 +270,12 @@ VALUE Query_next_ary(int argc, VALUE *argv, VALUE self) {
  */
 VALUE Query_next_single_column(int argc, VALUE *argv, VALUE self) {
   rb_check_arity(argc, 0, 1);
-  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_single_column, TRANSFORM_NONE);
+  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_single_column, 0);
 }
 
 /* Returns all rows in the associated query's result set as hashes, unless a
- * conversion block is set, in which case records are converted. See also
- * `#convert`.
+ * transform block is set, in which case records are transform. See also
+ * `#transform_argv` and `#transform_hash`.
  *
  * @overload to_a()
  *   @return [Array<Hash>] all rows
@@ -295,7 +295,7 @@ VALUE Query_to_a_hash(VALUE self) {
 VALUE Query_to_a_ary(VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_ary, TRANSFORM_NONE);
+  return Query_perform_next(self, ALL_ROWS, safe_query_ary, 0);
 }
 
 /* Returns all rows in the associated query's result set as single values. If
@@ -306,13 +306,13 @@ VALUE Query_to_a_ary(VALUE self) {
 VALUE Query_to_a_single_column(VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_single_column, TRANSFORM_NONE);
+  return Query_perform_next(self, ALL_ROWS, safe_query_single_column, 0);
 }
 
 /* Iterates through the result set, passing each row to the given block as a
- * hash, unless a conversion block is set, in which case records are converted.
- * See also `#convert`. If no block is given, returns a `Extralite::Iterator`
- * instance in hash mode (or converted value mode).
+ * hash, unless a transform block is set, in which case records are transformed.
+ * See also `#transform_argv` and `#transform_hash`. If no block is given,
+ * returns a `Extralite::Iterator` instance in hash/transformed mode.
  *
  * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
  */
@@ -321,7 +321,7 @@ VALUE Query_each_hash(VALUE self) {
 
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_hash, query->transform_mode);
+  return Query_perform_next(self, ALL_ROWS, safe_query_hash, 1);
 }
 
 /* Iterates through the result set, passing each row to the given block as an
@@ -335,7 +335,7 @@ VALUE Query_each_ary(VALUE self) {
 
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_ary, TRANSFORM_NONE);
+  return Query_perform_next(self, ALL_ROWS, safe_query_ary, 0);
 }
 
 /* Iterates through the result set, passing each row to the given block as a
@@ -350,7 +350,7 @@ VALUE Query_each_single_column(VALUE self) {
 
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_single_column, TRANSFORM_NONE);
+  return Query_perform_next(self, ALL_ROWS, safe_query_single_column, 0);
 }
 
 /* call-seq:
@@ -379,7 +379,7 @@ VALUE Query_each_single_column(VALUE self) {
 VALUE Query_execute(int argc, VALUE *argv, VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset_and_bind(query, argc, argv);
-  return Query_perform_next(self, ALL_ROWS, safe_query_changes, TRANSFORM_NONE);
+  return Query_perform_next(self, ALL_ROWS, safe_query_changes, 0);
 }
 
 /* call-seq:
@@ -473,8 +473,9 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
  * source. If a block is given, it is called with the resulting rows for each
  * invocation of the query, and the total number of changes is returned.
  * Otherwise, an array containing the resulting rows for each invocation is
- * returned. If a conversion block is set, records are converted, otherwise they
- * are returned as hashes. See also `#convert`.
+ * returned. If a transform block is set, records are transformed, otherwise
+ * they are returned as hashes. See also `#transform_argv` and
+ * `#transform_hash`.
  *
  *     q = db.prepare('insert into foo values (?, ?) returning bar, baz')
  *     records = [
@@ -628,7 +629,7 @@ VALUE Query_sql(VALUE self) {
 VALUE Query_columns(VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_columns, TRANSFORM_NONE);
+  return Query_perform_next(self, ALL_ROWS, safe_query_columns, 0);
 }
 
 /* call-seq:
@@ -694,20 +695,21 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
   return INT2NUM(value);
 }
 
-/* Sets the conversion block to the given block. If a conversion block is set,
- * calls to #to_a, #next, #each and #batch_query will convert values fetched
- * from the database using the conversion block before passing them to the
- * application code. To remove the conversion block, call `#convert` without a
- * block.
- * 
+/* Sets the transform block to the given block. If a transform block is set,
+ * calls to #to_a, #next, #each and #batch_query will transform values fetched
+ * from the database using the transform block before passing them to the
+ * application code. To remove the transform block, call `#transform_argv`
+ * without a block. The transform for each row is done by passing the column
+ * values as individual parameters the block.
+ *
  * Note that the other record fetching methods, such as `to_a_ary` are not
- * affected by the setting of a conversion block.
- * 
+ * affected by the setting of a transform block.
+ *
  *     # fetch column c as a JSON object
- *     q = db.prepare('select a, b, c from foo order by a').convert do |a, b, c|
+ *     q = db.prepare('select a, b, c from foo').transform_argv do |a, b, c|
  *       { a: a, b: b, c: JSON.parse(c, symbolize_names: true) }
  *     end
- *    
+ *
  *     q.to_a
  *     #=> [{ a: 1, b: 2, c: { foo: 42, bar: 43} }]
  *
@@ -719,6 +721,38 @@ VALUE Query_transform_argv(VALUE self) {
   if (rb_block_given_p()) {
     RB_OBJ_WRITE(self, &query->transform_proc, rb_block_proc());
     query->transform_mode = TRANSFORM_ARGV;
+  }
+  else {
+    RB_OBJ_WRITE(self, &query->transform_proc, Qnil);
+    query->transform_mode = TRANSFORM_NONE;
+  }
+
+  return self;
+}
+
+/* Sets the transform block to the given block. If a transform block is set,
+ * calls to #to_a, #next, #each and #batch_query will transform values fetched
+ * from the database using the transform block before passing them to the
+ * application code. To remove the transform block, call `#transform_hash`
+ * without a block. The transform for each row is done by passing the row hash
+ * to the block.
+ *
+ * Note that the other record fetching methods, such as `to_a_ary` are not
+ * affected by the setting of a transform block.
+ *
+ *     # fetch column c as an ORM object
+ *     q = db.prepare('select * from foo order by a').transform_hash do |h|
+ *       MyModel.new(h)
+ *     end
+ *
+ * @return [Extralite::Query] query
+ */
+VALUE Query_transform_hash(VALUE self) {
+  Query_t *query = self_to_query(self);
+
+  if (rb_block_given_p()) {
+    RB_OBJ_WRITE(self, &query->transform_proc, rb_block_proc());
+    query->transform_mode = TRANSFORM_HASH;
   }
   else {
     RB_OBJ_WRITE(self, &query->transform_proc, Qnil);
@@ -792,6 +826,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "to_a_single_column", Query_to_a_single_column, 0);
 
   rb_define_method(cQuery, "transform_argv", Query_transform_argv, 0);
+  rb_define_method(cQuery, "transform_hash", Query_transform_hash, 0);
 
   ID_inspect  = rb_intern("inspect");
   ID_slice    = rb_intern("slice");

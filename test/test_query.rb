@@ -931,10 +931,54 @@ class QueryConvertTest < MiniTest::Test
     @q3 = @db.prepare('select * from t where a = ?')
     @q4 = @db.prepare('select * from t order by a')
 
+    @q5 = @db.prepare('select a, b from t where a = ?')
+    @q6 = @db.prepare('select a, b from t order by a')
+
     @db.batch_execute('insert into t (a, b, c) values (?, ?, ?)', [
       [1, 2, { foo: 42, bar: 43 }.to_json],
       [4, 5, { foo: 45, bar: 46 }.to_json]
     ])
+  end
+
+  class MyModel
+    def initialize(h)
+      @h = h
+    end
+
+    def values
+      @h
+    end
+  end
+
+  def test_transform_hash
+    q = @q5.transform_hash { |h| MyModel.new(h) }
+    assert_equal @q5, q
+
+    o = @q5.bind(1).next
+    assert_kind_of MyModel, o
+    assert_equal({ a: 1, b: 2 }, o.values)
+
+    o = @q5.bind(4).next
+    assert_kind_of MyModel, o
+    assert_equal({ a: 4, b: 5 }, o.values)
+
+    assert_equal [
+      [{ a: 1, b: 2 }],
+      [{ a: 4, b: 5 }]
+    ], @q5.batch_query([[1], [4]]).map { |a| a.map(&:values) }
+
+    @q6.transform_hash { |h| MyModel.new(h) }
+    assert_equal [
+      { a: 1, b: 2 },
+      { a: 4, b: 5 }
+    ], @q6.to_a.map(&:values)
+
+    buf = []
+    @q6.each { |r| buf << r.values }
+    assert_equal [
+      { a: 1, b: 2 },
+      { a: 4, b: 5 }
+    ], buf
   end
 
   def test_transform_argv_single_column
