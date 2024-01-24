@@ -236,6 +236,26 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
+static inline VALUE Database_perform_query_transform(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *), VALUE transform_proc, enum transform_mode transform_mode) {
+  Database_t *db = self_to_open_database(self);
+  sqlite3_stmt *stmt;
+  VALUE sql;
+
+  // extract query from args
+  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
+  sql = rb_funcall(argv[0], ID_strip, 0);
+  if (RSTRING_LEN(sql) == 0) return Qnil;
+
+  TRACE_SQL(db, sql);
+  prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
+  RB_GC_GUARD(sql);
+
+  bind_all_parameters(stmt, argc - 1, argv + 1);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, Qnil, transform_proc, transform_mode, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS);
+  
+  return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+}
+
 /* call-seq:
  *    db.query(sql, *parameters, &block) -> [...]
  *    db.query_hash(sql, *parameters, &block) -> [...]
@@ -261,6 +281,58 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
  */
 VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_hash);
+}
+
+/* call-seq:
+ *    db.query_transform(transform, sql, *parameters, &block) -> [...]
+ *    db.query_transform_hash(transform, sql, *parameters, &block) -> [...]
+ *
+ * Runs a query and transforms rows through the given transform poc. Each row is
+ * provided to the transform proc as a hash. If a block is given, it will be
+ * called for each row. Otherwise, an array containing all rows is returned.
+ *
+ * Query parameters to be bound to placeholders in the query can be specified as
+ * a list of values or as a hash mapping parameter names to values. When
+ * parameters are given as an array, the query should specify parameters using
+ * `?`:
+ *
+ *     transform = ->(h) { MyModel.new(h) }
+ *     db.query_transform_hash(transform, 'select * from foo where x = ?', 42)
+ *
+ * @param transform [Proc] transform proc
+ * @param sql [String] SQL query string
+ * @return [Array<Hash, any>, Integer] array containing result set or number of rows
+ */
+VALUE Database_query_transform_hash(int argc, VALUE *argv, VALUE self) {
+  if (argc < 2)
+    rb_raise(eArgumentError, "Invalid arguments");
+  return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_hash, argv[0], TRANSFORM_HASH);
+}
+
+/* call-seq:
+ *    db.query_transform_argv(transform, sql, *parameters, &block) -> [...]
+ *
+ * Runs a query and transforms rows through the given transform poc. Each row is
+ * provided to the transform proc as a list of values. If a block is given, it
+ * will be called for each row. Otherwise, an array containing all rows is
+ * returned.
+ *
+ * Query parameters to be bound to placeholders in the query can be specified as
+ * a list of values or as a hash mapping parameter names to values. When
+ * parameters are given as an array, the query should specify parameters using
+ * `?`:
+ *
+ *     transform = ->(a, b, c) { a * 100 + b * 10 + c }
+ *     db.query_transform_argv(transform, 'select a, b, c from foo where c = ?', 42)
+ *
+ * @param transform [Proc] transform proc
+ * @param sql [String] SQL query string
+ * @return [Array<Hash, any>, Integer] array containing result set or number of rows
+ */
+VALUE Database_query_transform_argv(int argc, VALUE *argv, VALUE self) {
+  if (argc < 2)
+    rb_raise(eArgumentError, "Invalid arguments");
+  return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_hash, argv[0], TRANSFORM_ARGV);
 }
 
 /* call-seq:
@@ -310,6 +382,18 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
  */
 VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_single_row);
+}
+
+VALUE Database_query_transform_hash_single_row(int argc, VALUE *argv, VALUE self) {
+  if (argc < 2)
+    rb_raise(eArgumentError, "Invalid arguments");
+  return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], TRANSFORM_HASH);
+}
+
+VALUE Database_query_transform_argv_single_row(int argc, VALUE *argv, VALUE self) {
+  if (argc < 2)
+    rb_raise(eArgumentError, "Invalid arguments");
+  return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], TRANSFORM_ARGV);
 }
 
 /* call-seq:
@@ -1155,6 +1239,11 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
   rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
   rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
+  rb_define_method(cDatabase, "query_transform", Database_query_transform_hash, -1);
+  rb_define_method(cDatabase, "query_transform_argv", Database_query_transform_argv, -1);
+  rb_define_method(cDatabase, "query_transform_hash", Database_query_transform_hash, -1);
+  rb_define_method(cDatabase, "query_transform_argv_single_row", Database_query_transform_argv_single_row, -1);
+  rb_define_method(cDatabase, "query_transform_hash_single_row", Database_query_transform_hash_single_row, -1);
   rb_define_method(cDatabase, "read_only?", Database_read_only_p, 0);
   rb_define_method(cDatabase, "status", Database_status, -1);
   rb_define_method(cDatabase, "total_changes", Database_total_changes, 0);
