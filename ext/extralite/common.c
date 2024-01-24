@@ -321,11 +321,10 @@ VALUE cleanup_stmt(query_ctx *ctx) {
   return Qnil;
 }
 
-VALUE safe_query_ary_convert(query_ctx *ctx);
+VALUE safe_query_argv(query_ctx *ctx);
 
 VALUE safe_query_hash(query_ctx *ctx) {
-  if (!NIL_P(ctx->convert_proc))
-    return safe_query_ary_convert(ctx);
+  if (ctx->transform_mode == TRANSFORM_ARGV) return safe_query_argv(ctx);
 
   VALUE array = MULTI_ROW_P(ctx->mode) ? rb_ary_new() : Qnil;
   VALUE row = Qnil;
@@ -335,6 +334,8 @@ VALUE safe_query_hash(query_ctx *ctx) {
 
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
+    if (ctx->transform_mode == TRANSFORM_HASH)
+      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
     row_count++;
     switch (ctx->mode) {
       case QUERY_YIELD:
@@ -386,7 +387,7 @@ VALUE safe_query_ary(query_ctx *ctx) {
 
 #define MAX_CONVERTED_COLUMNS 8
 
-VALUE safe_query_ary_convert(query_ctx *ctx) {
+VALUE safe_query_argv(query_ctx *ctx) {
   VALUE array = MULTI_ROW_P(ctx->mode) ? rb_ary_new() : Qnil;
   VALUE row_values[MAX_CONVERTED_COLUMNS] = {
     Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil
@@ -400,7 +401,7 @@ VALUE safe_query_ary_convert(query_ctx *ctx) {
   while (stmt_iterate(ctx)) {
     // row = row_to_ary(ctx->stmt, column_count);
     row_to_row_values(ctx->stmt, column_count, row_values);
-    row = rb_funcall2(ctx->convert_proc, ID_call, column_count, row_values);
+    row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
     row_count++;
     switch (ctx->mode) {
       case QUERY_YIELD:
@@ -497,11 +498,11 @@ enum batch_mode {
   BATCH_QUERY_SINGLE_COLUMN
 };
 
-static VALUE batch_iterate_ary_convert(query_ctx *ctx);
+static VALUE batch_iterate_argv(query_ctx *ctx);
 
 static inline VALUE batch_iterate_hash(query_ctx *ctx) {
-  if (!NIL_P(ctx->convert_proc))
-    return batch_iterate_ary_convert(ctx);
+  if (ctx->transform_mode == TRANSFORM_ARGV)
+    return batch_iterate_argv(ctx);
 
   VALUE rows = rb_ary_new();
   VALUE row = Qnil;
@@ -510,6 +511,8 @@ static inline VALUE batch_iterate_hash(query_ctx *ctx) {
 
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
+    if (ctx->transform_mode == TRANSFORM_HASH)
+      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
     rb_ary_push(rows, row);
   }
 
@@ -534,7 +537,7 @@ static inline VALUE batch_iterate_ary(query_ctx *ctx) {
   return rows;
 }
 
-static inline VALUE batch_iterate_ary_convert(query_ctx *ctx) {
+static inline VALUE batch_iterate_argv(query_ctx *ctx) {
   VALUE rows = rb_ary_new();
   VALUE row_values[MAX_CONVERTED_COLUMNS] = {
     Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil
@@ -546,7 +549,7 @@ static inline VALUE batch_iterate_ary_convert(query_ctx *ctx) {
 
   while (stmt_iterate(ctx)) {
     row_to_row_values(ctx->stmt, column_count, row_values);
-    row = rb_funcall2(ctx->convert_proc, ID_call, column_count, row_values);
+    row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
     rb_ary_push(rows, row);
   }
 

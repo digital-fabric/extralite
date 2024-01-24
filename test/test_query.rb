@@ -937,8 +937,8 @@ class QueryConvertTest < MiniTest::Test
     ])
   end
 
-  def test_convert_single_column
-    q = @q1.convert { |c| JSON.parse(c, symbolize_names: true) }
+  def test_transform_argv_single_column
+    q = @q1.transform_argv { |c| JSON.parse(c, symbolize_names: true) }
     assert_equal @q1, q
 
     assert_equal({ foo: 42, bar: 43 }, @q1.bind(1).next)
@@ -949,7 +949,7 @@ class QueryConvertTest < MiniTest::Test
       [{ foo: 45, bar: 46 }]
     ], @q1.batch_query([[1], [4]])
 
-    @q2.convert { |c| JSON.parse(c, symbolize_names: true) }
+    @q2.transform_argv { |c| JSON.parse(c, symbolize_names: true) }
     assert_equal [
       { foo: 42, bar: 43 },
       { foo: 45, bar: 46 }
@@ -963,8 +963,8 @@ class QueryConvertTest < MiniTest::Test
     ], buf
   end
 
-  def test_convert_multi_column
-    q = @q3.convert { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
+  def test_transform_argv_multi_column
+    q = @q3.transform_argv { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     assert_equal @q3, q
 
     assert_equal({ a: 1, b: 2, c: { foo: 42, bar: 43 }}, @q3.bind(1).next)
@@ -975,7 +975,7 @@ class QueryConvertTest < MiniTest::Test
       [{ a: 4, b: 5, c: { foo: 45, bar: 46 }}]
     ], @q3.batch_query([[1], [4]])
 
-    @q4.convert { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
+    @q4.transform_argv { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     assert_equal [
       { a: 1, b: 2, c: { foo: 42, bar: 43 }},
       { a: 4, b: 5, c: { foo: 45, bar: 46 }}
