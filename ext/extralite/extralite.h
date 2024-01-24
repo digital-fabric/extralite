@@ -51,15 +51,22 @@ typedef struct {
   int     gvl_release_threshold;
 } Database_t;
 
+enum transform_mode {
+  TRANSFORM_NONE,
+  TRANSFORM_HASH,
+  TRANSFORM_ARGV
+};
+
 typedef struct {
-  VALUE         db;
-  VALUE         sql;
-  VALUE         convert_proc;
-  Database_t    *db_struct;
-  sqlite3       *sqlite3_db;
-  sqlite3_stmt  *stmt;
-  int           eof;
-  int           closed;
+  VALUE               db;
+  VALUE               sql;
+  VALUE               transform_proc;
+  Database_t          *db_struct;
+  sqlite3             *sqlite3_db;
+  sqlite3_stmt        *stmt;
+  int                 eof;
+  int                 closed;
+  enum transform_mode transform_mode;
 } Query_t;
 
 enum iterator_mode {
@@ -87,16 +94,17 @@ enum query_mode {
 };
 
 typedef struct {
-  VALUE           self;
-  sqlite3         *sqlite3_db;
-  sqlite3_stmt    *stmt;
-  VALUE           params;
-  VALUE           convert_proc;
-  enum query_mode mode;
-  int             max_rows;
-  int             eof;
-  int             gvl_release_threshold;
-  int             step_count;
+  VALUE               self;
+  sqlite3             *sqlite3_db;
+  sqlite3_stmt        *stmt;
+  VALUE               params;
+  VALUE               transform_proc;
+  enum transform_mode transform_mode;
+  enum query_mode     mode;
+  int                 max_rows;
+  int                 eof;
+  int                 gvl_release_threshold;
+  int                 step_count;
 } query_ctx;
 
 enum gvl_mode {
@@ -108,8 +116,8 @@ enum gvl_mode {
 #define SINGLE_ROW -2
 #define QUERY_MODE(default) (rb_block_given_p() ? QUERY_YIELD : default)
 #define MULTI_ROW_P(mode) (mode == QUERY_MULTI_ROW)
-#define QUERY_CTX(self, db, stmt, params, convert_proc, mode, max_rows) \
-  { self, db->sqlite3_db, stmt, params, convert_proc, mode, max_rows, 0, db->gvl_release_threshold, 0 }
+#define QUERY_CTX(self, db, stmt, params, transform_proc, transform_mode, query_mode, max_rows) \
+  { self, db->sqlite3_db, stmt, params, transform_proc, transform_mode, query_mode, max_rows, 0, db->gvl_release_threshold, 0 }
 #define TRACE_SQL(db, sql) \
     if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
 

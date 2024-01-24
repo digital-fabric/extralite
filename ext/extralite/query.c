@@ -24,14 +24,14 @@ static void Query_mark(void *ptr) {
   Query_t *query = ptr;
   rb_gc_mark_movable(query->db);
   rb_gc_mark_movable(query->sql);
-  rb_gc_mark_movable(query->convert_proc);
+  rb_gc_mark_movable(query->transform_proc);
 }
 
 static void Query_compact(void *ptr) {
   Query_t *query = ptr;
   query->db = rb_gc_location(query->db);
   query->sql = rb_gc_location(query->sql);
-  query->convert_proc = rb_gc_location(query->convert_proc);
+  query->transform_proc = rb_gc_location(query->transform_proc);
 }
 
 static void Query_free(void *ptr) {
@@ -50,7 +50,7 @@ static VALUE Query_allocate(VALUE klass) {
   Query_t *query = ALLOC(Query_t);
   query->db = Qnil;
   query->sql = Qnil;
-  query->convert_proc = Qnil;
+  query->transform_proc = Qnil;
   query->sqlite3_db = NULL;
   query->stmt = NULL;
   return TypedData_Wrap_Struct(klass, &Query_type, query);
@@ -87,6 +87,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
   query->stmt = NULL;
   query->closed = 0;
   query->eof = 0;
+  query->transform_mode = TRANSFORM_NONE;
 
   return Qnil;
 }
@@ -190,7 +191,8 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
     query->db_struct,
     query->stmt,
     Qnil,
-    convert ? query->convert_proc : Qnil,
+    query->transform_proc,
+    convert ? query->transform_mode : TRANSFORM_NONE,
     QUERY_MODE(max_rows == SINGLE_ROW ? QUERY_SINGLE_ROW : QUERY_MULTI_ROW),
     MAX_ROWS(max_rows)
   );
@@ -246,7 +248,7 @@ VALUE Query_next_hash(int argc, VALUE *argv, VALUE self) {
  */
 VALUE Query_next_ary(int argc, VALUE *argv, VALUE self) {
   rb_check_arity(argc, 0, 1);
-  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_ary, 0);
+  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_ary, TRANSFORM_NONE);
 }
 
 /* Returns the next 1 or more rows from the associated query's result set as an
@@ -268,7 +270,7 @@ VALUE Query_next_ary(int argc, VALUE *argv, VALUE self) {
  */
 VALUE Query_next_single_column(int argc, VALUE *argv, VALUE self) {
   rb_check_arity(argc, 0, 1);
-  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_single_column, 0);
+  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_single_column, TRANSFORM_NONE);
 }
 
 /* Returns all rows in the associated query's result set as hashes, unless a
@@ -293,7 +295,7 @@ VALUE Query_to_a_hash(VALUE self) {
 VALUE Query_to_a_ary(VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_ary, 0);
+  return Query_perform_next(self, ALL_ROWS, safe_query_ary, TRANSFORM_NONE);
 }
 
 /* Returns all rows in the associated query's result set as single values. If
@@ -304,7 +306,7 @@ VALUE Query_to_a_ary(VALUE self) {
 VALUE Query_to_a_single_column(VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_single_column, 0);
+  return Query_perform_next(self, ALL_ROWS, safe_query_single_column, TRANSFORM_NONE);
 }
 
 /* Iterates through the result set, passing each row to the given block as a
@@ -319,7 +321,7 @@ VALUE Query_each_hash(VALUE self) {
 
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_hash, 1);
+  return Query_perform_next(self, ALL_ROWS, safe_query_hash, query->transform_mode);
 }
 
 /* Iterates through the result set, passing each row to the given block as an
@@ -333,7 +335,7 @@ VALUE Query_each_ary(VALUE self) {
 
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_ary, 0);
+  return Query_perform_next(self, ALL_ROWS, safe_query_ary, TRANSFORM_NONE);
 }
 
 /* Iterates through the result set, passing each row to the given block as a
@@ -348,7 +350,7 @@ VALUE Query_each_single_column(VALUE self) {
 
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_single_column, 0);
+  return Query_perform_next(self, ALL_ROWS, safe_query_single_column, TRANSFORM_NONE);
 }
 
 /* call-seq:
@@ -377,7 +379,7 @@ VALUE Query_each_single_column(VALUE self) {
 VALUE Query_execute(int argc, VALUE *argv, VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset_and_bind(query, argc, argv);
-  return Query_perform_next(self, ALL_ROWS, safe_query_changes, 0);
+  return Query_perform_next(self, ALL_ROWS, safe_query_changes, TRANSFORM_NONE);
 }
 
 /* call-seq:
@@ -452,6 +454,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
     query->stmt,
     parameters,
     Qnil,
+    TRANSFORM_NONE,
     QUERY_MODE(QUERY_MULTI_ROW),
     ALL_ROWS
   );
@@ -497,7 +500,8 @@ VALUE Query_batch_query_hash(VALUE self, VALUE parameters) {
     query->db_struct,
     query->stmt,
     parameters,
-    query->convert_proc,
+    query->transform_proc,
+    query->transform_mode,
     QUERY_MODE(QUERY_MULTI_ROW),
     ALL_ROWS
   );
@@ -543,6 +547,7 @@ VALUE Query_batch_query_ary(VALUE self, VALUE parameters) {
     query->stmt,
     parameters,
     Qnil,
+    TRANSFORM_NONE,
     QUERY_MODE(QUERY_MULTI_ROW),
     ALL_ROWS
   );
@@ -588,6 +593,7 @@ VALUE Query_batch_query_single_column(VALUE self, VALUE parameters) {
     query->stmt,
     parameters,
     Qnil,
+    TRANSFORM_NONE,
     QUERY_MODE(QUERY_MULTI_ROW),
     ALL_ROWS
   );
@@ -622,7 +628,7 @@ VALUE Query_sql(VALUE self) {
 VALUE Query_columns(VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_columns, 0);
+  return Query_perform_next(self, ALL_ROWS, safe_query_columns, TRANSFORM_NONE);
 }
 
 /* call-seq:
@@ -707,10 +713,18 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
  *
  * @return [Extralite::Query] query
  */
-VALUE Query_convert(VALUE self) {
+VALUE Query_transform_argv(VALUE self) {
   Query_t *query = self_to_query(self);
 
-  RB_OBJ_WRITE(self, &query->convert_proc, rb_block_given_p() ? rb_block_proc() : Qnil);
+  if (rb_block_given_p()) {
+    RB_OBJ_WRITE(self, &query->transform_proc, rb_block_proc());
+    query->transform_mode = TRANSFORM_ARGV;
+  }
+  else {
+    RB_OBJ_WRITE(self, &query->transform_proc, Qnil);
+    query->transform_mode = TRANSFORM_NONE;
+  }
+
   return self;
 }
 
@@ -743,7 +757,6 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "closed?", Query_closed_p, 0);
   rb_define_method(cQuery, "columns", Query_columns, 0);
   rb_define_method(cQuery, "clone", Query_clone, 0);
-  rb_define_method(cQuery, "convert", Query_convert, 0);
   rb_define_method(cQuery, "database", Query_database, 0);
   rb_define_method(cQuery, "db", Query_database, 0);
   rb_define_method(cQuery, "dup", Query_clone, 0);
@@ -777,6 +790,8 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "to_a_ary", Query_to_a_ary, 0);
   rb_define_method(cQuery, "to_a_hash", Query_to_a_hash, 0);
   rb_define_method(cQuery, "to_a_single_column", Query_to_a_single_column, 0);
+
+  rb_define_method(cQuery, "transform_argv", Query_transform_argv, 0);
 
   ID_inspect  = rb_intern("inspect");
   ID_slice    = rb_intern("slice");
