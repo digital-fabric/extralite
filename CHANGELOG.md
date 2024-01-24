@@ -1,32 +1,33 @@
 # 2.6 2024-01-23
 
-- Implement changeset API
+- Implement changeset API.
   [#58](https://github.com/digital-fabric/extralite/issues/58)
-- Reorganize README, update benchmarks
+- Reorganize README, update benchmarks.
   [#63](https://github.com/digital-fabric/extralite/issues/63)
-- Implement progress handler API
+- Implement progress handler API.
   [#62](https://github.com/digital-fabric/extralite/issues/62)
-- Implement savepoint methods
+- Implement savepoint methods.
 
 # 2.5 2024-01-16
 
-- Update bundled sqlite to version 3.45.0
-- Implement `Database#batch_query` and related methods
+- Update bundled sqlite to version 3.45.0.
+- Implement `Database#batch_query` and related methods.
   [53](https://github.com/digital-fabric/extralite/issues/53)
-- Accept more options in `Database#initialize`
+- Accept more options in `Database#initialize`.
   [48](https://github.com/digital-fabric/extralite/issues/48)
-- Fix `Database#pragma` to return single value when reading pragma value
-- Accept database name in `Database#tables` method
+- Fix `Database#pragma` to return single value when reading pragma value.
+- Accept database name in `Database#tables` method.
 - Improve `Database#batch_execute` - now accepts Enumerable and Callable
-  parameters [52](https://github.com/digital-fabric/extralite/issues/52)
-- Rename `Database#execute_multi` to `Database#batch_execute`
-- Implement Query#clone
+  parameters. [52](https://github.com/digital-fabric/extralite/issues/52)
+- Rename `Database#execute_multi` to `Database#batch_execute`.
+- Implement `Query#clone`.
   [51](https://github.com/digital-fabric/extralite/issues/51)
-- Add support for GC compaction
-- Remove support for Ruby 2.7
-- Implement Query#<< [49](https://github.com/digital-fabric/extralite/issues/49)
-- Allow passing parameters in array
-- Add support for ractors
+- Add support for GC compaction.
+- Remove support for Ruby 2.7.
+- Implement `Query#<<`.
+  [49](https://github.com/digital-fabric/extralite/issues/49)
+- Allow passing parameters in array.
+- Add support for ractors.
   [#50](https://github.com/digital-fabric/extralite/issues/50)
 
 # 2.4 2023-12-24
