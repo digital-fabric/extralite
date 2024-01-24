@@ -2,6 +2,7 @@
 
 require_relative 'helper'
 require 'date'
+require 'json'
 
 class QueryTest < MiniTest::Test
   def setup
@@ -916,5 +917,75 @@ class QueryTest < MiniTest::Test
     assert_equal @db, q2.database
     assert_equal q1.sql, q2.sql
     refute_equal q1, q2
+  end
+end
+
+class QueryConvertTest < MiniTest::Test
+  def setup
+    @db = Extralite::Database.new(':memory:')
+    @db.query('create table t (a, b, c)')
+
+    @q1 = @db.prepare('select c from t where a = ?')
+    @q2 = @db.prepare('select c from t order by a')
+    
+    @q3 = @db.prepare('select * from t where a = ?')
+    @q4 = @db.prepare('select * from t order by a')
+
+    @db.batch_execute('insert into t (a, b, c) values (?, ?, ?)', [
+      [1, 2, { foo: 42, bar: 43 }.to_json],
+      [4, 5, { foo: 45, bar: 46 }.to_json]
+    ])
+  end
+
+  def test_convert_single_column
+    q = @q1.convert { |c| JSON.parse(c, symbolize_names: true) }
+    assert_equal @q1, q
+
+    assert_equal({ foo: 42, bar: 43 }, @q1.bind(1).next)
+    assert_equal({ foo: 45, bar: 46 }, @q1.bind(4).next)
+
+    assert_equal [
+      [{ foo: 42, bar: 43 }],
+      [{ foo: 45, bar: 46 }]
+    ], @q1.batch_query([[1], [4]])
+
+    @q2.convert { |c| JSON.parse(c, symbolize_names: true) }
+    assert_equal [
+      { foo: 42, bar: 43 },
+      { foo: 45, bar: 46 }
+    ], @q2.to_a
+
+    buf = []
+    @q2.each { |r| buf << r }
+    assert_equal [
+      { foo: 42, bar: 43 },
+      { foo: 45, bar: 46 }
+    ], buf
+  end
+
+  def test_convert_multi_column
+    q = @q3.convert { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
+    assert_equal @q3, q
+
+    assert_equal({ a: 1, b: 2, c: { foo: 42, bar: 43 }}, @q3.bind(1).next)
+    assert_equal({ a: 4, b: 5, c: { foo: 45, bar: 46 }}, @q3.bind(4).next)
+
+    assert_equal [
+      [{ a: 1, b: 2, c: { foo: 42, bar: 43 }}],
+      [{ a: 4, b: 5, c: { foo: 45, bar: 46 }}]
+    ], @q3.batch_query([[1], [4]])
+
+    @q4.convert { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
+    assert_equal [
+      { a: 1, b: 2, c: { foo: 42, bar: 43 }},
+      { a: 4, b: 5, c: { foo: 45, bar: 46 }}
+    ], @q4.to_a
+
+    buf = []
+    @q4.each { |r| buf << r }
+    assert_equal [
+      { a: 1, b: 2, c: { foo: 42, bar: 43 }},
+      { a: 4, b: 5, c: { foo: 45, bar: 46 }}
+    ], buf
   end
 end

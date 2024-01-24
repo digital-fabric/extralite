@@ -162,6 +162,12 @@ static inline VALUE row_to_ary(sqlite3_stmt *stmt, int column_count) {
   return row;
 }
 
+static inline void row_to_row_values(sqlite3_stmt *stmt, int column_count, VALUE *values) {
+  for (int i = 0; i < column_count; i++) {
+    values[i] = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
+  }
+}
+
 typedef struct {
   sqlite3 *db;
   sqlite3_stmt **stmt;
@@ -315,7 +321,12 @@ VALUE cleanup_stmt(query_ctx *ctx) {
   return Qnil;
 }
 
+VALUE safe_query_ary_convert(query_ctx *ctx);
+
 VALUE safe_query_hash(query_ctx *ctx) {
+  if (!NIL_P(ctx->convert_proc))
+    return safe_query_ary_convert(ctx);
+
   VALUE array = MULTI_ROW_P(ctx->mode) ? rb_ary_new() : Qnil;
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
@@ -368,6 +379,51 @@ VALUE safe_query_ary(query_ctx *ctx) {
       return MULTI_ROW_P(ctx->mode) ? array : ctx->self;
   }
 
+  RB_GC_GUARD(row);
+  RB_GC_GUARD(array);
+  return MULTI_ROW_P(ctx->mode) ? array : Qnil;
+}
+
+#define MAX_CONVERTED_COLUMNS 8
+
+VALUE safe_query_ary_convert(query_ctx *ctx) {
+  VALUE array = MULTI_ROW_P(ctx->mode) ? rb_ary_new() : Qnil;
+  VALUE row_values[MAX_CONVERTED_COLUMNS] = {
+    Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil
+  };
+  VALUE row = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+  if (column_count > MAX_CONVERTED_COLUMNS)
+    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
+
+  int row_count = 0;
+  while (stmt_iterate(ctx)) {
+    // row = row_to_ary(ctx->stmt, column_count);
+    row_to_row_values(ctx->stmt, column_count, row_values);
+    row = rb_funcall2(ctx->convert_proc, ID_call, column_count, row_values);
+    row_count++;
+    switch (ctx->mode) {
+      case QUERY_YIELD:
+        rb_yield(row);
+        break;
+      case QUERY_MULTI_ROW:
+        rb_ary_push(array, row);
+        break;
+      case QUERY_SINGLE_ROW:
+        return row;
+    }
+    if (ctx->max_rows != ALL_ROWS && row_count >= ctx->max_rows)
+      return MULTI_ROW_P(ctx->mode) ? array : ctx->self;
+  }
+
+  RB_GC_GUARD(row_values[0]);
+  RB_GC_GUARD(row_values[1]);
+  RB_GC_GUARD(row_values[2]);
+  RB_GC_GUARD(row_values[3]);
+  RB_GC_GUARD(row_values[4]);
+  RB_GC_GUARD(row_values[5]);
+  RB_GC_GUARD(row_values[6]);
+  RB_GC_GUARD(row_values[7]);
   RB_GC_GUARD(row);
   RB_GC_GUARD(array);
   return MULTI_ROW_P(ctx->mode) ? array : Qnil;
@@ -441,7 +497,12 @@ enum batch_mode {
   BATCH_QUERY_SINGLE_COLUMN
 };
 
+static VALUE batch_iterate_ary_convert(query_ctx *ctx);
+
 static inline VALUE batch_iterate_hash(query_ctx *ctx) {
+  if (!NIL_P(ctx->convert_proc))
+    return batch_iterate_ary_convert(ctx);
+
   VALUE rows = rb_ary_new();
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
@@ -453,6 +514,7 @@ static inline VALUE batch_iterate_hash(query_ctx *ctx) {
   }
 
   RB_GC_GUARD(column_names);
+  RB_GC_GUARD(row);
   RB_GC_GUARD(rows);
   return rows;
 }
@@ -467,6 +529,36 @@ static inline VALUE batch_iterate_ary(query_ctx *ctx) {
     rb_ary_push(rows, row);
   }
 
+  RB_GC_GUARD(row);
+  RB_GC_GUARD(rows);
+  return rows;
+}
+
+static inline VALUE batch_iterate_ary_convert(query_ctx *ctx) {
+  VALUE rows = rb_ary_new();
+  VALUE row_values[MAX_CONVERTED_COLUMNS] = {
+    Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil
+  };
+  VALUE row = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+  if (column_count > MAX_CONVERTED_COLUMNS)
+    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
+
+  while (stmt_iterate(ctx)) {
+    row_to_row_values(ctx->stmt, column_count, row_values);
+    row = rb_funcall2(ctx->convert_proc, ID_call, column_count, row_values);
+    rb_ary_push(rows, row);
+  }
+
+  RB_GC_GUARD(row_values[0]);
+  RB_GC_GUARD(row_values[1]);
+  RB_GC_GUARD(row_values[2]);
+  RB_GC_GUARD(row_values[3]);
+  RB_GC_GUARD(row_values[4]);
+  RB_GC_GUARD(row_values[5]);
+  RB_GC_GUARD(row_values[6]);
+  RB_GC_GUARD(row_values[7]);
+  RB_GC_GUARD(row);
   RB_GC_GUARD(rows);
   return rows;
 }
@@ -482,6 +574,7 @@ static inline VALUE batch_iterate_single_column(query_ctx *ctx) {
     rb_ary_push(rows, value);
   }
 
+  RB_GC_GUARD(value);
   RB_GC_GUARD(rows);
   return rows;
 }
