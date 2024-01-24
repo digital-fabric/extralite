@@ -227,6 +227,36 @@ db.execute(sql, Extralite::Blob.new('Hello, 世界!'))
 db.execute(sql, 'Hello, 世界!'.force_encoding(Encoding::ASCII_8BIT))
 ```
 
+## Value Transforms
+
+Extralite allows you to transform rows to any value your application may need by
+providing a transform proc that takes the raw row values and returns the
+transformed data. The transform proc is passed each resulting row either as a
+hash or as a list of values.
+
+Transforms are useful when you need to transform rows into ORM model instances,
+or when you need to do some other transformation on the values retrieved from
+the database.
+
+To transform rows as hashes, use `#query_transform_hash`:
+
+```ruby
+transform = ->(h) { MyModel.new(h) }
+db.query_transform_hash(transform, 'select * from foo')
+#=> rows as instances of MyModel
+```
+
+To transform rows as lists of values, use `#query_transform_argv`:
+
+```ruby
+transform = ->(a, b, c) { { a:a, b: b, c: JSON.parse(c) } }
+db.query_transform_argv(transform, 'select a, b, c from foo')
+#=> transformed rows
+```
+
+Value transforms can also be done with [prepared
+queries](#value-transforms-in-prepared-queries).
+
 ## Prepared Queries
 
 Prepared queries (also known as prepared statements) allow you to maximize
@@ -365,10 +395,36 @@ instantiate an iterator explicitly:
 iterator = Extralite::Iterator(query, :hash)
 ```
 
-### Value Conversion in Prepared Queries
+### Value Transforms in Prepared Queries
 
-Prepared queries can automatically convert their result sets to arbitrary Ruby
-objects. This is useful when you need to transform values, such as 
+Prepared queries can automatically transform their result sets by providing a
+transform block. The transform is done either on a hash (useful when you need to
+return ORM instances from your queries), or on a list of values (useful when you
+need to make additional transformations on specific fields, such as JSON
+fields).
+
+Setting a transform will only affect the following methods: `#to_a`, `#next`,
+`#each` and `#batch_query`. All other methods will behave the same even if a
+transform is set.
+
+To set a hash transform use `#transform_hash`:
+
+```ruby
+q = db.prepare('select * from items where id = ?')
+q.transform_hash { |h| Item.new(h) }
+
+q.bind(42).next #=> Item instance
+```
+
+To set a transform on individual values, use `#transform_argv`:
+
+```ruby
+q = db.prepare('select a, b, c from items order by a')
+# note how values are passed to the transform proc:
+q.transform_argv { |a, b, c| { a: a, b: b, c: JSON.parse(c) } }
+
+q.to_a #=> transformed rows
+```
 
 ## Batch Execution of Queries
 
