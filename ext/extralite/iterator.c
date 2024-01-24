@@ -10,6 +10,7 @@
 VALUE cIterator;
 
 VALUE SYM_hash;
+VALUE SYM_argv;
 VALUE SYM_ary;
 VALUE SYM_single_column;
 
@@ -46,8 +47,9 @@ static inline Iterator_t *self_to_iterator(VALUE obj) {
 }
 
 static inline enum iterator_mode symbol_to_mode(VALUE sym) {
-  if (sym == SYM_hash) return ITERATOR_HASH;
-  if (sym == SYM_ary) return ITERATOR_ARY;
+  if (sym == SYM_hash)          return ITERATOR_HASH;
+  if (sym == SYM_argv)          return ITERATOR_ARGV;
+  if (sym == SYM_ary)           return ITERATOR_ARY;
   if (sym == SYM_single_column) return ITERATOR_SINGLE_COLUMN;
 
   rb_raise(cError, "Invalid iterator mode");
@@ -78,6 +80,8 @@ typedef VALUE (*each_method)(VALUE);
 
 inline each_method mode_to_each_method(enum iterator_mode mode) {
   switch (mode) {
+    case ITERATOR_ARGV:
+      return Query_each_argv;
     case ITERATOR_ARY:
       return Query_each_ary;
     case ITERATOR_SINGLE_COLUMN:
@@ -204,10 +208,12 @@ void Init_ExtraliteIterator(void) {
   rb_define_method(cIterator, "to_a", Iterator_to_a, 0);
 
   SYM_hash          = ID2SYM(rb_intern("hash"));
+  SYM_argv          = ID2SYM(rb_intern("argv"));
   SYM_ary           = ID2SYM(rb_intern("ary"));
   SYM_single_column = ID2SYM(rb_intern("single_column"));
 
   rb_gc_register_mark_object(SYM_hash);
+  rb_gc_register_mark_object(SYM_argv);
   rb_gc_register_mark_object(SYM_ary);
   rb_gc_register_mark_object(SYM_single_column);
 }

@@ -48,6 +48,19 @@ class DatabaseTest < MiniTest::Test
     assert_equal [], r
   end
 
+  def test_query_argv
+    r = @db.query_argv('select * from t')
+    assert_equal [[1, 2, 3], [4, 5, 6]], r
+
+    r = @db.query_argv('select * from t where x = 2')
+    assert_equal [], r
+
+    # with block
+    r = []
+    @db.query_argv('select * from t') { |a, b, c| r << [a, b, c] }
+    assert_equal [[1, 2, 3], [4, 5, 6]], r
+  end
+
   def test_query_single_row
     r = @db.query_single_row('select * from t order by x desc limit 1')
     assert_equal({ x: 4, y: 5, z: 6 }, r)
@@ -944,6 +957,16 @@ class DatabaseTest < MiniTest::Test
       assert_equal [42, 43], db.query_single_column('select x from foo')
     end
   end
+
+  def test_prepare
+    q = @db.prepare('select * from t order by x')
+    assert_kind_of Extralite::Query, q
+
+    assert_equal [
+      { x: 1, y: 2, z: 3},
+      { x: 4, y: 5, z: 6}
+    ], q.to_a
+  end
 end
 
 class ScenarioTest < MiniTest::Test
@@ -1459,15 +1482,15 @@ class DatabaseTransformTest < MiniTest::Test
     end
   end
 
-  def test_query_transform_hash
+  def test_query_hash_transform
     transform = ->(h) { MyModel.new(h) }
 
     sql = 'select a, b from t where a = ?'
-    o = @db.query_transform_hash(transform, sql, 1).first
+    o = @db.query(transform, sql, 1).first
     assert_kind_of MyModel, o
     assert_equal({ a: 1, b: 2 }, o.values)
 
-    o = @db.query_transform_hash(transform, sql, 4).first
+    o = @db.query(transform, sql, 4).first
     assert_kind_of MyModel, o
     assert_equal({ a: 4, b: 5 }, o.values)
 
@@ -1475,84 +1498,84 @@ class DatabaseTransformTest < MiniTest::Test
     assert_equal [
       { a: 1, b: 2 },
       { a: 4, b: 5 }
-    ], @db.query_transform_hash(transform, sql).map(&:values)
+    ], @db.query(transform, sql).map(&:values)
 
     buf = []
-    @db.query_transform_hash(transform, sql) { |r| buf << r.values }
+    @db.query(transform, sql) { |r| buf << r.values }
     assert_equal [
       { a: 1, b: 2 },
       { a: 4, b: 5 }
     ], buf
   end
 
-  def test_query_transform_hash_single_row
+  def test_query_hash_single_row_transform
     transform = ->(h) { MyModel.new(h) }
 
     sql = 'select a, b from t where a = ?'
-    o = @db.query_transform_hash_single_row(transform, sql, 1)
+    o = @db.query_single_row(transform, sql, 1)
     assert_kind_of MyModel, o
     assert_equal({ a: 1, b: 2 }, o.values)
 
-    o = @db.query_transform_hash_single_row(transform, sql, 4)
+    o = @db.query_single_row(transform, sql, 4)
     assert_kind_of MyModel, o
     assert_equal({ a: 4, b: 5 }, o.values)
   end
 
-  def test_query_transform_argv_single_column
+  def test_query_argv_single_column_transform
     transform = ->(c) { JSON.parse(c, symbolize_names: true) }
     sql = 'select c from t where a = ?'
 
-    assert_equal([{ foo: 42, bar: 43 }], @db.query_transform_argv(transform, sql, 1))
-    assert_equal([{ foo: 45, bar: 46 }], @db.query_transform_argv(transform, sql, 4))
+    assert_equal([{ foo: 42, bar: 43 }], @db.query_argv(transform, sql, 1))
+    assert_equal([{ foo: 45, bar: 46 }], @db.query_argv(transform, sql, 4))
 
     sql = 'select c from t order by a'
     assert_equal [
       { foo: 42, bar: 43 },
       { foo: 45, bar: 46 }
-    ], @db.query_transform_argv(transform, sql)
+    ], @db.query_argv(transform, sql)
 
     buf = []
-    @db.query_transform_argv(transform, sql) { |r| buf << r }
+    @db.query_argv(transform, sql) { |r| buf << r }
     assert_equal [
       { foo: 42, bar: 43 },
       { foo: 45, bar: 46 }
     ], buf
   end
 
-  def test_query_transform_argv_single_row_single_column
+  def test_query_argv_single_row_single_column
     transform = ->(c) { JSON.parse(c, symbolize_names: true) }
     sql = 'select c from t where a = ?'
 
-    assert_equal({ foo: 42, bar: 43 }, @db.query_transform_argv_single_row(transform, sql, 1))
-    assert_equal({ foo: 45, bar: 46 }, @db.query_transform_argv_single_row(transform, sql, 4))
+    assert_equal({ foo: 42, bar: 43 }, @db.query_single_row_argv(transform, sql, 1))
+    assert_equal({ foo: 45, bar: 46 }, @db.query_single_row_argv(transform, sql, 4))
   end
 
-  def test_query_transform_argv_multi_column
+  def test_query_argv_multi_column
     transform = ->(a, b, c) { { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     sql = 'select * from t where a = ?'
 
-    assert_equal([{ a: 1, b: 2, c: { foo: 42, bar: 43 }}], @db.query_transform_argv(transform, sql, 1))
-    assert_equal([{ a: 4, b: 5, c: { foo: 45, bar: 46 }}], @db.query_transform_argv(transform, sql, 4))
+    assert_equal([{ a: 1, b: 2, c: { foo: 42, bar: 43 }}], @db.query_argv(transform, sql, 1))
+    assert_equal([{ a: 4, b: 5, c: { foo: 45, bar: 46 }}], @db.query_argv(transform, sql, 4))
 
     sql = 'select * from t order by a'
     assert_equal [
       { a: 1, b: 2, c: { foo: 42, bar: 43 }},
       { a: 4, b: 5, c: { foo: 45, bar: 46 }}
-    ], @db.query_transform_argv(transform, sql)
+    ], @db.query_argv(transform, sql)
 
     buf = []
-    @db.query_transform_argv(transform, sql) { |r| buf << r }
+    @db.query_argv(transform, sql) { |r| buf << r }
     assert_equal [
       { a: 1, b: 2, c: { foo: 42, bar: 43 }},
       { a: 4, b: 5, c: { foo: 45, bar: 46 }}
     ], buf
   end
 
-  def test_query_transform_argv_single_row_multi_column
+  def test_query_argv_single_row_multi_column
     transform = ->(a, b, c) { { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     sql = 'select * from t where a = ?'
 
-    assert_equal({ a: 1, b: 2, c: { foo: 42, bar: 43 }}, @db.query_transform_argv_single_row(transform, sql, 1))
-    assert_equal({ a: 4, b: 5, c: { foo: 45, bar: 46 }}, @db.query_transform_argv_single_row(transform, sql, 4))
+    assert_equal({ a: 1, b: 2, c: { foo: 42, bar: 43 }}, @db.query_single_row_argv(transform, sql, 1))
+    assert_equal({ a: 4, b: 5, c: { foo: 45, bar: 46 }}, @db.query_single_row_argv(transform, sql, 4))
   end
 end

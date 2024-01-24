@@ -311,8 +311,8 @@ VALUE Query_to_a_single_column(VALUE self) {
 
 /* Iterates through the result set, passing each row to the given block as a
  * hash, unless a transform block is set, in which case records are transformed.
- * See also `#transform_argv` and `#transform_hash`. If no block is given,
- * returns a `Extralite::Iterator` instance in hash/transformed mode.
+ * See also `#transform_hash`. If no block is given, returns a
+ * `Extralite::Iterator` instance in hash/transformed mode.
  *
  * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
  */
@@ -322,6 +322,21 @@ VALUE Query_each_hash(VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_hash, 1);
+}
+
+/* Iterates through the result set, passing each row to the given block as a
+ * lits of values unless a transform block is set, in which case records are
+ * transformed. See also `#transform_argv`. If no block is given, returns a
+ * `Extralite::Iterator` instance in hash/transformed mode.
+ *
+ * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
+ */
+VALUE Query_each_argv(VALUE self) {
+  if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_argv);
+
+  Query_t *query = self_to_query(self);
+  query_reset(query);
+  return Query_perform_next(self, ALL_ROWS, safe_query_argv, 1);
 }
 
 /* Iterates through the result set, passing each row to the given block as an
@@ -718,14 +733,8 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
 VALUE Query_transform_argv(VALUE self) {
   Query_t *query = self_to_query(self);
 
-  if (rb_block_given_p()) {
-    RB_OBJ_WRITE(self, &query->transform_proc, rb_block_proc());
-    query->transform_mode = TRANSFORM_ARGV;
-  }
-  else {
-    RB_OBJ_WRITE(self, &query->transform_proc, Qnil);
-    query->transform_mode = TRANSFORM_NONE;
-  }
+  query->transform_mode = TRANSFORM_ARGV;
+  RB_OBJ_WRITE(self, &query->transform_proc, rb_block_given_p() ? rb_block_proc() : Qnil);
 
   return self;
 }
@@ -796,6 +805,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "dup", Query_clone, 0);
 
   rb_define_method(cQuery, "each", Query_each_hash, 0);
+  rb_define_method(cQuery, "each_argv", Query_each_argv, 0);
   rb_define_method(cQuery, "each_ary", Query_each_ary, 0);
   rb_define_method(cQuery, "each_hash", Query_each_hash, 0);
   rb_define_method(cQuery, "each_single_column", Query_each_single_column, 0);
@@ -825,6 +835,7 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "to_a_hash", Query_to_a_hash, 0);
   rb_define_method(cQuery, "to_a_single_column", Query_to_a_single_column, 0);
 
+  rb_define_method(cQuery, "transform", Query_transform_hash, 0);
   rb_define_method(cQuery, "transform_argv", Query_transform_argv, 0);
   rb_define_method(cQuery, "transform_hash", Query_transform_hash, 0);
 

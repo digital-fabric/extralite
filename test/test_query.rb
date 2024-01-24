@@ -311,6 +311,33 @@ class QueryTest < MiniTest::Test
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
   end
 
+  def test_query_each_argv
+    buf = []
+    @query.bind(1).each_argv { |a, b, c| buf << [a, b, c] }
+    assert_equal [[1, 2, 3]], buf
+
+    # each should reset the stmt
+    buf = []
+    @query.each_argv { |a, b, c| buf << [a, b, c] }
+    assert_equal [[1, 2, 3]], buf
+
+    query = @db.prepare('select * from t')
+    buf = []
+    query.each_argv { |a, b, c| buf << [a, b, c] }
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
+  end
+
+  def test_query_each_argv_without_block
+    query = @db.prepare('select * from t')
+    iter = query.each_argv
+    assert_kind_of Extralite::Iterator, iter
+
+    buf = []
+    v = iter.each { |a, b, c| buf << [a, b, c] }
+    assert_equal iter, v
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
+  end
+
   def test_query_each_single_column
     query = @db.prepare('select x from t where x = ?')
     buf = []
@@ -951,7 +978,7 @@ class QueryTransformTest < MiniTest::Test
   end
 
   def test_transform_hash
-    q = @q5.transform_hash { |h| MyModel.new(h) }
+    q = @q5.transform { |h| MyModel.new(h) }
     assert_equal @q5, q
 
     o = @q5.bind(1).next
@@ -967,7 +994,7 @@ class QueryTransformTest < MiniTest::Test
       [{ a: 4, b: 5 }]
     ], @q5.batch_query([[1], [4]]).map { |a| a.map(&:values) }
 
-    @q6.transform_hash { |h| MyModel.new(h) }
+    @q6.transform { |h| MyModel.new(h) }
     assert_equal [
       { a: 1, b: 2 },
       { a: 4, b: 5 }
