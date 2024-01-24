@@ -30,6 +30,16 @@ class IteratorTest < MiniTest::Test
     assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], buf
   end
 
+  def test_iterator_argv
+    iter = @query.each_argv
+    assert_kind_of Extralite::Iterator, iter
+
+    buf = []
+    v = iter.each { |a, b, c| buf << [a, b, c] }
+    assert_equal iter, v
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
+  end
+
   def test_iterator_ary
     iter = @query.each_ary
     assert_kind_of Extralite::Iterator, iter

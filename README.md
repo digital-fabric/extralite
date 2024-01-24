@@ -238,19 +238,19 @@ Transforms are useful when you need to transform rows into ORM model instances,
 or when you need to do some other transformation on the values retrieved from
 the database.
 
-To transform rows as hashes, use `#query_transform_hash`:
+To transform results, pass a transform proc as the first parameter to `#query`:
 
 ```ruby
 transform = ->(h) { MyModel.new(h) }
-db.query_transform_hash(transform, 'select * from foo')
+db.query(transform, 'select * from foo')
 #=> rows as instances of MyModel
 ```
 
-To transform rows as lists of values, use `#query_transform_argv`:
+To transform rows as lists of values, use `#query_argv`:
 
 ```ruby
 transform = ->(a, b, c) { { a:a, b: b, c: JSON.parse(c) } }
-db.query_transform_argv(transform, 'select a, b, c from foo')
+db.query_argv(transform, 'select a, b, c from foo')
 #=> transformed rows
 ```
 
@@ -407,7 +407,7 @@ Setting a transform will only affect the following methods: `#to_a`, `#next`,
 `#each` and `#batch_query`. All other methods will behave the same even if a
 transform is set.
 
-To set a hash transform use `#transform_hash`:
+To set a hash transform use `#transform`:
 
 ```ruby
 q = db.prepare('select * from items where id = ?')
