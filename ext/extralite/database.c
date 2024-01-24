@@ -384,12 +384,38 @@ VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_single_row);
 }
 
+/* call-seq:
+ *   db.query_transform_hash_single_row(transform, sql, *parameters) -> {...}
+ *
+ * Runs a query returning a single row using the given transform proc to
+ * transform the row. The row is passed to the transform proc as a hash.
+ *
+ *     transform = ->(h) { MyModel.new(h) }
+ *     db.query_transform_hash_single_row(transform, 'select * from foo where x = ?', 42)
+ *
+ * @param transform [Proc] transform proc
+ * @param sql [String] SQL query string
+ * @return [any] transformed row
+ */
 VALUE Database_query_transform_hash_single_row(int argc, VALUE *argv, VALUE self) {
   if (argc < 2)
     rb_raise(eArgumentError, "Invalid arguments");
   return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], TRANSFORM_HASH);
 }
 
+/* call-seq:
+ *   db.query_transform_argv_single_row(transform, sql, *parameters) -> {...}
+ *
+ * Runs a query returning a single row using the given transform proc to
+ * transform the row. The row is passed to the transform proc as a list of values.
+ *
+ *     transform = ->(a, b, c) { "#{a} #{b} #{c}" }
+ *     db.query_transform_argv_single_row(transform, 'select a, b, c from foo where x = ?', 42)
+ *
+ * @param transform [Proc] transform proc
+ * @param sql [String] SQL query string
+ * @return [any] transformed row
+ */
 VALUE Database_query_transform_argv_single_row(int argc, VALUE *argv, VALUE self) {
   if (argc < 2)
     rb_raise(eArgumentError, "Invalid arguments");
