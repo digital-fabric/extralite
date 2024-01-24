@@ -54,6 +54,7 @@ typedef struct {
 typedef struct {
   VALUE         db;
   VALUE         sql;
+  VALUE         convert_proc;
   Database_t    *db_struct;
   sqlite3       *sqlite3_db;
   sqlite3_stmt  *stmt;
@@ -90,6 +91,7 @@ typedef struct {
   sqlite3         *sqlite3_db;
   sqlite3_stmt    *stmt;
   VALUE           params;
+  VALUE           convert_proc;
   enum query_mode mode;
   int             max_rows;
   int             eof;
@@ -106,8 +108,8 @@ enum gvl_mode {
 #define SINGLE_ROW -2
 #define QUERY_MODE(default) (rb_block_given_p() ? QUERY_YIELD : default)
 #define MULTI_ROW_P(mode) (mode == QUERY_MULTI_ROW)
-#define QUERY_CTX(self, db, stmt, params, mode, max_rows) \
-  { self, db->sqlite3_db, stmt, params, mode, max_rows, 0, db->gvl_release_threshold, 0 }
+#define QUERY_CTX(self, db, stmt, params, convert_proc, mode, max_rows) \
+  { self, db->sqlite3_db, stmt, params, convert_proc, mode, max_rows, 0, db->gvl_release_threshold, 0 }
 #define TRACE_SQL(db, sql) \
     if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
 
