@@ -430,7 +430,12 @@ VALUE safe_query_argv(query_ctx *ctx) {
   return MULTI_ROW_P(ctx->mode) ? array : Qnil;
 }
 
+VALUE safe_query_single_row_transform_argv(query_ctx *ctx);
+
 VALUE safe_query_single_row(query_ctx *ctx) {
+  if (ctx->transform_mode == TRANSFORM_ARGV)
+    return safe_query_single_row_transform_argv(ctx);
+
   int column_count;
   VALUE row = Qnil;
   VALUE column_names;
@@ -438,11 +443,40 @@ VALUE safe_query_single_row(query_ctx *ctx) {
   column_count = sqlite3_column_count(ctx->stmt);
   column_names = get_column_names(ctx->stmt, column_count);
 
-  if (stmt_iterate(ctx))
+  if (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
+    if (ctx->transform_mode == TRANSFORM_HASH)
+      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
+  }
 
   RB_GC_GUARD(row);
   RB_GC_GUARD(column_names);
+  return row;
+}
+
+VALUE safe_query_single_row_transform_argv(query_ctx *ctx) {
+  VALUE row_values[MAX_CONVERTED_COLUMNS] = {
+    Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil
+  };
+  VALUE row = Qnil;
+  int column_count = sqlite3_column_count(ctx->stmt);
+  if (column_count > MAX_CONVERTED_COLUMNS)
+    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
+
+  if (stmt_iterate(ctx)) {
+    row_to_row_values(ctx->stmt, column_count, row_values);
+    row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
+  }
+
+  RB_GC_GUARD(row_values[0]);
+  RB_GC_GUARD(row_values[1]);
+  RB_GC_GUARD(row_values[2]);
+  RB_GC_GUARD(row_values[3]);
+  RB_GC_GUARD(row_values[4]);
+  RB_GC_GUARD(row_values[5]);
+  RB_GC_GUARD(row_values[6]);
+  RB_GC_GUARD(row_values[7]);
+  RB_GC_GUARD(row);
   return row;
 }
 

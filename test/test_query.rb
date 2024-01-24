@@ -920,7 +920,7 @@ class QueryTest < MiniTest::Test
   end
 end
 
-class QueryConvertTest < MiniTest::Test
+class QueryTransformTest < MiniTest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table t (a, b, c)')
