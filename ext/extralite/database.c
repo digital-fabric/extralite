@@ -630,35 +630,35 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
 }
 #endif
 
+static inline VALUE Database_prepare(int argc, VALUE *argv, VALUE self, VALUE mode) {
+  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
+
+  VALUE args[3] = { self, argv[0], mode};
+  VALUE query = rb_funcall_passing_block(cQuery, ID_new, 3, args);
+  if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
+  RB_GC_GUARD(query);
+  return query;
+}
+
 /* call-seq:
  *   db.prepare(sql) -> Extralite::Query
  *   db.prepare(sql, ...) -> Extralite::Query
+ *   db.prepare(sql) { ... } -> Extralite::Query
  *
- * Creates a prepared statement with the given SQL query. If query parameters
- * are given, they are bound to the query.
+ * Creates a prepared statement with the given SQL query in hash mode. If query
+ * parameters are given, they are bound to the query. If a block is given, it is
+ * used as a transform proc.
  */
 VALUE Database_prepare_hash(int argc, VALUE *argv, VALUE self) {
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  VALUE query = rb_funcall(cQuery, ID_new, 3, self, argv[0], SYM_hash);
-  if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
-  RB_GC_GUARD(query);
-  return query;
+  return Database_prepare(argc, argv, self, SYM_hash);
 }
 
 VALUE Database_prepare_argv(int argc, VALUE *argv, VALUE self) {
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  VALUE query = rb_funcall(cQuery, ID_new, 3, self, argv[0], SYM_argv);
-  if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
-  RB_GC_GUARD(query);
-  return query;
+  return Database_prepare(argc, argv, self, SYM_argv);
 }
 
 VALUE Database_prepare_ary(int argc, VALUE *argv, VALUE self) {
-  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  VALUE query = rb_funcall(cQuery, ID_new, 3, self, argv[0], SYM_ary);
-  if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
-  RB_GC_GUARD(query);
-  return query;
+  return Database_prepare(argc, argv, self, SYM_ary);
 }
 
 /* call-seq:

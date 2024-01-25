@@ -967,6 +967,30 @@ class DatabaseTest < MiniTest::Test
       { x: 4, y: 5, z: 6}
     ], q.to_a
   end
+
+  def test_prepare_with_transform
+    q = @db.prepare('select * from t order by x') { |h| h[:x] * 100 + h[:y] * 10 + h[:z] }
+    assert_equal [
+      123,
+      456
+    ], q.to_a
+  end
+
+  def test_prepare_argv_with_transform
+    q = @db.prepare_argv('select * from t order by x') { |x, y, z| x * 100 + y * 10 + z }
+    assert_equal [
+      123,
+      456
+    ], q.to_a
+  end
+
+  def test_prepare_ary_with_transform
+    q = @db.prepare_ary('select * from t order by x') { |r| r * 2 }
+    assert_equal [
+      [1, 2, 3, 1, 2, 3],
+      [4, 5, 6, 4, 5, 6]
+    ], q.to_a
+  end
 end
 
 class ScenarioTest < MiniTest::Test

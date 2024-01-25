@@ -60,7 +60,8 @@ latest features and enhancements.
 ## Table of Content
 
 - [Installing Extralite](#installing-extralite)
-- [Basic Usage](#basic-usage)
+- [Getting Started](#getting-started)
+- [Query Modes](#query-modes)
 - [Parameter binding](#parameter-binding)
 - [Data Types](#data-types)
 - [Prepared Queries](#prepared-queries)
@@ -101,7 +102,7 @@ SQLite source code.
 Usage of the `extralite-bundle` gem is identical to the usage of the normal
 `extralite` gem, using `require 'extralite'` to load the gem.
 
-## Basic Usage
+## Getting Started
 
 Here's as an example showing how to open an SQLite database and run some
 queries:
@@ -130,24 +131,43 @@ db.query 'select * from foo' do |r|
 end
 ```
 
-Extralite also provides other ways of retrieving data:
+## Query Modes
+
+Extralite allows you to retrieve data from SQLite database in the form that most
+a particular context. For some use cases you'll want to work with rows as
+hashes. In other cases, you'll want to work with rows as arrays, or even as
+single values, if you're just reading one column.
+
+For that purpose, Extralite offers three different ways, or modes, of retrieving
+records:
+
+- `:hash`: read rows as hashes (this is the default mode).
+- `:ary`: read rows as arrays.
+- `:argv`: similar to the `:ary`, except that for queries with a single column,
+  the single column value is returned.
+
+Extralite provides separate methods for the different modes:
 
 ```ruby
-# get rows as arrays
-db.query_ary 'select * from foo'
-#=> [[1, 2, 3], [4, 5, 6]]
+# alias #query_hash
+db.query('select 1') #=> [{ "1" => 1 }]
 
-# get a single column
-db.query_argv 'select x from foo'
-#=> [1, 4]
+db.query_ary('select 1') #=> [[1]]
 
-# get a single row
-db.query_single 'select * from foo order by x desc limit 1'
-#=> { x: 4, y: 5, z: 6 }
+db.query_argv('select 1') #=> [1]
+```
 
-# get a single value (a single column from a single row)
-db.query_single_argv 'select z from foo order by x desc limit 1'
-#=> 6
+Notice how all the return values above are arrays. This is because the different
+`#query_xxx` methods are designed to return multiple rows. If you want to just
+get back a single row, use one of the `query_single_xxx` methods:
+
+```ruby
+# alias #query_single_hash
+db.query('select 1') #=> { "1" => 1 }
+
+db.query_single_ary('select 1') #=> [1]
+
+db.query_single_argv('select 1') #=> 1
 ```
 
 ## Parameter binding
@@ -161,14 +181,16 @@ statement:
 db.query('select x from my_table where y = ? and z = ?', 'foo', 'bar')
 ```
 
-You can also express place holders by specifying their index (starting from 1) using `?IDX`:
+You can also express place holders by specifying their index (starting from 1)
+using `?IDX`:
 
 ```ruby
 # use the same value for both place holders:
 db.query('select x from my_table where y = ?1 and z = ?1', 42)
 ```
 
-Another possibility is to use named parameters, which can be done by expressing place holders as `:KEY`, `@KEY` or `$KEY`:
+Another possibility is to use named parameters, which can be done by expressing
+place holders as `:KEY`, `@KEY` or `$KEY`:
 
 ```ruby
 db.query('select x from my_table where y = $y and z = $z', y: 'foo', z: 'bar')
@@ -238,7 +260,8 @@ Transforms are useful when you need to transform rows into ORM model instances,
 or when you need to do some other transformation on the values retrieved from
 the database.
 
-To transform results, pass a transform proc as the first parameter to `#query`:
+To transform results, pass a transform proc as the first parameter to one of the
+`#query_xxx` methods:
 
 ```ruby
 transform = ->(h) { MyModel.new(h) }
@@ -246,7 +269,8 @@ db.query(transform, 'select * from foo')
 #=> rows as instances of MyModel
 ```
 
-To transform rows as lists of values, use `#query_argv`:
+When using the `argv` mode, the different column values are passed as individual
+values to the transform proc:
 
 ```ruby
 transform = ->(a, b, c) { { a:a, b: b, c: JSON.parse(c) } }
@@ -274,7 +298,8 @@ query.bind(1).to_a
 
 ### Binding Values to Prepared Queries
 
-To bind parameter values to the query, use the `#bind` method. The parameters will remain bound to the query until `#bind` is called again.
+To bind parameter values to the query, use the `#bind` method. The parameters
+will remain bound to the query until `#bind` is called again.
 
 ```ruby
 query.bind(1)
@@ -295,21 +320,33 @@ query = db.prepare('select * from foo where x = ?', 1)
 
 ### Fetching Records from a Prepared Query
 
-Just like the `Database` interface, prepared queries offer various ways of
-retrieving records: as hashes, as arrays, as single column values, as a single
-value. Normally, you'll set the mode by calling the appropriate `#prepare_xxx`
-method:
+Just like the `Database` interface, prepared queries support getting data using
+three different modes: as a hash, an array or as individual column values. To
+set the mode, you can use one of the `#prepare_xxx` methods:
 
 ```ruby
-# get records as arrays
-query = db.prepare_ary('select * from foo where x = ?', 1)
-query.to_a
-#=> [[1, 2, 3]]
+# hash mode
+db.prepare('select * from foo').to_a
+#=> [{ x: 1, y: 2, z: 3}]
 
-# get records as single values
-query2 = db.prepare_argv('select z from foo where x = ?', 1)
-query2.to_a
-#=> [3]
+# argv mode
+db.prepare_argv('select x from foo').to_a
+#=> [1]
+
+# ary mode
+db.prepare_ary('select * from foo').to_a
+#=> [[1, 2, 3]]
+```
+
+You can also set the query mode by getting or setting `#mode`:
+
+```ruby
+q = db.prepare('select * from foo')
+q.to_a #=> [{ x: 1, y: 2, z: 3}]
+
+q.mode #=> :hash
+q.mode = :ary
+q.to_a "=> [[1, 2, 3]]
 ```
 
 ### Fetching Single Records or Batches of Records
@@ -331,8 +368,7 @@ query.next(10)
 #=> [{ x: 1, y: 2, z: 3 }, { x: 4, y: 5, z: 6 }]
 
 # Fetch the next row as an array
-query.reset
-q.mode = :ary
+query = db.prepare_ary('select * from foo')
 query.next
 #=> [1, 2, 3]
 
@@ -399,25 +435,26 @@ iterator.each { |r| ... }
 
 ### Value Transforms in Prepared Queries
 
-Prepared queries can automatically transform their result sets by providing a
+Prepared queries can automatically transform their result sets by setting a
 transform block. The transform block receives values according to the query mode
-(hash, array or argv). To set a transform use `#transform`:
+(hash, array or argv). To set a transform you can pass a block to one of the
+`Database#prepare_xxx` methods, or use `Query#transform`:
 
 ```ruby
+q = db.prepare('select * from items where id = ?') { |h| Item.new(h) }
+q.bind(42).next #=> Item instance
+
+# An equivalent
 q = db.prepare('select * from items where id = ?')
 q.transform { |h| Item.new(h) }
-
-q.bind(42).next #=> Item instance
 ```
 
-To set a transform on individual values, use `#transform`:
+The same can be done for queries in `argv` or `ary` mode:
 
 ```ruby
-q = db.prepare('select a, b, c from items order by a')
-# note how values are passed to the transform proc:
-q.transform_argv { |a, b, c| { a: a, b: b, c: JSON.parse(c) } }
+db.prepare_argv('select * from foo') { |a, b, c| a + b + c }
 
-q.to_a #=> transformed rows
+db.prepare_ary('select * from foo') { |a| a.map(&:to_s).join }
 ```
 
 ## Batch Execution of Queries
@@ -494,9 +531,8 @@ end
 #=> 2
 ```
 
-And of course, for your convenience there are also `#batch_query_ary` and
-`#batch_query_single_column` methods that retrieve records as arrays or as
-single values.
+The `#batch_query` method, like other row fetching methods, changes the row
+representation according to the query mode.
 
 ### Batch Execution of Prepared Queries
 
