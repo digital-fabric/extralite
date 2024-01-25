@@ -106,6 +106,8 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
 
   RB_OBJ_WRITE(self, &query->db, db);
   RB_OBJ_WRITE(self, &query->sql, sql);
+  if (rb_block_given_p())
+    RB_OBJ_WRITE(self, &query->transform_proc, rb_block_proc());
 
   query->db = db;
   query->db_struct = self_to_database(db);
