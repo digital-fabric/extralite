@@ -245,7 +245,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
   query_ctx ctx = QUERY_CTX(
-    self, db, stmt, Qnil, transform, transform_mode, QUERY_MODE(QUERY_MULTI_ROW), ALL_ROWS
+    self, db, stmt, Qnil, transform, transform_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
   );
   
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
@@ -528,7 +528,7 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, QUERY_MULTI_ROW, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, ROW_MULTI, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -563,7 +563,7 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, QUERY_MULTI_ROW, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, ROW_MULTI, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -598,7 +598,7 @@ VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, QUERY_MULTI_ROW, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, ROW_MULTI, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query_ary), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -633,7 +633,7 @@ VALUE Database_batch_query_single_column(VALUE self, VALUE sql, VALUE parameters
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, QUERY_MULTI_ROW, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, ROW_MULTI, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query_single_column), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }

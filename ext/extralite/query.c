@@ -193,12 +193,12 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
     Qnil,
     query->transform_proc,
     transform ? query->transform_mode : TRANSFORM_NONE,
-    QUERY_MODE(max_rows == SINGLE_ROW ? QUERY_SINGLE_ROW : QUERY_MULTI_ROW),
+    ROW_YIELD_OR_MODE(max_rows == SINGLE_ROW ? ROW_SINGLE : ROW_MULTI),
     MAX_ROWS(max_rows)
   );
   VALUE result = call(&ctx);
   query->eof = ctx.eof;
-  return (ctx.mode == QUERY_YIELD) ? self : result;
+  return (ctx.row_mode == ROW_YIELD) ? self : result;
 }
 
 #define MAX_ROWS_FROM_ARGV(argc, argv) (argc == 1 ? FIX2INT(argv[0]) : SINGLE_ROW)
@@ -470,7 +470,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
     parameters,
     Qnil,
     TRANSFORM_NONE,
-    QUERY_MODE(QUERY_MULTI_ROW),
+    ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
   );
   return safe_batch_execute(&ctx);
@@ -518,7 +518,7 @@ VALUE Query_batch_query_hash(VALUE self, VALUE parameters) {
     parameters,
     query->transform_proc,
     query->transform_mode,
-    QUERY_MODE(QUERY_MULTI_ROW),
+    ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
   );
   return safe_batch_query(&ctx);
@@ -564,7 +564,7 @@ VALUE Query_batch_query_ary(VALUE self, VALUE parameters) {
     parameters,
     Qnil,
     TRANSFORM_NONE,
-    QUERY_MODE(QUERY_MULTI_ROW),
+    ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
   );
   return safe_batch_query_ary(&ctx);
@@ -610,7 +610,7 @@ VALUE Query_batch_query_single_column(VALUE self, VALUE parameters) {
     parameters,
     Qnil,
     TRANSFORM_NONE,
-    QUERY_MODE(QUERY_MULTI_ROW),
+    ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
   );
   return safe_batch_query_single_column(&ctx);
