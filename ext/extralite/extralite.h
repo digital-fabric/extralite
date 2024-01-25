@@ -89,23 +89,26 @@ typedef struct {
 } Changeset_t;
 #endif
 
-enum query_mode {
-  QUERY_YIELD,
-  QUERY_MULTI_ROW,
-  QUERY_SINGLE_ROW
+enum row_mode {
+  ROW_YIELD,
+  ROW_MULTI,
+  ROW_SINGLE
 };
 
 typedef struct {
   VALUE               self;
-  sqlite3             *sqlite3_db;
-  sqlite3_stmt        *stmt;
   VALUE               params;
   VALUE               transform_proc;
-  enum transform_mode transform_mode;
-  enum query_mode     mode;
-  int                 max_rows;
-  int                 eof;
+
+  sqlite3             *sqlite3_db;
+  sqlite3_stmt        *stmt;
+
   int                 gvl_release_threshold;
+  enum transform_mode transform_mode;
+  enum row_mode       row_mode;
+  int                 max_rows;
+
+  int                 eof;
   int                 step_count;
 } query_ctx;
 
@@ -116,10 +119,21 @@ enum gvl_mode {
 
 #define ALL_ROWS -1
 #define SINGLE_ROW -2
-#define QUERY_MODE(default) (rb_block_given_p() ? QUERY_YIELD : default)
-#define MULTI_ROW_P(mode) (mode == QUERY_MULTI_ROW)
-#define QUERY_CTX(self, db, stmt, params, transform_proc, transform_mode, query_mode, max_rows) \
-  { self, db->sqlite3_db, stmt, params, transform_proc, transform_mode, query_mode, max_rows, 0, db->gvl_release_threshold, 0 }
+#define ROW_YIELD_OR_MODE(default) (rb_block_given_p() ? ROW_YIELD : default)
+#define ROW_MULTI_P(mode) (mode == ROW_MULTI)
+#define QUERY_CTX(self, db, stmt, params, transform_proc, transform_mode, row_mode, max_rows) { \
+  self, \
+  params, \
+  transform_proc, \
+  db->sqlite3_db, \
+  stmt, \
+  db->gvl_release_threshold, \
+  transform_mode, \
+  row_mode, \
+  max_rows, \
+  0, \
+  0 \
+}
 #define TRACE_SQL(db, sql) \
     if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
 
