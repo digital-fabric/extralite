@@ -216,14 +216,14 @@ inline enum gvl_mode Database_prepare_gvl_mode(Database_t *db) {
   return db->gvl_release_threshold < 0 ? GVL_HOLD : GVL_RELEASE;
 }
 
-static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *), enum transform_mode transform_mode) {
+static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *), enum query_mode query_mode) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
   VALUE sql = Qnil;
   VALUE transform = Qnil;
   // transform mode is set and the first parameter is not a string, so we expect
   // a transform.
-  int got_transform = (transform_mode != TRANSFORM_NONE) && (TYPE(argv[0]) != T_STRING);
+  int got_transform = (TYPE(argv[0]) != T_STRING);
   
   // extract query from args
   rb_check_arity(argc, got_transform ? 2 : 1, UNLIMITED_ARGUMENTS);
@@ -233,8 +233,6 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
     argc--;
     argv++;
   }
-  else
-    transform_mode = TRANSFORM_NONE;
 
   sql = rb_funcall(argv[0], ID_strip, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
@@ -245,7 +243,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
   query_ctx ctx = QUERY_CTX(
-    self, db, stmt, Qnil, transform, transform_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
+    self, db, stmt, Qnil, transform, query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
   );
   
   return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
@@ -275,7 +273,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
  *     db.query('select * from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_hash, TRANSFORM_HASH);
+  return Database_perform_query(argc, argv, self, safe_query_hash, QUERY_HASH);
 }
 
 /* call-seq:
@@ -299,7 +297,7 @@ VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
  * @return [Array<Hash, any>, Integer] array containing result set or number of rows
  */
 VALUE Database_query_argv(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_argv, TRANSFORM_ARGV);
+  return Database_perform_query(argc, argv, self, safe_query_argv, QUERY_ARGV);
 }
 
 /* call-seq:
@@ -324,7 +322,7 @@ VALUE Database_query_argv(int argc, VALUE *argv, VALUE self) {
  *     db.query_ary('select * from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_ary, TRANSFORM_NONE);
+  return Database_perform_query(argc, argv, self, safe_query_ary, QUERY_ARY);
 }
 
 /* call-seq:
@@ -349,7 +347,7 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
  *     db.query_single_row('select * from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_row, TRANSFORM_HASH);
+  return Database_perform_query(argc, argv, self, safe_query_single_row, QUERY_HASH);
 }
 
 /* call-seq:
@@ -374,7 +372,7 @@ VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
  *     db.query_single_row('select * from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_single_row_argv(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_row_argv, TRANSFORM_ARGV);
+  return Database_perform_query(argc, argv, self, safe_query_single_row_argv, QUERY_ARGV);
 }
 
 /* call-seq:
@@ -393,8 +391,8 @@ VALUE Database_query_single_row_argv(int argc, VALUE *argv, VALUE self) {
 VALUE Database_query_transform_hash_single_row(int argc, VALUE *argv, VALUE self) {
   if (argc < 2)
     rb_raise(eArgumentError, "Invalid arguments");
-  return Database_perform_query(argc, argv, self, safe_query_single_row, TRANSFORM_HASH);
-  // return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], TRANSFORM_HASH);
+  return Database_perform_query(argc, argv, self, safe_query_single_row, QUERY_HASH);
+  // return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], QUERY_HASH);
 }
 
 /* call-seq:
@@ -413,8 +411,8 @@ VALUE Database_query_transform_hash_single_row(int argc, VALUE *argv, VALUE self
 VALUE Database_query_transform_argv_single_row(int argc, VALUE *argv, VALUE self) {
   if (argc < 2)
     rb_raise(eArgumentError, "Invalid arguments");
-  return Database_perform_query(argc, argv, self, safe_query_single_row, TRANSFORM_ARGV);
-  // return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], TRANSFORM_ARGV);
+  return Database_perform_query(argc, argv, self, safe_query_single_row, QUERY_ARGV);
+  // return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], QUERY_ARGV);
 }
 
 /* call-seq:
@@ -439,7 +437,7 @@ VALUE Database_query_transform_argv_single_row(int argc, VALUE *argv, VALUE self
  *     db.query_single_column('select x from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_column, TRANSFORM_NONE);
+  return Database_perform_query(argc, argv, self, safe_query_single_column, QUERY_ARGV);
 }
 
 /* call-seq:
@@ -463,7 +461,7 @@ VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
  *     db.query_single_value('select x from foo where x = :bar', ':bar' => 42)
  */
 VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_value, TRANSFORM_NONE);
+  return Database_perform_query(argc, argv, self, safe_query_single_value, QUERY_ARGV);
 }
 
 /* call-seq:
@@ -488,7 +486,7 @@ VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
  *     db.execute('update foo set x = :bar', ':bar' => 42)
  */
 VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_changes, TRANSFORM_NONE);
+  return Database_perform_query(argc, argv, self, safe_query_changes, QUERY_HASH);
 }
 
 /* call-seq:
@@ -528,7 +526,7 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, ROW_MULTI, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -563,7 +561,7 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, ROW_MULTI, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -598,7 +596,7 @@ VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, ROW_MULTI, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_ARY, ROW_MULTI, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query_ary), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -633,7 +631,7 @@ VALUE Database_batch_query_single_column(VALUE self, VALUE sql, VALUE parameters
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, TRANSFORM_NONE, ROW_MULTI, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_ARGV, ROW_MULTI, ALL_ROWS);
 
   return rb_ensure(SAFE(safe_batch_query_single_column), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -644,7 +642,7 @@ VALUE Database_batch_query_single_column(VALUE self, VALUE sql, VALUE parameters
  * Returns the column names for the given query, without running it.
  */
 VALUE Database_columns(VALUE self, VALUE sql) {
-  return Database_perform_query(1, &sql, self, safe_query_columns, TRANSFORM_NONE);
+  return Database_perform_query(1, &sql, self, safe_query_columns, QUERY_HASH);
 }
 
 /* call-seq:
@@ -724,9 +722,25 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
  * Creates a prepared statement with the given SQL query. If query parameters
  * are given, they are bound to the query.
  */
-VALUE Database_prepare(int argc, VALUE *argv, VALUE self) {
+VALUE Database_prepare_hash(int argc, VALUE *argv, VALUE self) {
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
   VALUE query = rb_funcall(cQuery, ID_new, 3, self, argv[0], SYM_hash);
+  if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
+  RB_GC_GUARD(query);
+  return query;
+}
+
+VALUE Database_prepare_argv(int argc, VALUE *argv, VALUE self) {
+  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
+  VALUE query = rb_funcall(cQuery, ID_new, 3, self, argv[0], SYM_argv);
+  if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
+  RB_GC_GUARD(query);
+  return query;
+}
+
+VALUE Database_prepare_ary(int argc, VALUE *argv, VALUE self) {
+  rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
+  VALUE query = rb_funcall(cQuery, ID_new, 3, self, argv[0], SYM_ary);
   if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
   RB_GC_GUARD(query);
   return query;
@@ -1226,67 +1240,71 @@ void Init_ExtraliteDatabase(void) {
   cDatabase = rb_define_class_under(mExtralite, "Database", rb_cObject);
   rb_define_alloc_func(cDatabase, Database_allocate);
 
-  rb_define_method(cDatabase, "backup", Database_backup, -1);
-  rb_define_method(cDatabase, "busy_timeout=", Database_busy_timeout_set, 1);
-  rb_define_method(cDatabase, "changes", Database_changes, 0);
-  rb_define_method(cDatabase, "close", Database_close, 0);
-  rb_define_method(cDatabase, "closed?", Database_closed_p, 0);
-  rb_define_method(cDatabase, "columns", Database_columns, 1);
-  rb_define_method(cDatabase, "errcode", Database_errcode, 0);
-  rb_define_method(cDatabase, "errmsg", Database_errmsg, 0);
+  #define DEF(s, f, a) rb_define_method(cDatabase, s, f, a)
+
+  DEF("backup",                     Database_backup, -1);
+  DEF("busy_timeout=",              Database_busy_timeout_set, 1);
+  DEF("changes",                    Database_changes, 0);
+  DEF("close",                      Database_close, 0);
+  DEF("closed?",                    Database_closed_p, 0);
+  DEF("columns",                    Database_columns, 1);
+  DEF("errcode",                    Database_errcode, 0);
+  DEF("errmsg",                     Database_errmsg, 0);
 
   #ifdef HAVE_SQLITE3_ERROR_OFFSET
-  rb_define_method(cDatabase, "error_offset", Database_error_offset, 0);
+  DEF("error_offset",               Database_error_offset, 0);
   #endif
 
-  rb_define_method(cDatabase, "execute", Database_execute, -1);
-  rb_define_method(cDatabase, "batch_execute", Database_batch_execute, 2);
-  rb_define_method(cDatabase, "batch_query", Database_batch_query, 2);
-  rb_define_method(cDatabase, "batch_query_ary", Database_batch_query_ary, 2);
-  rb_define_method(cDatabase, "batch_query_single_column", Database_batch_query_single_column, 2);
-  rb_define_method(cDatabase, "filename", Database_filename, -1);
-  rb_define_method(cDatabase, "gvl_release_threshold", Database_gvl_release_threshold_get, 0);
-  rb_define_method(cDatabase, "gvl_release_threshold=", Database_gvl_release_threshold_set, 1);
-  rb_define_method(cDatabase, "initialize", Database_initialize, -1);
-  rb_define_method(cDatabase, "inspect", Database_inspect, 0);
-  rb_define_method(cDatabase, "interrupt", Database_interrupt, 0);
-  rb_define_method(cDatabase, "last_insert_rowid", Database_last_insert_rowid, 0);
-  rb_define_method(cDatabase, "limit", Database_limit, -1);
-  rb_define_method(cDatabase, "on_progress", Database_on_progress, 1);
-  rb_define_method(cDatabase, "prepare", Database_prepare, -1);
-  rb_define_method(cDatabase, "query", Database_query_hash, -1);
-  rb_define_method(cDatabase, "query_argv", Database_query_argv, -1);
-  rb_define_method(cDatabase, "query_ary", Database_query_ary, -1);
-  rb_define_method(cDatabase, "query_hash", Database_query_hash, -1);
-  rb_define_method(cDatabase, "query_single_column", Database_query_single_column, -1);
-  rb_define_method(cDatabase, "query_single_row", Database_query_single_row, -1);
-  rb_define_method(cDatabase, "query_single_row_argv", Database_query_single_row_argv, -1);
-  rb_define_method(cDatabase, "query_single_value", Database_query_single_value, -1);
+  DEF("execute",                    Database_execute, -1);
+  DEF("batch_execute",              Database_batch_execute, 2);
+  DEF("batch_query",                Database_batch_query, 2);
+  DEF("batch_query_ary",            Database_batch_query_ary, 2);
+  DEF("batch_query_single_column",  Database_batch_query_single_column, 2);
+  DEF("filename",                   Database_filename, -1);
+  DEF("gvl_release_threshold",      Database_gvl_release_threshold_get, 0);
+  DEF("gvl_release_threshold=",     Database_gvl_release_threshold_set, 1);
+  DEF("initialize",                 Database_initialize, -1);
+  DEF("inspect",                    Database_inspect, 0);
+  DEF("interrupt",                  Database_interrupt, 0);
+  DEF("last_insert_rowid",          Database_last_insert_rowid, 0);
+  DEF("limit",                      Database_limit, -1);
+  DEF("on_progress",                Database_on_progress, 1);
 
-  rb_define_method(cDatabase, "read_only?", Database_read_only_p, 0);
-  rb_define_method(cDatabase, "status", Database_status, -1);
-  rb_define_method(cDatabase, "total_changes", Database_total_changes, 0);
-  rb_define_method(cDatabase, "trace", Database_trace, 0);
+  DEF("prepare",                    Database_prepare_hash, -1);
+  DEF("prepare_argv",               Database_prepare_argv, -1);
+  DEF("prepare_ary",                Database_prepare_ary, -1);
+
+  DEF("query",                      Database_query_hash, -1);
+  DEF("query_argv",                 Database_query_argv, -1);
+  DEF("query_ary",                  Database_query_ary, -1);
+  DEF("query_hash",                 Database_query_hash, -1);
+  DEF("query_single_column",        Database_query_single_column, -1);
+  DEF("query_single_row",           Database_query_single_row, -1);
+  DEF("query_single_row_argv",      Database_query_single_row_argv, -1);
+  DEF("query_single_value",         Database_query_single_value, -1);
+
+  DEF("read_only?",                 Database_read_only_p, 0);
+  DEF("status",                     Database_status, -1);
+  DEF("total_changes",              Database_total_changes, 0);
+  DEF("trace",                      Database_trace, 0);
 
   #ifdef EXTRALITE_ENABLE_CHANGESET
-  rb_define_method(cDatabase, "track_changes", Database_track_changes, -1);
+  DEF("track_changes",              Database_track_changes, -1);
   #endif
   
-  rb_define_method(cDatabase, "transaction_active?", Database_transaction_active_p, 0);
+  DEF("transaction_active?",        Database_transaction_active_p, 0);
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
-  rb_define_method(cDatabase, "load_extension", Database_load_extension, 1);
+  DEF("load_extension",             Database_load_extension, 1);
 #endif
 
-  cBlob = rb_define_class_under(mExtralite, "Blob", rb_cString);
-
-  cError = rb_define_class_under(mExtralite, "Error", rb_eStandardError);
-  cSQLError = rb_define_class_under(mExtralite, "SQLError", cError);
-  cBusyError = rb_define_class_under(mExtralite, "BusyError", cError);
+  cBlob           = rb_define_class_under(mExtralite, "Blob", rb_cString);
+  cError          = rb_define_class_under(mExtralite, "Error", rb_eStandardError);
+  cSQLError       = rb_define_class_under(mExtralite, "SQLError", cError);
+  cBusyError      = rb_define_class_under(mExtralite, "BusyError", cError);
   cInterruptError = rb_define_class_under(mExtralite, "InterruptError", cError);
   cParameterError = rb_define_class_under(mExtralite, "ParameterError", cError);
-
-  eArgumentError = rb_const_get(rb_cObject, rb_intern("ArgumentError"));
+  eArgumentError  = rb_const_get(rb_cObject, rb_intern("ArgumentError"));
 
   ID_bind   = rb_intern("bind");
   ID_call   = rb_intern("call");
