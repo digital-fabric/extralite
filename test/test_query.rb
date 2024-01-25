@@ -24,6 +24,23 @@ class QueryTest < MiniTest::Test
     assert_equal 4, query.next_single_column
   end
 
+  def test_mode
+    query = @db.prepare('select 1')
+    assert_equal :hash, query.mode
+    
+    query.mode = :argv
+    assert_equal :argv, query.mode
+
+    query.mode = :ary
+    assert_equal :ary, query.mode
+
+    assert_raises(Extralite::Error) { query.mode = :foo }
+    assert_equal :ary, query.mode
+
+    query.mode = :hash
+    assert_equal :hash, query.mode
+  end
+
   def test_query_props
     assert_kind_of Extralite::Query, @query
     assert_equal @db, @query.database
