@@ -9,11 +9,6 @@
 
 VALUE cIterator;
 
-VALUE SYM_hash;
-VALUE SYM_argv;
-VALUE SYM_ary;
-VALUE SYM_single_column;
-
 static size_t Iterator_size(const void *ptr) {
   return sizeof(Iterator_t);
 }
@@ -138,14 +133,4 @@ void Init_ExtraliteIterator(void) {
   rb_define_method(cIterator, "inspect", Iterator_inspect, 0);
   rb_define_method(cIterator, "next", Iterator_next, -1);
   rb_define_method(cIterator, "to_a", Iterator_to_a, 0);
-
-  SYM_hash          = ID2SYM(rb_intern("hash"));
-  SYM_argv          = ID2SYM(rb_intern("argv"));
-  SYM_ary           = ID2SYM(rb_intern("ary"));
-  SYM_single_column = ID2SYM(rb_intern("single_column"));
-
-  rb_gc_register_mark_object(SYM_hash);
-  rb_gc_register_mark_object(SYM_argv);
-  rb_gc_register_mark_object(SYM_ary);
-  rb_gc_register_mark_object(SYM_single_column);
 }
