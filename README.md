@@ -400,16 +400,12 @@ iterator.each { |r| ... }
 ### Value Transforms in Prepared Queries
 
 Prepared queries can automatically transform their result sets by providing a
-transform block. The transform is done either on a hash (useful when you need to
-return ORM instances from your queries), or on a list of values (useful when you
-need to make additional transformations on specific fields, such as JSON
-fields).
-
-To set a hash transform use `#transform`:
+transform block. The transform block receives values according to the query mode
+(hash, array or argv). To set a transform use `#transform`:
 
 ```ruby
 q = db.prepare('select * from items where id = ?')
-q.transform_hash { |h| Item.new(h) }
+q.transform { |h| Item.new(h) }
 
 q.bind(42).next #=> Item instance
 ```
