@@ -62,6 +62,14 @@ static inline Query_t *self_to_query(VALUE obj) {
   return query;
 }
 
+static inline enum query_mode symbol_to_query_mode(VALUE sym) {
+  if (sym == SYM_hash)          return QUERY_HASH;
+  if (sym == SYM_argv)          return QUERY_ARGV;
+  if (sym == SYM_ary)           return QUERY_ARY;
+
+  rb_raise(cError, "Invalid query mode");
+}
+
 /* Initializes a new prepared query with the given database and SQL string. A
  * `Query` is normally instantiated by calling `Database#prepare`:
  *
@@ -71,7 +79,7 @@ static inline Query_t *self_to_query(VALUE obj) {
  * @param sql [String] SQL string
  * @return [void]
  */
-VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
+VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
   Query_t *query = self_to_query(self);
 
   sql = rb_funcall(sql, ID_strip, 0);
@@ -87,6 +95,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
   query->stmt = NULL;
   query->closed = 0;
   query->eof = 0;
+  query->query_mode = symbol_to_query_mode(mode);
   query->transform_mode = TRANSFORM_NONE;
 
   return Qnil;
@@ -789,6 +798,26 @@ VALUE Query_inspect(VALUE self) {
   return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, sql);
 }
 
+VALUE Query_mode_get(VALUE self) {
+  Query_t *query = self_to_query(self);
+  switch (query->query_mode) {
+    case QUERY_HASH:
+      return SYM_hash;
+    case QUERY_ARGV:
+      return SYM_argv;
+    case QUERY_ARY:
+      return SYM_ary;
+    default:
+      rb_raise(cError, "Invalid mode");
+  }
+}
+
+VALUE Query_mode_set(VALUE self, VALUE mode) {
+  Query_t *query = self_to_query(self);
+  query->query_mode = symbol_to_query_mode(mode);
+  return mode;
+}
+
 void Init_ExtraliteQuery(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -818,8 +847,10 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "batch_query_ary", Query_batch_query_ary, 1);
   rb_define_method(cQuery, "batch_query_hash", Query_batch_query_hash, 1);
   rb_define_method(cQuery, "batch_query_single_column", Query_batch_query_single_column, 1);
-  rb_define_method(cQuery, "initialize", Query_initialize, 2);
+  rb_define_method(cQuery, "initialize", Query_initialize, 3);
   rb_define_method(cQuery, "inspect", Query_inspect, 0);
+  rb_define_method(cQuery, "mode", Query_mode_get, 0);
+  rb_define_method(cQuery, "mode=", Query_mode_set, 1);
 
   rb_define_method(cQuery, "next", Query_next_hash, -1);
   rb_define_method(cQuery, "next_ary", Query_next_ary, -1);

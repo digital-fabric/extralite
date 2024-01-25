@@ -58,6 +58,12 @@ enum transform_mode {
   TRANSFORM_ARGV
 };
 
+enum query_mode {
+  QUERY_HASH,
+  QUERY_ARGV,
+  QUERY_ARY
+};
+
 typedef struct {
   VALUE               db;
   VALUE               sql;
@@ -67,6 +73,7 @@ typedef struct {
   sqlite3_stmt        *stmt;
   int                 eof;
   int                 closed;
+  enum query_mode     query_mode;
   enum transform_mode transform_mode;
 } Query_t;
 

@@ -726,7 +726,7 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
  */
 VALUE Database_prepare(int argc, VALUE *argv, VALUE self) {
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
-  VALUE query = rb_funcall(cQuery, ID_new, 2, self, argv[0]);
+  VALUE query = rb_funcall(cQuery, ID_new, 3, self, argv[0], SYM_hash);
   if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
   RB_GC_GUARD(query);
   return query;
