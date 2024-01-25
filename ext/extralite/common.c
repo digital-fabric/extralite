@@ -324,18 +324,16 @@ VALUE cleanup_stmt(query_ctx *ctx) {
 VALUE safe_query_argv(query_ctx *ctx);
 
 VALUE safe_query_hash(query_ctx *ctx) {
-  if (ctx->transform_mode == TRANSFORM_ARGV)
-    return safe_query_argv(ctx);
-
   VALUE array = ROW_MULTI_P(ctx->row_mode) ? rb_ary_new() : Qnil;
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
   VALUE column_names = get_column_names(ctx->stmt, column_count);
   int row_count = 0;
+  int do_transform = !NIL_P(ctx->transform_proc);
 
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
-    if (ctx->transform_mode == TRANSFORM_HASH)
+    if (do_transform)
       row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
     row_count++;
     switch (ctx->row_mode) {
@@ -370,7 +368,7 @@ VALUE safe_query_argv(query_ctx *ctx) {
   if (column_count > MAX_CONVERTED_COLUMNS)
     rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
 
-  int do_transform = (ctx->transform_mode == TRANSFORM_ARGV);
+  int do_transform = !NIL_P(ctx->transform_proc);
   int return_rows = (ctx->row_mode != ROW_YIELD);
 
   int row_count = 0;
@@ -381,8 +379,7 @@ VALUE safe_query_argv(query_ctx *ctx) {
     if (do_transform)
       row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
     else if (return_rows)
-      row = rb_ary_new_from_values(column_count, row_values);
-    
+      row = column_count == 1 ? row_values[0] : rb_ary_new_from_values(column_count, row_values);
     
     switch (ctx->row_mode) {
       case ROW_YIELD:
@@ -452,7 +449,7 @@ VALUE safe_query_single_row(query_ctx *ctx) {
 
   if (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
-    if (ctx->transform_mode == TRANSFORM_HASH)
+    if (!NIL_P(ctx->transform_proc))
       row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
   }
 
@@ -469,10 +466,14 @@ VALUE safe_query_single_row_argv(query_ctx *ctx) {
   int column_count = sqlite3_column_count(ctx->stmt);
   if (column_count > MAX_CONVERTED_COLUMNS)
     rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
+  int do_transform = !NIL_P(ctx->transform_proc);
 
   if (stmt_iterate(ctx)) {
     row_to_row_values(ctx->stmt, column_count, row_values);
-    row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
+    if (do_transform)
+      row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
+    else
+      row = column_count == 1 ? row_values[0] : rb_ary_new_from_values(column_count, row_values);
   }
 
   RB_GC_GUARD(row_values[0]);
@@ -534,25 +535,24 @@ VALUE safe_query_single_value(query_ctx *ctx) {
 
 enum batch_mode {
   BATCH_EXECUTE,
-  BATCH_QUERY_ARY,
   BATCH_QUERY_HASH,
+  BATCH_QUERY_ARGV,
+  BATCH_QUERY_ARY,
   BATCH_QUERY_SINGLE_COLUMN
 };
 
 static VALUE batch_iterate_argv(query_ctx *ctx);
 
 static inline VALUE batch_iterate_hash(query_ctx *ctx) {
-  if (ctx->transform_mode == TRANSFORM_ARGV)
-    return batch_iterate_argv(ctx);
-
   VALUE rows = rb_ary_new();
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
   VALUE column_names = get_column_names(ctx->stmt, column_count);
+  const int do_transform = !NIL_P(ctx->transform_proc);
 
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, column_names);
-    if (ctx->transform_mode == TRANSFORM_HASH)
+    if (do_transform)
       row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
     rb_ary_push(rows, row);
   }
@@ -587,10 +587,14 @@ static inline VALUE batch_iterate_argv(query_ctx *ctx) {
   int column_count = sqlite3_column_count(ctx->stmt);
   if (column_count > MAX_CONVERTED_COLUMNS)
     rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
+  int do_transform = !NIL_P(ctx->transform_proc);
 
   while (stmt_iterate(ctx)) {
     row_to_row_values(ctx->stmt, column_count, row_values);
-    row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
+    if (do_transform)
+      row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
+    else
+      row = column_count == 1 ? row_values[0] : rb_ary_new_from_values(column_count, row_values);
     rb_ary_push(rows, row);
   }
 
@@ -628,11 +632,14 @@ static inline void batch_iterate(query_ctx *ctx, enum batch_mode mode, VALUE *ro
     case BATCH_EXECUTE:
       while (stmt_iterate(ctx));
       break;
-    case BATCH_QUERY_ARY:
-      *rows = batch_iterate_ary(ctx);
-      break;
     case BATCH_QUERY_HASH:
       *rows = batch_iterate_hash(ctx);
+      break;
+    case BATCH_QUERY_ARGV:
+      *rows = batch_iterate_argv(ctx);
+      break;
+    case BATCH_QUERY_ARY:
+      *rows = batch_iterate_ary(ctx);
       break;
     case BATCH_QUERY_SINGLE_COLUMN:
       *rows = batch_iterate_single_column(ctx);
@@ -772,7 +779,17 @@ VALUE safe_batch_execute(query_ctx *ctx) {
 }
 
 VALUE safe_batch_query(query_ctx *ctx) {
-  return batch_run(ctx, BATCH_QUERY_HASH);
+  switch (ctx->query_mode) {
+    case QUERY_HASH:
+      return batch_run(ctx, BATCH_QUERY_HASH);
+    case QUERY_ARGV:
+      return batch_run(ctx, BATCH_QUERY_ARGV);
+    case QUERY_ARY:
+      return batch_run(ctx, BATCH_QUERY_ARY);
+    default:
+      rb_raise(cError, "Invalid query mode (safe_batch_query)");
+  }
+  
 }
 
 VALUE safe_batch_query_ary(query_ctx *ctx) {

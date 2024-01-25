@@ -46,15 +46,6 @@ static inline Iterator_t *self_to_iterator(VALUE obj) {
   return iterator;
 }
 
-static inline enum iterator_mode symbol_to_mode(VALUE sym) {
-  if (sym == SYM_hash)          return ITERATOR_HASH;
-  if (sym == SYM_argv)          return ITERATOR_ARGV;
-  if (sym == SYM_ary)           return ITERATOR_ARY;
-  if (sym == SYM_single_column) return ITERATOR_SINGLE_COLUMN;
-
-  rb_raise(cError, "Invalid iterator mode");
-}
-
 /* Initializes an iterator using the given query object and iteration mode. The
  * iteration mode is one of: `:hash`, `:ary`, or `:single_column`. An iterator
  * is normally returned from one of the methods `Query#each`/`Query#each_hash`,
@@ -67,28 +58,10 @@ static inline enum iterator_mode symbol_to_mode(VALUE sym) {
  * @param mode [Symbol] iteration mode
  * @return [void]
  */
-VALUE Iterator_initialize(VALUE self, VALUE query, VALUE mode) {
+VALUE Iterator_initialize(VALUE self, VALUE query) {
   Iterator_t *iterator = self_to_iterator(self);
-
   iterator->query = query;
-  iterator->mode = symbol_to_mode(mode);
-
   return Qnil;
-}
-
-typedef VALUE (*each_method)(VALUE);
-
-inline each_method mode_to_each_method(enum iterator_mode mode) {
-  switch (mode) {
-    case ITERATOR_ARGV:
-      return Query_each_argv;
-    case ITERATOR_ARY:
-      return Query_each_ary;
-    case ITERATOR_SINGLE_COLUMN:
-      return Query_each_single_column;
-    default:
-      return Query_each_hash;
-  }
 }
 
 /* Iterates through the associated query's result set using the iteration mode
@@ -102,24 +75,10 @@ inline each_method mode_to_each_method(enum iterator_mode mode) {
 VALUE Iterator_each(VALUE self) {
   if (rb_block_given_p()) {
     Iterator_t *iterator = self_to_iterator(self);
-    each_method method = mode_to_each_method(iterator->mode);
-    method(iterator->query);
+    Query_each(iterator->query);
   }
 
   return self;
-}
-
-typedef VALUE (*next_method)(int, VALUE *, VALUE);
-
-inline next_method mode_to_next_method(enum iterator_mode mode) {
-  switch (mode) {
-    case ITERATOR_ARY:
-      return Query_next_ary;
-    case ITERATOR_SINGLE_COLUMN:
-      return Query_next_single_column;
-    default:
-      return Query_next_hash;
-  }
 }
 
 /* Returns the next 1 or more rows from the associated query's result set
@@ -140,23 +99,9 @@ inline next_method mode_to_next_method(enum iterator_mode mode) {
  */
 VALUE Iterator_next(int argc, VALUE *argv, VALUE self) {
   Iterator_t *iterator = self_to_iterator(self);
-  next_method method = mode_to_next_method(iterator->mode);
-  VALUE result = method(argc, argv, iterator->query);
+  VALUE result = Query_next(argc, argv, iterator->query);
 
   return rb_block_given_p() ? self : result;
-}
-
-typedef VALUE (*to_a_method)(VALUE);
-
-inline to_a_method mode_to_to_a_method(enum iterator_mode mode) {
-  switch (mode) {
-    case ITERATOR_ARY:
-      return Query_to_a_ary;
-    case ITERATOR_SINGLE_COLUMN:
-      return Query_to_a_single_column;
-    default:
-      return Query_to_a_hash;
-  }
 }
 
 /* Returns all rows from the associated query's result set according to the
@@ -166,19 +111,7 @@ inline to_a_method mode_to_to_a_method(enum iterator_mode mode) {
  */
 VALUE Iterator_to_a(VALUE self) {
   Iterator_t *iterator = self_to_iterator(self);
-  to_a_method method = mode_to_to_a_method(iterator->mode);
-  return method(iterator->query);
-}
-
-inline VALUE mode_to_symbol(Iterator_t *iterator) {
-  switch (iterator->mode) {
-    case ITERATOR_ARY:
-      return SYM_ary;
-    case ITERATOR_SINGLE_COLUMN:
-      return SYM_single_column;
-    default:
-      return SYM_hash;
-  }
+  return Query_to_a(iterator->query);
 }
 
 /* Returns a short string representation of the iterator instance, including the
@@ -188,9 +121,8 @@ inline VALUE mode_to_symbol(Iterator_t *iterator) {
  */
 VALUE Iterator_inspect(VALUE self) {
   VALUE cname = rb_class_name(CLASS_OF(self));
-  VALUE sym = mode_to_symbol(self_to_iterator(self));
 
-  return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, sym);
+  return rb_sprintf("#<%"PRIsVALUE":%p>", cname, (void*)self);
 }
 
 void Init_ExtraliteIterator(void) {
@@ -201,7 +133,7 @@ void Init_ExtraliteIterator(void) {
 
   rb_include_module(cIterator, rb_mEnumerable);
 
-  rb_define_method(cIterator, "initialize", Iterator_initialize, 2);
+  rb_define_method(cIterator, "initialize", Iterator_initialize, 1);
   rb_define_method(cIterator, "each", Iterator_each, 0);
   rb_define_method(cIterator, "inspect", Iterator_inspect, 0);
   rb_define_method(cIterator, "next", Iterator_next, -1);
