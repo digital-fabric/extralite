@@ -272,7 +272,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
  *     db.query('select * from foo where x = :bar', 'bar' => 42)
  *     db.query('select * from foo where x = :bar', ':bar' => 42)
  */
-VALUE Database_query_hash(int argc, VALUE *argv, VALUE self) {
+VALUE Database_query(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_hash, QUERY_HASH);
 }
 
@@ -326,8 +326,8 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
- *   db.query_single_row(sql, *parameters) -> {...}
- *   db.query_single_row(transform, sql, *parameters) -> {...}
+ *   db.query_single(sql, *parameters) -> {...}
+ *   db.query_single(transform, sql, *parameters) -> {...}
  *
  * Runs a query returning a single row as a hash.
  *
@@ -336,23 +336,23 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
  * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
- *     db.query_single_row('select * from foo where x = ?', 42)
+ *     db.query_single('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
  * specified using a hash, where keys are either strings are symbols. String
  * keys can include or omit the `:` prefix. The following are equivalent:
  *
- *     db.query_single_row('select * from foo where x = :bar', bar: 42)
- *     db.query_single_row('select * from foo where x = :bar', 'bar' => 42)
- *     db.query_single_row('select * from foo where x = :bar', ':bar' => 42)
+ *     db.query_single('select * from foo where x = :bar', bar: 42)
+ *     db.query_single('select * from foo where x = :bar', 'bar' => 42)
+ *     db.query_single('select * from foo where x = :bar', ':bar' => 42)
  */
-VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_row, QUERY_HASH);
+VALUE Database_query_single(int argc, VALUE *argv, VALUE self) {
+  return Database_perform_query(argc, argv, self, safe_query_single_row_hash, QUERY_HASH);
 }
 
 /* call-seq:
- *   db.query_single_row_argv(sql, *parameters) -> {...}
- *   db.query_single_row_argv(transform, sql, *parameters) -> {...}
+ *   db.query_single_argv(sql, *parameters) -> {...}
+ *   db.query_single_argv(transform, sql, *parameters) -> {...}
  *
  * Runs a query returning a single row as a hash.
  *
@@ -361,107 +361,22 @@ VALUE Database_query_single_row(int argc, VALUE *argv, VALUE self) {
  * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
- *     db.query_single_row('select * from foo where x = ?', 42)
+ *     db.query_single_argv('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
  * specified using a hash, where keys are either strings are symbols. String
  * keys can include or omit the `:` prefix. The following are equivalent:
  *
- *     db.query_single_row('select * from foo where x = :bar', bar: 42)
- *     db.query_single_row('select * from foo where x = :bar', 'bar' => 42)
- *     db.query_single_row('select * from foo where x = :bar', ':bar' => 42)
+ *     db.query_single_argv('select * from foo where x = :bar', bar: 42)
+ *     db.query_single_argv('select * from foo where x = :bar', 'bar' => 42)
+ *     db.query_single_argv('select * from foo where x = :bar', ':bar' => 42)
  */
-VALUE Database_query_single_row_argv(int argc, VALUE *argv, VALUE self) {
+VALUE Database_query_single_argv(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_single_row_argv, QUERY_ARGV);
 }
 
-/* call-seq:
- *   db.query_transform_hash_single_row(transform, sql, *parameters) -> {...}
- *
- * Runs a query returning a single row using the given transform proc to
- * transform the row. The row is passed to the transform proc as a hash.
- *
- *     transform = ->(h) { MyModel.new(h) }
- *     db.query_transform_hash_single_row(transform, 'select * from foo where x = ?', 42)
- *
- * @param transform [Proc] transform proc
- * @param sql [String] SQL query string
- * @return [any] transformed row
- */
-VALUE Database_query_transform_hash_single_row(int argc, VALUE *argv, VALUE self) {
-  if (argc < 2)
-    rb_raise(eArgumentError, "Invalid arguments");
-  return Database_perform_query(argc, argv, self, safe_query_single_row, QUERY_HASH);
-  // return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], QUERY_HASH);
-}
-
-/* call-seq:
- *   db.query_transform_argv_single_row(transform, sql, *parameters) -> {...}
- *
- * Runs a query returning a single row using the given transform proc to
- * transform the row. The row is passed to the transform proc as a list of values.
- *
- *     transform = ->(a, b, c) { "#{a} #{b} #{c}" }
- *     db.query_transform_argv_single_row(transform, 'select a, b, c from foo where x = ?', 42)
- *
- * @param transform [Proc] transform proc
- * @param sql [String] SQL query string
- * @return [any] transformed row
- */
-VALUE Database_query_transform_argv_single_row(int argc, VALUE *argv, VALUE self) {
-  if (argc < 2)
-    rb_raise(eArgumentError, "Invalid arguments");
-  return Database_perform_query(argc, argv, self, safe_query_single_row, QUERY_ARGV);
-  // return Database_perform_query_transform(argc - 1, argv + 1, self, safe_query_single_row, argv[0], QUERY_ARGV);
-}
-
-/* call-seq:
- *   db.query_single_column(sql, *parameters, &block) -> [...]
- *
- * Runs a query returning single column values. If a block is given, it will be called
- * for each value. Otherwise, an array containing all values is returned.
- *
- * Query parameters to be bound to placeholders in the query can be specified as
- * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as an array, the query should specify parameters using
- * `?`:
- *
- *     db.query_single_column('select x from foo where x = ?', 42)
- *
- * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
- *
- *     db.query_single_column('select x from foo where x = :bar', bar: 42)
- *     db.query_single_column('select x from foo where x = :bar', 'bar' => 42)
- *     db.query_single_column('select x from foo where x = :bar', ':bar' => 42)
- */
-VALUE Database_query_single_column(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_column, QUERY_ARGV);
-}
-
-/* call-seq:
- *   db.query_single_value(sql, *parameters) -> value
- *
- * Runs a query returning a single value from the first row.
- *
- * Query parameters to be bound to placeholders in the query can be specified as
- * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as an array, the query should specify parameters using
- * `?`:
- *
- *     db.query_single_value('select x from foo where x = ?', 42)
- *
- * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
- *
- *     db.query_single_value('select x from foo where x = :bar', bar: 42)
- *     db.query_single_value('select x from foo where x = :bar', 'bar' => 42)
- *     db.query_single_value('select x from foo where x = :bar', ':bar' => 42)
- */
-VALUE Database_query_single_value(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_value, QUERY_ARGV);
+VALUE Database_query_single_ary(int argc, VALUE *argv, VALUE self) {
+  return Database_perform_query(argc, argv, self, safe_query_single_row_ary, QUERY_ARY);
 }
 
 /* call-seq:
@@ -602,12 +517,12 @@ VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
 }
 
 /* call-seq:
- *   db.batch_query_single_column(sql, params_array) -> rows
- *   db.batch_query_single_column(sql, enumerable) -> rows
- *   db.batch_query_single_column(sql, callable) -> rows
- *   db.batch_query_single_column(sql, params_array) { |rows| ... } -> changes
- *   db.batch_query_single_column(sql, enumerable) { |rows| ... } -> changes
- *   db.batch_query_single_column(sql, callable) { |rows| ... } -> changes
+ *   db.batch_query_argv(sql, params_array) -> rows
+ *   db.batch_query_argv(sql, enumerable) -> rows
+ *   db.batch_query_argv(sql, callable) -> rows
+ *   db.batch_query_argv(sql, params_array) { |rows| ... } -> changes
+ *   db.batch_query_argv(sql, enumerable) { |rows| ... } -> changes
+ *   db.batch_query_argv(sql, callable) { |rows| ... } -> changes
  *
  * Executes the given query for each list of parameters in the given paramter
  * source. If a block is given, it is called with the resulting rows for each
@@ -619,21 +534,21 @@ VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
  *       [1, 2],
  *       [3, 4]
  *     ]
- *     db.batch_query_ary('insert into foo values (?, ?) returning baz', records)
+ *     db.batch_query_argv('insert into foo values (?, ?) returning baz', records)
  *     #=> [2, 4]
  * *
  * @param sql [String] query SQL
  * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
  * @return [Array<any>, Integer] Total number of changes effected
  */
-VALUE Database_batch_query_single_column(VALUE self, VALUE sql, VALUE parameters) {
+VALUE Database_batch_query_argv(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_ARGV, ROW_MULTI, ALL_ROWS);
 
-  return rb_ensure(SAFE(safe_batch_query_single_column), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+  return rb_ensure(SAFE(safe_batch_query_argv), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
 /* call-seq:
@@ -1242,61 +1157,61 @@ void Init_ExtraliteDatabase(void) {
 
   #define DEF(s, f, a) rb_define_method(cDatabase, s, f, a)
 
-  DEF("backup",                     Database_backup, -1);
-  DEF("busy_timeout=",              Database_busy_timeout_set, 1);
-  DEF("changes",                    Database_changes, 0);
-  DEF("close",                      Database_close, 0);
-  DEF("closed?",                    Database_closed_p, 0);
-  DEF("columns",                    Database_columns, 1);
-  DEF("errcode",                    Database_errcode, 0);
-  DEF("errmsg",                     Database_errmsg, 0);
+  DEF("backup",                 Database_backup, -1);
+  DEF("batch_execute",          Database_batch_execute, 2);
+  DEF("batch_query",            Database_batch_query, 2);
+  DEF("batch_query_ary",        Database_batch_query_ary, 2);
+  DEF("batch_query_argv",       Database_batch_query_argv, 2);
+  DEF("batch_query_hash",       Database_batch_query, 2);
+  DEF("busy_timeout=",          Database_busy_timeout_set, 1);
+  DEF("changes",                Database_changes, 0);
+  DEF("close",                  Database_close, 0);
+  DEF("closed?",                Database_closed_p, 0);
+  DEF("columns",                Database_columns, 1);
+  DEF("errcode",                Database_errcode, 0);
+  DEF("errmsg",                 Database_errmsg, 0);
 
   #ifdef HAVE_SQLITE3_ERROR_OFFSET
-  DEF("error_offset",               Database_error_offset, 0);
+  DEF("error_offset",           Database_error_offset, 0);
   #endif
 
-  DEF("execute",                    Database_execute, -1);
-  DEF("batch_execute",              Database_batch_execute, 2);
-  DEF("batch_query",                Database_batch_query, 2);
-  DEF("batch_query_ary",            Database_batch_query_ary, 2);
-  DEF("batch_query_single_column",  Database_batch_query_single_column, 2);
-  DEF("filename",                   Database_filename, -1);
-  DEF("gvl_release_threshold",      Database_gvl_release_threshold_get, 0);
-  DEF("gvl_release_threshold=",     Database_gvl_release_threshold_set, 1);
-  DEF("initialize",                 Database_initialize, -1);
-  DEF("inspect",                    Database_inspect, 0);
-  DEF("interrupt",                  Database_interrupt, 0);
-  DEF("last_insert_rowid",          Database_last_insert_rowid, 0);
-  DEF("limit",                      Database_limit, -1);
-  DEF("on_progress",                Database_on_progress, 1);
+  DEF("execute",                Database_execute, -1);
+  DEF("filename",               Database_filename, -1);
+  DEF("gvl_release_threshold",  Database_gvl_release_threshold_get, 0);
+  DEF("gvl_release_threshold=", Database_gvl_release_threshold_set, 1);
+  DEF("initialize",             Database_initialize, -1);
+  DEF("inspect",                Database_inspect, 0);
+  DEF("interrupt",              Database_interrupt, 0);
+  DEF("last_insert_rowid",      Database_last_insert_rowid, 0);
+  DEF("limit",                  Database_limit, -1);
 
-  DEF("prepare",                    Database_prepare_hash, -1);
-  DEF("prepare_argv",               Database_prepare_argv, -1);
-  DEF("prepare_ary",                Database_prepare_ary, -1);
+  #ifdef HAVE_SQLITE3_LOAD_EXTENSION
+  DEF("load_extension",         Database_load_extension, 1);
+  #endif
 
-  DEF("query",                      Database_query_hash, -1);
-  DEF("query_argv",                 Database_query_argv, -1);
-  DEF("query_ary",                  Database_query_ary, -1);
-  DEF("query_hash",                 Database_query_hash, -1);
-  DEF("query_single_column",        Database_query_single_column, -1);
-  DEF("query_single_row",           Database_query_single_row, -1);
-  DEF("query_single_row_argv",      Database_query_single_row_argv, -1);
-  DEF("query_single_value",         Database_query_single_value, -1);
-
-  DEF("read_only?",                 Database_read_only_p, 0);
-  DEF("status",                     Database_status, -1);
-  DEF("total_changes",              Database_total_changes, 0);
-  DEF("trace",                      Database_trace, 0);
+  DEF("on_progress",            Database_on_progress, 1);
+  DEF("prepare",                Database_prepare_hash, -1);
+  DEF("prepare_argv",           Database_prepare_argv, -1);
+  DEF("prepare_ary",            Database_prepare_ary, -1);
+  DEF("prepare_hash",           Database_prepare_hash, -1);
+  DEF("query",                  Database_query, -1);
+  DEF("query_argv",             Database_query_argv, -1);
+  DEF("query_ary",              Database_query_ary, -1);
+  DEF("query_hash",             Database_query, -1);
+  DEF("query_single",           Database_query_single, -1);
+  DEF("query_single_ary",       Database_query_single_ary, -1);
+  DEF("query_single_argv",      Database_query_single_argv, -1);
+  DEF("query_single_hash",      Database_query_single, -1);
+  DEF("read_only?",             Database_read_only_p, 0);
+  DEF("status",                 Database_status, -1);
+  DEF("total_changes",          Database_total_changes, 0);
+  DEF("trace",                  Database_trace, 0);
 
   #ifdef EXTRALITE_ENABLE_CHANGESET
-  DEF("track_changes",              Database_track_changes, -1);
+  DEF("track_changes",          Database_track_changes, -1);
   #endif
   
-  DEF("transaction_active?",        Database_transaction_active_p, 0);
-
-#ifdef HAVE_SQLITE3_LOAD_EXTENSION
-  DEF("load_extension",             Database_load_extension, 1);
-#endif
+  DEF("transaction_active?",    Database_transaction_active_p, 0);
 
   cBlob           = rb_define_class_under(mExtralite, "Blob", rb_cString);
   cError          = rb_define_class_under(mExtralite, "Error", rb_eStandardError);

@@ -416,9 +416,12 @@ VALUE safe_query_ary(query_ctx *ctx) {
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
   int row_count = 0;
+  int do_transform = !NIL_P(ctx->transform_proc);
 
   while (stmt_iterate(ctx)) {
     row = row_to_ary(ctx->stmt, column_count);
+    if (do_transform)
+      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
     row_count++;
     switch (ctx->row_mode) {
       case ROW_YIELD:
@@ -439,7 +442,7 @@ VALUE safe_query_ary(query_ctx *ctx) {
   return ROW_MULTI_P(ctx->row_mode) ? array : Qnil;
 }
 
-VALUE safe_query_single_row(query_ctx *ctx) {
+VALUE safe_query_single_row_hash(query_ctx *ctx) {
   int column_count;
   VALUE row = Qnil;
   VALUE column_names;
@@ -488,49 +491,19 @@ VALUE safe_query_single_row_argv(query_ctx *ctx) {
   return row;
 }
 
-VALUE safe_query_single_column(query_ctx *ctx) {
-  VALUE array = ROW_MULTI_P(ctx->row_mode) ? rb_ary_new() : Qnil;
-  VALUE value = Qnil;
+VALUE safe_query_single_row_ary(query_ctx *ctx) {
   int column_count = sqlite3_column_count(ctx->stmt);
-  int row_count = 0;
+  VALUE row = Qnil;
+  int do_transform = !NIL_P(ctx->transform_proc);
 
-  if (column_count != 1) rb_raise(cError, "Expected query result to have 1 column");
-
-  while (stmt_iterate(ctx)) {
-    value = get_column_value(ctx->stmt, 0, sqlite3_column_type(ctx->stmt, 0));
-    row_count++;
-    switch (ctx->row_mode) {
-      case ROW_YIELD:
-        rb_yield(value);
-        break;
-      case ROW_MULTI:
-        rb_ary_push(array, value);
-        break;
-      case ROW_SINGLE:
-        return value;
-    }
-    if (ctx->max_rows != ALL_ROWS && row_count >= ctx->max_rows)
-      return ROW_MULTI_P(ctx->row_mode) ? array : ctx->self;
+  if (stmt_iterate(ctx)) {
+    row = row_to_ary(ctx->stmt, column_count);
+    if (do_transform)
+      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
   }
 
-  RB_GC_GUARD(value);
-  RB_GC_GUARD(array);
-  return ROW_MULTI_P(ctx->row_mode) ? array : Qnil;
-}
-
-VALUE safe_query_single_value(query_ctx *ctx) {
-  int column_count;
-  VALUE value = Qnil;
-
-  column_count = sqlite3_column_count(ctx->stmt);
-  if (column_count != 1)
-    rb_raise(cError, "Expected query result to have 1 column");
-
-  if (stmt_iterate(ctx))
-    value = get_column_value(ctx->stmt, 0, sqlite3_column_type(ctx->stmt, 0));
-
-  RB_GC_GUARD(value);
-  return value;
+  RB_GC_GUARD(row);
+  return row;
 }
 
 enum batch_mode {
@@ -538,7 +511,6 @@ enum batch_mode {
   BATCH_QUERY_HASH,
   BATCH_QUERY_ARGV,
   BATCH_QUERY_ARY,
-  BATCH_QUERY_SINGLE_COLUMN
 };
 
 static VALUE batch_iterate_argv(query_ctx *ctx);
@@ -567,9 +539,12 @@ static inline VALUE batch_iterate_ary(query_ctx *ctx) {
   VALUE rows = rb_ary_new();
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
+  int do_transform = !NIL_P(ctx->transform_proc);
 
   while (stmt_iterate(ctx)) {
     row = row_to_ary(ctx->stmt, column_count);
+    if (do_transform)
+      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
     rb_ary_push(rows, row);
   }
 
@@ -611,22 +586,6 @@ static inline VALUE batch_iterate_argv(query_ctx *ctx) {
   return rows;
 }
 
-static inline VALUE batch_iterate_single_column(query_ctx *ctx) {
-  VALUE rows = rb_ary_new();
-  VALUE value = Qnil;
-  int column_count = sqlite3_column_count(ctx->stmt);
-  if (column_count != 1) rb_raise(cError, "Expected query result to have 1 column");
-
-  while (stmt_iterate(ctx)) {
-    value = get_column_value(ctx->stmt, 0, sqlite3_column_type(ctx->stmt, 0));
-    rb_ary_push(rows, value);
-  }
-
-  RB_GC_GUARD(value);
-  RB_GC_GUARD(rows);
-  return rows;
-}
-
 static inline void batch_iterate(query_ctx *ctx, enum batch_mode mode, VALUE *rows) {
   switch (mode) {
     case BATCH_EXECUTE:
@@ -640,9 +599,6 @@ static inline void batch_iterate(query_ctx *ctx, enum batch_mode mode, VALUE *ro
       break;
     case BATCH_QUERY_ARY:
       *rows = batch_iterate_ary(ctx);
-      break;
-    case BATCH_QUERY_SINGLE_COLUMN:
-      *rows = batch_iterate_single_column(ctx);
       break;
   }
 }
@@ -788,16 +744,15 @@ VALUE safe_batch_query(query_ctx *ctx) {
       return batch_run(ctx, BATCH_QUERY_ARY);
     default:
       rb_raise(cError, "Invalid query mode (safe_batch_query)");
-  }
-  
+  }  
 }
 
 VALUE safe_batch_query_ary(query_ctx *ctx) {
   return batch_run(ctx, BATCH_QUERY_ARY);
 }
 
-VALUE safe_batch_query_single_column(query_ctx *ctx) {
-  return batch_run(ctx, BATCH_QUERY_SINGLE_COLUMN);
+VALUE safe_batch_query_argv(query_ctx *ctx) {
+  return batch_run(ctx, BATCH_QUERY_ARGV);
 }
 
 VALUE safe_query_columns(query_ctx *ctx) {

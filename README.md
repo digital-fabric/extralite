@@ -138,15 +138,15 @@ db.query_ary 'select * from foo'
 #=> [[1, 2, 3], [4, 5, 6]]
 
 # get a single column
-db.query_single_column 'select x from foo'
+db.query_argv 'select x from foo'
 #=> [1, 4]
 
 # get a single row
-db.query_single_row 'select * from foo order by x desc limit 1'
+db.query_single 'select * from foo order by x desc limit 1'
 #=> { x: 4, y: 5, z: 6 }
 
 # get a single value (a single column from a single row)
-db.query_single_value 'select z from foo order by x desc limit 1'
+db.query_single_argv 'select z from foo order by x desc limit 1'
 #=> 6
 ```
 
@@ -297,21 +297,19 @@ query = db.prepare('select * from foo where x = ?', 1)
 
 Just like the `Database` interface, prepared queries offer various ways of
 retrieving records: as hashes, as arrays, as single column values, as a single
-value:
+value. Normally, you'll set the mode by calling the appropriate `#prepare_xxx`
+method:
 
 ```ruby
 # get records as arrays
-query.to_a_ary
+query = db.prepare_ary('select * from foo where x = ?', 1)
+query.to_a
 #=> [[1, 2, 3]]
 
 # get records as single values
-query2 = db.prepare('select z from foo where x = ?', 1)
-query2.to_a_single_column
+query2 = db.prepare_argv('select z from foo where x = ?', 1)
+query2.to_a
 #=> [3]
-
-# get a single value
-query2.next_single_column
-#=> 3
 ```
 
 ### Fetching Single Records or Batches of Records
@@ -334,11 +332,12 @@ query.next(10)
 
 # Fetch the next row as an array
 query.reset
-query.next_ary
+q.mode = :ary
+query.next
 #=> [1, 2, 3]
 
 # Fetch the next row as a single column
-db.prepare('select z from foo').next_single_column
+db.prepare_argv('select z from foo').next
 #=> 3
 ```
 
@@ -361,13 +360,16 @@ using the familiar `#each` method:
 
 ```ruby
 # iterate over records as hashes
+query = db.prepare('select * from foo')
 query.each { |r| ... }
 
 # iterate over records as arrays
-query.each_ary { |r| ... }
+query = db.prepare_ary('select * from foo')
+query.each { |r| ... }
 
 # iterate over records as single values
-query.each_single_column { |v| }
+query = db.prepare_argv('select a, b, c from foo')
+query.each { |a, b, c| ... }
 ```
 
 ### Prepared Query as an Enumerable
@@ -390,9 +392,9 @@ methods, such as `#map`, `#select`, `#inject`, `#lazy` etc. You can also
 instantiate an iterator explicitly:
 
 ```ruby
-# You need to pass the query to iterate over and the access mode (hash, ary, or
-# single_column):
-iterator = Extralite::Iterator(query, :hash)
+# You need to pass the query to iterate over:
+iterator = Extralite::Iterator(query)
+iterator.each { |r| ... }
 ```
 
 ### Value Transforms in Prepared Queries
@@ -403,10 +405,6 @@ return ORM instances from your queries), or on a list of values (useful when you
 need to make additional transformations on specific fields, such as JSON
 fields).
 
-Setting a transform will only affect the following methods: `#to_a`, `#next`,
-`#each` and `#batch_query`. All other methods will behave the same even if a
-transform is set.
-
 To set a hash transform use `#transform`:
 
 ```ruby
@@ -416,7 +414,7 @@ q.transform_hash { |h| Item.new(h) }
 q.bind(42).next #=> Item instance
 ```
 
-To set a transform on individual values, use `#transform_argv`:
+To set a transform on individual values, use `#transform`:
 
 ```ruby
 q = db.prepare('select a, b, c from items order by a')

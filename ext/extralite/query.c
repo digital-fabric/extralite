@@ -14,6 +14,10 @@ VALUE cQuery;
 ID ID_inspect;
 ID ID_slice;
 
+VALUE SYM_hash;
+VALUE SYM_argv;
+VALUE SYM_ary;
+
 #define DB_GVL_MODE(query) Database_prepare_gvl_mode(query->db_struct)
 
 static size_t Query_size(const void *ptr) {
@@ -620,4 +624,12 @@ void Init_ExtraliteQuery(void) {
 
   ID_inspect  = rb_intern("inspect");
   ID_slice    = rb_intern("slice");
+
+  SYM_hash          = ID2SYM(rb_intern("hash"));
+  SYM_argv          = ID2SYM(rb_intern("argv"));
+  SYM_ary           = ID2SYM(rb_intern("ary"));
+
+  rb_gc_register_mark_object(SYM_hash);
+  rb_gc_register_mark_object(SYM_argv);
+  rb_gc_register_mark_object(SYM_ary);
 }

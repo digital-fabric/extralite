@@ -1042,6 +1042,39 @@ class QueryTransformTest < MiniTest::Test
     ], buf
   end
 
+  def test_transform_ary
+    @q5.mode = :ary
+    q = @q5.transform { |h| MyModel.new(h) }
+    assert_equal @q5, q
+
+    o = @q5.bind(1).next
+    assert_kind_of MyModel, o
+    assert_equal([1, 2], o.values)
+
+    o = @q5.bind(4).next
+    assert_kind_of MyModel, o
+    assert_equal([4, 5], o.values)
+
+    assert_equal [
+      [[1, 2]],
+      [[4, 5]]
+    ], @q5.batch_query([[1], [4]]).map { |a| a.map(&:values) }
+
+    @q6.mode = :ary
+    @q6.transform { |h| MyModel.new(h) }
+    assert_equal [
+      [1, 2],
+      [4, 5]
+    ], @q6.to_a.map(&:values)
+
+    buf = []
+    @q6.each { |r| buf << r.values }
+    assert_equal [
+      [1, 2],
+      [4, 5]
+    ], buf
+  end
+
   def test_transform_argv_single_column
     q = @q1.transform { |c| JSON.parse(c, symbolize_names: true) }
     assert_equal @q1, q
