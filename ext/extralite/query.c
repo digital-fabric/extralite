@@ -585,11 +585,20 @@ VALUE Query_inspect(VALUE self) {
   return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, sql);
 }
 
+/* Returns the query mode.
+ *
+ * @return [Symbol] query mode
+ */
 VALUE Query_mode_get(VALUE self) {
   Query_t *query = self_to_query(self);
   return query_mode_to_symbol(query->query_mode);
 }
 
+/* Sets the query mode. This can be one of `:hash`, `:argv`, `:ary`.
+ *
+ * @param [Symbol] query mode
+ * @return [Symbol] query mode
+ */
 VALUE Query_mode_set(VALUE self, VALUE mode) {
   Query_t *query = self_to_query(self);
   query->query_mode = symbol_to_query_mode(mode);

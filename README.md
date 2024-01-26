@@ -41,8 +41,8 @@ latest features and enhancements.
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem).
 - Support for [concurrency](#concurrency) out of the box for multi-threaded
   and multi-fibered apps.
-- A variety of methods for [retrieving data](#basic-usage) - hashes, array, single rows, single
-  values.
+- A variety of ways to [retrieve data](#query-modes) - hashes, arrays, single
+  columns, single rows, [transforms](#value-transforms).
 - Support for [external iteration](#iterating-over-records-in-a-prepared-query),
   allowing iterating through single records or batches of records.
 - [Prepared queries](#prepared-queries).
