@@ -44,7 +44,7 @@ def extralite_run_map(count)
 end
 
 def extralite_run_transform(count)
-  results = $extralite_db.query_transform_hash(TRANSFORM, 'select * from foo')
+  results = $extralite_db.query(TRANSFORM, 'select * from foo')
   raise unless results.size == count
 end
 

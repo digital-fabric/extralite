@@ -19,7 +19,7 @@ puts "DB_PATH = #{DB_PATH.inspect}"
 $extralite_db = Extralite::Database.new(DB_PATH, gvl_release_threshold: -1)
 
 def prepare_database(count)
-  $extralite_db.query('create table if not exists foo ( a integer primary key, b text )')
+  $extralite_db.query('create table if not exists foo (b text)')
   $extralite_db.query('delete from foo')
   $extralite_db.query('begin')
   count.times { $extralite_db.query('insert into foo (b) values (?)', "hello#{rand(1000)}" )}
@@ -36,16 +36,22 @@ class Model
   end
 end
 
-TRANSFORM = ->(a, b) { { a: a, b: b } }
+TRANSFORM = ->(b) { { b: b } }
 
-def extralite_run_map(count)
+def extralite_run_ary_map(count)
   results = []
-  $extralite_db.query_ary('select * from foo') { |(a, b)| results << { a: a, b: b } }
+  $extralite_db.query_ary('select * from foo') { |(b)| results << { b: b } }
+  raise unless results.size == count
+end
+
+def extralite_run_argv_map(count)
+  results = []
+  $extralite_db.query_argv('select * from foo') { |b| results << { b: b } }
   raise unless results.size == count
 end
 
 def extralite_run_transform(count)
-  results = $extralite_db.query_transform_argv(TRANSFORM, 'select * from foo')
+  results = $extralite_db.query_argv(TRANSFORM, 'select * from foo')
   raise unless results.size == count
 end
 
@@ -56,7 +62,8 @@ end
   bm = Benchmark.ips do |x|
     x.config(:time => 5, :warmup => 2)
 
-    x.report("map")       { extralite_run_map(c) }
+    x.report("ary_map")   { extralite_run_ary_map(c) }
+    x.report("argv_map")  { extralite_run_argv_map(c) }
     x.report("transform") { extralite_run_transform(c) }
 
     x.compare!
