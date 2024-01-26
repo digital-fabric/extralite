@@ -182,10 +182,9 @@ VALUE Database_read_only_p(VALUE self) {
   return (open == 1) ? Qtrue : Qfalse;
 }
 
-/* call-seq:
- *   db.close -> db
- *
- * Closes the database.
+/* Closes the database.
+ * 
+ * @return [Extralite::Database] database
  */
 VALUE Database_close(VALUE self) {
   int rc;
@@ -265,45 +264,46 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
  *     db.query('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
+ * specified using keyword arguments:
  *
  *     db.query('select * from foo where x = :bar', bar: 42)
- *     db.query('select * from foo where x = :bar', 'bar' => 42)
- *     db.query('select * from foo where x = :bar', ':bar' => 42)
+ * 
+ * @overload query(sql, ...)
+ *   @param sql [String] SQL statement
+ *   @return [Array<Hash>, Integer] rows or total changes
+ * @overload query(transform, sql, ...)
+ *   @param transform [Proc] transform proc
+ *   @param sql [String] SQL statement
+ *   @return [Array<Hash>, Integer] rows or total changes
  */
 VALUE Database_query(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_hash, QUERY_HASH);
 }
 
-/* call-seq:
- *    db.query_argv(transform, sql, *parameters, &block) -> [...]
- *
- * Runs a query and transforms rows through the given transform poc. Each row is
+/* Runs a query and transforms rows through the given transform poc. Each row is
  * provided to the transform proc as a list of values. If a block is given, it
  * will be called for each row. Otherwise, an array containing all rows is
  * returned.
  *
- * Query parameters to be bound to placeholders in the query can be specified as
- * a list of values or as a hash mapping parameter names to values. When
- * parameters are given as an array, the query should specify parameters using
- * `?`:
+ * If a transform block is given, it is called for each row, with the row values
+ * splatted:
  *
  *     transform = ->(a, b, c) { a * 100 + b * 10 + c }
  *     db.query_argv(transform, 'select a, b, c from foo where c = ?', 42)
  *
- * @param transform [Proc] transform proc
- * @param sql [String] SQL query string
- * @return [Array<Hash, any>, Integer] array containing result set or number of rows
+ * @overload query_argv(sql, ...)
+ *   @param sql [String] SQL statement
+ *   @return [Array<Array, any>, Integer] rows or total changes
+ * @overload query_argv(transform, sql, ...)
+ *   @param transform [Proc] transform proc
+ *   @param sql [String] SQL statement
+ *   @return [Array<Array, any>, Integer] rows or total changes
  */
 VALUE Database_query_argv(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_argv, QUERY_ARGV);
 }
 
-/* call-seq:
- *   db.query_ary(sql, *parameters, &block) -> [...]
- *
- * Runs a query returning rows as arrays. If a block is given, it will be called
+/* Runs a query returning rows as arrays. If a block is given, it will be called
  * for each row. Otherwise, an array containing all rows is returned.
  *
  * Query parameters to be bound to placeholders in the query can be specified as
@@ -320,16 +320,20 @@ VALUE Database_query_argv(int argc, VALUE *argv, VALUE self) {
  *     db.query_ary('select * from foo where x = :bar', bar: 42)
  *     db.query_ary('select * from foo where x = :bar', 'bar' => 42)
  *     db.query_ary('select * from foo where x = :bar', ':bar' => 42)
+ * 
+ * @overload query_ary(sql, ...)
+ *   @param sql [String] SQL statement
+ *   @return [Array<Array>, Integer] rows or total changes
+ * @overload query_ary(transform, sql, ...)
+ *   @param transform [Proc] transform proc
+ *   @param sql [String] SQL statement
+ *   @return [Array<Array>, Integer] rows or total changes
  */
 VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_ary, QUERY_ARY);
 }
 
-/* call-seq:
- *   db.query_single(sql, *parameters) -> {...}
- *   db.query_single(transform, sql, *parameters) -> {...}
- *
- * Runs a query returning a single row as a hash.
+/* Runs a query returning a single row as a hash.
  *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
@@ -339,22 +343,23 @@ VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
  *     db.query_single('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
+ * specified using keyword arguments:
  *
  *     db.query_single('select * from foo where x = :bar', bar: 42)
- *     db.query_single('select * from foo where x = :bar', 'bar' => 42)
- *     db.query_single('select * from foo where x = :bar', ':bar' => 42)
+ *
+ * @overload query_single(sql, ...) -> row
+ *   @param sql [String] SQL statement
+ *   @return [Array, any] row
+ * @overload query_single(transform, sql, ...) -> row
+ *   @param transform [Proc] transform proc
+ *   @param sql [String] SQL statement
+ *   @return [Array, any] row
  */
 VALUE Database_query_single(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_single_row_hash, QUERY_HASH);
 }
 
-/* call-seq:
- *   db.query_single_argv(sql, *parameters) -> {...}
- *   db.query_single_argv(transform, sql, *parameters) -> {...}
- *
- * Runs a query returning a single row as a hash.
+/* Runs a query returning a single row as an array or a single value.
  *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
@@ -364,17 +369,44 @@ VALUE Database_query_single(int argc, VALUE *argv, VALUE self) {
  *     db.query_single_argv('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
+ * specified using keyword arguments:
  *
  *     db.query_single_argv('select * from foo where x = :bar', bar: 42)
- *     db.query_single_argv('select * from foo where x = :bar', 'bar' => 42)
- *     db.query_single_argv('select * from foo where x = :bar', ':bar' => 42)
+ * 
+ * @overload query_single_argv(sql, ...) -> row
+ *   @param sql [String] SQL statement
+ *   @return [Array, any] row
+ * @overload query_single_argv(transform, sql, ...) -> row
+ *   @param transform [Proc] transform proc
+ *   @param sql [String] SQL statement
+ *   @return [Array, any] row
  */
 VALUE Database_query_single_argv(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_single_row_argv, QUERY_ARGV);
 }
 
+/* Runs a query returning a single row as an array.
+ *
+ * Query parameters to be bound to placeholders in the query can be specified as
+ * a list of values or as a hash mapping parameter names to values. When
+ * parameters are given as an array, the query should specify parameters using
+ * `?`:
+ *
+ *     db.query_single_ary('select * from foo where x = ?', 42)
+ *
+ * Named placeholders are specified using `:`. The placeholder values are
+ * specified using keyword arguments:
+ *
+ *     db.query_single_ary('select * from foo where x = :bar', bar: 42)
+ * 
+ * @overload query_single_ary(sql, ...) -> row
+ *   @param sql [String] SQL statement
+ *   @return [Array, any] row
+ * @overload query_single_ary(transform, sql, ...) -> row
+ *   @param transform [Proc] transform proc
+ *   @param sql [String] SQL statement
+ *   @return [Array, any] row
+ */
 VALUE Database_query_single_ary(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_single_row_ary, QUERY_ARY);
 }
@@ -393,21 +425,16 @@ VALUE Database_query_single_ary(int argc, VALUE *argv, VALUE self) {
  *     db.execute('update foo set x = ? where y = ?', 42, 43)
  *
  * Named placeholders are specified using `:`. The placeholder values are
- * specified using a hash, where keys are either strings are symbols. String
- * keys can include or omit the `:` prefix. The following are equivalent:
+ * specified using keyword arguments:
  *
  *     db.execute('update foo set x = :bar', bar: 42)
- *     db.execute('update foo set x = :bar', 'bar' => 42)
- *     db.execute('update foo set x = :bar', ':bar' => 42)
  */
 VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_changes, QUERY_HASH);
 }
 
 /* call-seq:
- *   db.batch_execute(sql, params_array) -> changes
- *   db.batch_execute(sql, enumerable) -> changes
- *   db.batch_execute(sql, callable) -> changes
+ *   db.batch_execute(sql, params_source) -> changes
  *
  * Executes the given query for each list of parameters in the paramter source.
  * If an enumerable is given, it is iterated and each of its values is used as
@@ -447,12 +474,8 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
 }
 
 /* call-seq:
- *   db.batch_query(sql, params_array) -> rows
- *   db.batch_query(sql, enumerable) -> rows
- *   db.batch_query(sql, callable) -> rows
- *   db.batch_query(sql, params_array) { |rows| ... } -> changes
- *   db.batch_query(sql, enumerable) { |rows| ... } -> changes
- *   db.batch_query(sql, callable) { |rows| ... } -> changes
+ *   db.batch_query(sql, params_source) -> rows
+ *   db.batch_query(sql, params_source) { |rows| ... } -> changes
  *
  * Executes the given query for each list of parameters in the given paramter
  * source. If a block is given, it is called with the resulting rows for each
@@ -482,12 +505,8 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
 }
 
 /* call-seq:
- *   db.batch_query_ary(sql, params_array) -> rows
- *   db.batch_query_ary(sql, enumerable) -> rows
- *   db.batch_query_ary(sql, callable) -> rows
- *   db.batch_query_ary(sql, params_array) { |rows| ... } -> changes
- *   db.batch_query_ary(sql, enumerable) { |rows| ... } -> changes
- *   db.batch_query_ary(sql, callable) { |rows| ... } -> changes
+ *   db.batch_query_ary(sql, params_source) -> rows
+ *   db.batch_query_ary(sql, params_source) { |rows| ... } -> changes
  *
  * Executes the given query for each list of parameters in the given paramter
  * source. If a block is given, it is called with the resulting rows for each
@@ -517,12 +536,8 @@ VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
 }
 
 /* call-seq:
- *   db.batch_query_argv(sql, params_array) -> rows
- *   db.batch_query_argv(sql, enumerable) -> rows
- *   db.batch_query_argv(sql, callable) -> rows
- *   db.batch_query_argv(sql, params_array) { |rows| ... } -> changes
- *   db.batch_query_argv(sql, enumerable) { |rows| ... } -> changes
- *   db.batch_query_argv(sql, callable) { |rows| ... } -> changes
+ *   db.batch_query_argv(sql, params_source) -> rows
+ *   db.batch_query_argv(sql, params_source) { |rows| ... } -> changes
  *
  * Executes the given query for each list of parameters in the given paramter
  * source. If a block is given, it is called with the resulting rows for each
@@ -551,19 +566,17 @@ VALUE Database_batch_query_argv(VALUE self, VALUE sql, VALUE parameters) {
   return rb_ensure(SAFE(safe_batch_query_argv), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
-/* call-seq:
- *   db.columns(sql) -> columns
- *
- * Returns the column names for the given query, without running it.
+/* Returns the column names for the given query, without running it.
+ * 
+ * @return [Array<String>] column names
  */
 VALUE Database_columns(VALUE self, VALUE sql) {
   return Database_perform_query(1, &sql, self, safe_query_columns, QUERY_HASH);
 }
 
-/* call-seq:
- *   db.last_insert_rowid -> int
- *
- * Returns the rowid of the last inserted row.
+/* Returns the rowid of the last inserted row.
+ * 
+ * @return [Integer] last rowid
  */
 VALUE Database_last_insert_rowid(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -571,10 +584,9 @@ VALUE Database_last_insert_rowid(VALUE self) {
   return INT2FIX(sqlite3_last_insert_rowid(db->sqlite3_db));
 }
 
-/* call-seq:
- *   db.changes -> int
- *
- * Returns the number of changes made to the database by the last operation.
+/* Returns the number of changes made to the database by the last operation.
+ * 
+ * @return [Integer] number of changes
  */
 VALUE Database_changes(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -582,10 +594,14 @@ VALUE Database_changes(VALUE self) {
   return INT2FIX(sqlite3_changes(db->sqlite3_db));
 }
 
-/* call-seq: db.filename -> string db.filename(db_name) -> string
- *
- * Returns the database filename. If db_name is given, returns the filename for
+/* Returns the database filename. If db_name is given, returns the filename for
  * the respective attached database.
+ * 
+ * @overload filename()
+ *   @return [String] database filename
+ * @overload filename(db_name)
+ *   @param db_name [String] attached database name
+ *   @return [String] database filename
  */
 VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
   const char *db_name;
@@ -598,10 +614,9 @@ VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
   return filename ? rb_str_new_cstr(filename) : Qnil;
 }
 
-/* call-seq:
- *   db.transaction_active? -> bool
- *
- * Returns true if a transaction is currently in progress.
+/* Returns true if a transaction is currently in progress.
+ * 
+ * @return [bool] is transaction in progress
  */
 VALUE Database_transaction_active_p(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -610,10 +625,10 @@ VALUE Database_transaction_active_p(VALUE self) {
 }
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
-/* call-seq:
- *   db.load_extension(path) -> db
- *
- * Loads an extension with the given path.
+/* Loads an extension with the given path.
+ * 
+ * @param path [String] extension file path
+ * @return [Extralite::Database] database
  */
 VALUE Database_load_extension(VALUE self, VALUE path) {
   Database_t *db = self_to_open_database(self);
@@ -643,33 +658,60 @@ static inline VALUE Database_prepare(int argc, VALUE *argv, VALUE self, VALUE mo
 /* call-seq:
  *   db.prepare(sql) -> Extralite::Query
  *   db.prepare(sql, ...) -> Extralite::Query
- *   db.prepare(sql) { ... } -> Extralite::Query
+ *   db.prepare(sql, ...) { ... } -> Extralite::Query
  *
- * Creates a prepared statement with the given SQL query in hash mode. If query
+ * Creates a prepared query with the given SQL query in hash mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
+ * 
+ * @param sql [String] SQL statement
+ * @return [Extralite::Query] prepared query
  */
 VALUE Database_prepare_hash(int argc, VALUE *argv, VALUE self) {
   return Database_prepare(argc, argv, self, SYM_hash);
 }
 
+/* call-seq:
+ *   db.prepare_argv(sql) -> Extralite::Query
+ *   db.prepare_argv(sql, ...) -> Extralite::Query
+ *   db.prepare_argv(sql, ...) { ... } -> Extralite::Query
+ *
+ * Creates a prepared query with the given SQL query in argv mode. If query
+ * parameters are given, they are bound to the query. If a block is given, it is
+ * used as a transform proc.
+ * 
+ * @param sql [String] SQL statement
+ * @return [Extralite::Query] prepared query
+ */
 VALUE Database_prepare_argv(int argc, VALUE *argv, VALUE self) {
   return Database_prepare(argc, argv, self, SYM_argv);
 }
 
+/* call-seq:
+ *   db.prepare_ary(sql) -> Extralite::Query
+ *   db.prepare_ary(sql, ...) -> Extralite::Query
+ *   db.prepare_ary(sql, ...) { ... } -> Extralite::Query
+ *
+ * Creates a prepared query with the given SQL query in ary mode. If query
+ * parameters are given, they are bound to the query. If a block is given, it is
+ * used as a transform proc.
+ * 
+ * @param sql [String] SQL statement
+ * @return [Extralite::Query] prepared query
+ */
 VALUE Database_prepare_ary(int argc, VALUE *argv, VALUE self) {
   return Database_prepare(argc, argv, self, SYM_ary);
 }
 
-/* call-seq:
- *   db.interrupt -> db
- *
- * Interrupts a long running query. This method is to be called from a different
+/* Interrupts a long running query. This method is to be called from a different
  * thread than the one running the query. Upon calling `#interrupt` the running
  * query will stop and raise an `Extralite::InterruptError` exception.
  *
  * It is not safe to call `#interrupt` on a database that is about to be closed.
- * For more information, consult the [sqlite3 API docs](https://sqlite.org/c3ref/interrupt.html).
+ * For more information, consult the [sqlite3 API
+ * docs](https://sqlite.org/c3ref/interrupt.html).
+ * 
+ * @return [Extralite::Database] database
  */
 VALUE Database_interrupt(VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -743,16 +785,19 @@ VALUE backup_cleanup(VALUE ptr) {
   return Qnil;
 }
 
-/* call-seq:
- *   db.backup(dest) -> db
- *   db.backup(dest) { |remaining, total| } -> db
- *
- * Creates a backup of the database to the given destination, which can be
+/* Creates a backup of the database to the given destination, which can be
  * either a filename or a database instance. In order to monitor the backup
  * progress you can pass a block that will be called periodically by the backup
  * method with two arguments: the remaining page count, and the total page
  * count, which can be used to display the progress to the user or to collect
  * statistics.
+ * 
+ *     db_src.backup(db_dest) do |remaining, total|
+ *       puts "Backing up #{remaining}/#{total}"
+ *     end
+ * 
+ * @param dest [String, Extralite::Database] backup destination
+ * @return [Extralite::Database] source database
  */
 VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
   VALUE dst;
@@ -798,12 +843,17 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
   return self;
 }
 
-/* call-seq:
- *   Extralite.runtime_status(op[, reset]) -> [value, highwatermark]
- *
- * Returns runtime status values for the given op as an array containing the
+/* Returns runtime status values for the given op as an array containing the
  * current value and the high water mark value. To reset the high water mark,
  * pass true as reset.
+ *
+ * @overload runtime_status(op)
+ *   @param op [Integer] op
+ *   @return [Array<Integer>] array containing the value and high water mark
+ * @overload runtime_status(op, reset)
+ *   @param op [Integer] op
+ *   @param reset [Integer, bool] reset flag
+ *   @return [Array<Integer>] array containing the value and high water mark
  */
 VALUE Extralite_runtime_status(int argc, VALUE* argv, VALUE self) {
   VALUE op, reset;
@@ -817,12 +867,17 @@ VALUE Extralite_runtime_status(int argc, VALUE* argv, VALUE self) {
   return rb_ary_new3(2, LONG2FIX(cur), LONG2FIX(hwm));
 }
 
-/* call-seq:
- *   db.status(op[, reset]) -> [value, highwatermark]
- *
- * Returns database status values for the given op as an array containing the
+/* Returns database status values for the given op as an array containing the
  * current value and the high water mark value. To reset the high water mark,
  * pass true as reset.
+ * 
+ * @overload status(op)
+ *   @param op [Integer] op
+ *   @return [Array<Integer>] array containing the value and high water mark
+ * @overload status(op, reset)
+ *   @param op [Integer] op
+ *   @param reset [Integer, bool] reset flag
+ *   @return [Array<Integer>] array containing the value and high water mark
  */
 VALUE Database_status(int argc, VALUE *argv, VALUE self) {
   VALUE op, reset;
@@ -838,12 +893,16 @@ VALUE Database_status(int argc, VALUE *argv, VALUE self) {
   return rb_ary_new3(2, INT2NUM(cur), INT2NUM(hwm));
 }
 
-/* call-seq:
- *   db.limit(category) -> value
- *   db.limit(category, new_value) -> prev_value
- *
- * Returns the current limit for the given category. If a new value is given,
+/* Returns the current limit for the given category. If a new value is given,
  * sets the limit to the new value and returns the previous value.
+ * 
+ * @overload limit(category)
+ *   @param category [Integer] category
+ *   @return [Integer] limit value
+ * @overload limit(category, new_value)
+ *   @param category [Integer] category
+ *   @param new_value [Integer] new value
+ *   @return [Integer] old value
  */
 VALUE Database_limit(int argc, VALUE *argv, VALUE self) {
   VALUE category, new_value;
@@ -859,9 +918,7 @@ VALUE Database_limit(int argc, VALUE *argv, VALUE self) {
   return INT2NUM(value);
 }
 
-/* call-seq: db.busy_timeout=(sec) -> db db.busy_timeout=nil -> db
- *
- * Sets the busy timeout for the database, in seconds or fractions thereof. To
+/* Sets the busy timeout for the database, in seconds or fractions thereof. To
  * disable the busy timeout, set it to 0 or nil. When the busy timeout is set to
  * a value larger than zero, running a query when the database is locked will
  * cause the program to wait for the database to become available. If the
@@ -884,10 +941,7 @@ VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
   return self;
 }
 
-/* call-seq:
- *   db.total_changes -> value
- *
- * Returns the total number of changes made to the database since opening it.
+/* Returns the total number of changes made to the database since opening it.
  * 
  * @return [Integer] total changes
  */
@@ -898,12 +952,8 @@ VALUE Database_total_changes(VALUE self) {
   return INT2NUM(value);
 }
 
-/* call-seq:
- *   db.trace { |sql| } -> db
- *   db.trace -> db
- *
- * Installs or removes a block that will be invoked for every SQL statement
- * executed.
+/* Installs or removes a block that will be invoked for every SQL statement
+ * executed. To stop tracing, call `#trace` without a block.
  * 
  * @return [Extralite::Database] database
  */
@@ -961,11 +1011,7 @@ void Database_reset_progress_handler(VALUE self, Database_t *db) {
   sqlite3_busy_handler(db->sqlite3_db, NULL, NULL);
 }
 
-/* call-seq:
- *   db.on_progress(period) { } -> db
- *   db.on_progress(0) -> db
- *
- * Installs or removes a progress handler that will be executed periodically
+/* Installs or removes a progress handler that will be executed periodically
  * while a query is running. This method can be used to support switching
  * between fibers and threads or implementing timeouts for running queries.
  *
@@ -1034,10 +1080,7 @@ VALUE Database_on_progress(VALUE self, VALUE period) {
   return self;
 }
 
-/* call-seq:
- *   db.errcode -> errcode
- *
- * Returns the last error code for the database.
+/* Returns the last error code for the database.
  * 
  * @return [Integer] last error code
  */
@@ -1047,10 +1090,7 @@ VALUE Database_errcode(VALUE self) {
   return INT2NUM(sqlite3_errcode(db->sqlite3_db));
 }
 
-/* call-seq:
- *   db.errmsg -> errmsg
- *
- * Returns the last error message for the database.
+/* Returns the last error message for the database.
  * 
  * @return [String] last error message
  */
@@ -1061,10 +1101,7 @@ VALUE Database_errmsg(VALUE self) {
 }
 
 #ifdef HAVE_SQLITE3_ERROR_OFFSET
-/* call-seq:
- *   db.error_offset -> ofs
- *
- * Returns the offset for the last error. This is useful for indicating where in
+/* Returns the offset for the last error. This is useful for indicating where in
  * the SQL string an error was encountered.
  * 
  * @return [Integer] offset in the last submitted SQL string
