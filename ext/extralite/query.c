@@ -488,7 +488,12 @@ VALUE Query_columns(VALUE self) {
  */
 VALUE Query_clone(VALUE self) {
   Query_t *query = self_to_query(self);
-  return rb_funcall(cQuery, ID_new, 3, query->db, query->sql, query_mode_to_symbol(query->query_mode));
+  VALUE args[] = {
+    query->db,
+    query->sql,
+    query_mode_to_symbol(query->query_mode)
+  };
+  return rb_funcall_with_block(cQuery, ID_new, 3, args, query->transform_proc);
 }
 
 /* Closes the query. Attempting to run a closed query will raise an error.

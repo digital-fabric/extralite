@@ -162,7 +162,7 @@ static inline VALUE row_to_ary(sqlite3_stmt *stmt, int column_count) {
   return row;
 }
 
-static inline void row_to_row_values(sqlite3_stmt *stmt, int column_count, VALUE *values) {
+static inline void row_to_argv_values(sqlite3_stmt *stmt, int column_count, VALUE *values) {
   for (int i = 0; i < column_count; i++) {
     values[i] = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
   }
@@ -356,17 +356,32 @@ VALUE safe_query_hash(query_ctx *ctx) {
   return ROW_MULTI_P(ctx->row_mode) ? array : Qnil;
 }
 
-#define MAX_CONVERTED_COLUMNS 8
+#define MAX_ARGV_COLUMNS 8
+#define NIL_ARGV_VALUES {Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil}
+#define ARGV_GC_GUARD(values) \
+  RB_GC_GUARD(values[0]); \
+  RB_GC_GUARD(values[1]); \
+  RB_GC_GUARD(values[2]); \
+  RB_GC_GUARD(values[3]); \
+  RB_GC_GUARD(values[4]); \
+  RB_GC_GUARD(values[5]); \
+  RB_GC_GUARD(values[6]); \
+  RB_GC_GUARD(values[7])
+
+#define ARGV_GET_ROW(ctx, column_count, argv_values, row, do_transform, return_rows) \
+  row_to_argv_values(ctx->stmt, column_count, argv_values); \
+  if (do_transform) \
+    row = rb_funcall2(ctx->transform_proc, ID_call, column_count, argv_values); \
+  else if (return_rows) \
+    row = column_count == 1 ? argv_values[0] : rb_ary_new_from_values(column_count, argv_values);
 
 VALUE safe_query_argv(query_ctx *ctx) {
   VALUE array = ROW_MULTI_P(ctx->row_mode) ? rb_ary_new() : Qnil;
-  VALUE row_values[MAX_CONVERTED_COLUMNS] = {
-    Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil
-  };
+  VALUE argv_values[MAX_ARGV_COLUMNS] = NIL_ARGV_VALUES;
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
-  if (column_count > MAX_CONVERTED_COLUMNS)
-    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
+  if (column_count > MAX_ARGV_COLUMNS)
+    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_ARGV_COLUMNS);
 
   int do_transform = !NIL_P(ctx->transform_proc);
   int return_rows = (ctx->row_mode != ROW_YIELD);
@@ -374,19 +389,13 @@ VALUE safe_query_argv(query_ctx *ctx) {
   int row_count = 0;
   while (stmt_iterate(ctx)) {
     row_count++;
-    row_to_row_values(ctx->stmt, column_count, row_values);
-    
-    if (do_transform)
-      row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
-    else if (return_rows)
-      row = column_count == 1 ? row_values[0] : rb_ary_new_from_values(column_count, row_values);
-    
+    ARGV_GET_ROW(ctx, column_count, argv_values, row, do_transform, return_rows);
     switch (ctx->row_mode) {
       case ROW_YIELD:
         if (do_transform)
           rb_yield(row);
         else
-          rb_yield_values2(column_count, row_values);
+          rb_yield_values2(column_count, argv_values);
         break;
       case ROW_MULTI:
         rb_ary_push(array, row);
@@ -398,14 +407,7 @@ VALUE safe_query_argv(query_ctx *ctx) {
       return ROW_MULTI_P(ctx->row_mode) ? array : ctx->self;
   }
 
-  RB_GC_GUARD(row_values[0]);
-  RB_GC_GUARD(row_values[1]);
-  RB_GC_GUARD(row_values[2]);
-  RB_GC_GUARD(row_values[3]);
-  RB_GC_GUARD(row_values[4]);
-  RB_GC_GUARD(row_values[5]);
-  RB_GC_GUARD(row_values[6]);
-  RB_GC_GUARD(row_values[7]);
+  ARGV_GC_GUARD(argv_values);
   RB_GC_GUARD(row);
   RB_GC_GUARD(array);
   return ROW_MULTI_P(ctx->row_mode) ? array : Qnil;
@@ -462,31 +464,18 @@ VALUE safe_query_single_row_hash(query_ctx *ctx) {
 }
 
 VALUE safe_query_single_row_argv(query_ctx *ctx) {
-  VALUE row_values[MAX_CONVERTED_COLUMNS] = {
-    Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil
-  };
+  VALUE argv_values[MAX_ARGV_COLUMNS] = NIL_ARGV_VALUES;
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
-  if (column_count > MAX_CONVERTED_COLUMNS)
-    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
+  if (column_count > MAX_ARGV_COLUMNS)
+    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_ARGV_COLUMNS);
   int do_transform = !NIL_P(ctx->transform_proc);
 
   if (stmt_iterate(ctx)) {
-    row_to_row_values(ctx->stmt, column_count, row_values);
-    if (do_transform)
-      row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
-    else
-      row = column_count == 1 ? row_values[0] : rb_ary_new_from_values(column_count, row_values);
+    ARGV_GET_ROW(ctx, column_count, argv_values, row, do_transform, 1);
   }
 
-  RB_GC_GUARD(row_values[0]);
-  RB_GC_GUARD(row_values[1]);
-  RB_GC_GUARD(row_values[2]);
-  RB_GC_GUARD(row_values[3]);
-  RB_GC_GUARD(row_values[4]);
-  RB_GC_GUARD(row_values[5]);
-  RB_GC_GUARD(row_values[6]);
-  RB_GC_GUARD(row_values[7]);
+  ARGV_GC_GUARD(argv_values);
   RB_GC_GUARD(row);
   return row;
 }
@@ -512,8 +501,6 @@ enum batch_mode {
   BATCH_QUERY_ARGV,
   BATCH_QUERY_ARY,
 };
-
-static VALUE batch_iterate_argv(query_ctx *ctx);
 
 static inline VALUE batch_iterate_hash(query_ctx *ctx) {
   VALUE rows = rb_ary_new();
@@ -555,32 +542,19 @@ static inline VALUE batch_iterate_ary(query_ctx *ctx) {
 
 static inline VALUE batch_iterate_argv(query_ctx *ctx) {
   VALUE rows = rb_ary_new();
-  VALUE row_values[MAX_CONVERTED_COLUMNS] = {
-    Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil, Qnil
-  };
+  VALUE argv_values[MAX_ARGV_COLUMNS] = NIL_ARGV_VALUES;
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
-  if (column_count > MAX_CONVERTED_COLUMNS)
-    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_CONVERTED_COLUMNS);
+  if (column_count > MAX_ARGV_COLUMNS)
+    rb_raise(cError, "Conversion is supported only up to %d columns", MAX_ARGV_COLUMNS);
   int do_transform = !NIL_P(ctx->transform_proc);
 
   while (stmt_iterate(ctx)) {
-    row_to_row_values(ctx->stmt, column_count, row_values);
-    if (do_transform)
-      row = rb_funcall2(ctx->transform_proc, ID_call, column_count, row_values);
-    else
-      row = column_count == 1 ? row_values[0] : rb_ary_new_from_values(column_count, row_values);
+    ARGV_GET_ROW(ctx, column_count, argv_values, row, do_transform, 1);
     rb_ary_push(rows, row);
   }
 
-  RB_GC_GUARD(row_values[0]);
-  RB_GC_GUARD(row_values[1]);
-  RB_GC_GUARD(row_values[2]);
-  RB_GC_GUARD(row_values[3]);
-  RB_GC_GUARD(row_values[4]);
-  RB_GC_GUARD(row_values[5]);
-  RB_GC_GUARD(row_values[6]);
-  RB_GC_GUARD(row_values[7]);
+  ARGV_GC_GUARD(argv_values);
   RB_GC_GUARD(row);
   RB_GC_GUARD(rows);
   return rows;
