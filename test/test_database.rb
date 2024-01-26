@@ -61,6 +61,12 @@ class DatabaseTest < MiniTest::Test
     assert_equal [[1, 2, 3], [4, 5, 6]], r
   end
 
+  def test_query_argv_with_too_many_columns
+    assert_raises(Extralite::Error) {
+      @db.query_argv('select 1, 2, 3, 4, 5, 6, 7, 8, 9');
+    }
+  end
+
   def test_query_single
     r = @db.query_single('select * from t order by x desc limit 1')
     assert_equal({ x: 4, y: 5, z: 6 }, r)
@@ -965,6 +971,25 @@ class DatabaseTest < MiniTest::Test
     assert_equal [
       { x: 1, y: 2, z: 3},
       { x: 4, y: 5, z: 6}
+    ], q.to_a
+  end
+
+  def test_prepare_argv
+    q = @db.prepare_argv('select * from t order by x')
+    assert_kind_of Extralite::Query, q
+
+    buf = []
+    q.each { |x, y, z| buf << z }
+    assert_equal [3, 6], buf
+  end
+
+  def test_prepare_ary
+    q = @db.prepare_ary('select * from t order by x')
+    assert_kind_of Extralite::Query, q
+
+    assert_equal [
+      [1, 2, 3],
+      [4, 5, 6]
     ], q.to_a
   end
 

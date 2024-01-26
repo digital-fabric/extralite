@@ -48,6 +48,12 @@ class QueryTest < MiniTest::Test
     assert_equal 1, query.next
   end
 
+  def test_prepare_argv_with_too_many_columns
+    q = @db.prepare_argv('select 1, 2, 3, 4, 5, 6, 7, 8, 9')
+
+    assert_raises(Extralite::Error) { q.next }
+  end
+
   def test_prepare_ary
     query = @db.prepare_ary('select 1')
     assert_equal :ary, query.mode
@@ -977,7 +983,27 @@ class QueryTest < MiniTest::Test
     assert_kind_of Extralite::Query, q2
     assert_equal @db, q2.database
     assert_equal q1.sql, q2.sql
-    refute_equal q1, q2
+    refute_same  q1, q2
+
+    q1 = @db.prepare_argv('select x from t')
+    q2 = q1.dup
+
+    assert_kind_of Extralite::Query, q2
+    assert_equal @db, q2.database
+    assert_equal q1.sql, q2.sql
+    refute_same  q1, q2
+    assert_equal :argv, q2.mode
+  end
+
+  def test_query_dup_with_transform
+    q1 = @db.prepare_ary('select x, y from t') { |a| a * 2 }
+    q2 = q1.dup
+
+    assert_equal [
+      [1, 2, 1, 2],
+      [4, 5, 4, 5],
+      [7, 8, 7, 8],
+    ], q2.to_a
   end
 end
 
