@@ -917,7 +917,7 @@ int Database_progress_handler(void *ptr) {
 
 int Database_busy_handler(void *ptr, int v) {
   Database_t *db = (Database_t *)ptr;
-  rb_funcall(db->progress_handler_proc, ID_call, 0);
+  rb_funcall(db->progress_handler_proc, ID_call, 1, Qtrue);
   return 1;
 }
 
