@@ -81,13 +81,12 @@ module Extralite
     # @param mode [Symbol, String] transaction mode (deferred, immediate or exclusive).
     # @return [Any] the given block's return value
     def transaction(mode = :immediate)
-      execute "begin #{mode} transaction"
-    
       abort = false
+      execute "begin #{mode} transaction"    
       yield self
     rescue => e
       abort = true
-      raise unless e.is_a?(Rollback)
+      e.is_a?(Rollback) ? nil : raise
     ensure
       execute(abort ? 'rollback' : 'commit')
     end
