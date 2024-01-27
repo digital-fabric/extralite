@@ -104,8 +104,7 @@ Usage of the `extralite-bundle` gem is identical to the usage of the normal
 
 ## Getting Started
 
-Here's as an example showing how to open an SQLite database and run some
-queries:
+The following example shows how to open an SQLite database and run some queries:
 
 ```ruby
 db = Extralite::Database.new('mydb.sqlite')
@@ -692,6 +691,12 @@ db.pragma(:journal_mode)
 #=> 'wal'
 ```
 
+You can also pass pragmas when opening the database:
+
+```ruby
+db = Extralite::Database.new('path/to/db', pragma: { foreign_keys: true })
+```
+
 ## Error Handling
 
 Extralite defines various exception classes that are raised when an error is
@@ -720,6 +725,18 @@ that occurred is provided by the following methods:
 Extralite provides a comprehensive set of tools for dealing with concurrency
 issues, and for making sure that running queries on SQLite databases does not
 cause the app to freeze.
+
+**Note**: In order to allow concurrent access your the database, it is highly
+recommended that you set your database to use [WAL journaling
+mode](https://www.sqlite.org/wal.html) for *all* database connections.
+Otherwise, you risking running into performance problems and having queries fail
+with `BusyError` exceptions. You can easily open your database in WAL journaling
+mode by passing a `wal: true` option:
+
+```ruby
+# This will set PRAGMA journal_mode=1 and PRAGMA synchronous=1
+db = Extralite::Database.new('path/to/db', wal: true)
+```
 
 ### The Ruby GVL
 
@@ -796,9 +813,10 @@ db2.busy_timeout = 5
 db2.transaction { }
 ```
 
-For most use cases, setting the busy timeout solves the problem of failing to
-run queries because of a busy database, as normally transactions are
-short-lived.
+As stated above, setting the database to use WAL journaling mode greatly reduces
+contention between different process/threads accessing the same database. For
+most use cases, setting the busy timeout solves the problem of failing to run
+queries because of a busy database, as normally transactions are short-lived.
 
 However, in some cases, such as when running a multi-fibered app or when
 implementing your own timeout mechanisms, you'll want to set a [progress
@@ -806,7 +824,9 @@ handler](#the-progress-handler).
 
 ### Interrupting a Query
 
-To interrupt an ongoing query, use the `#interrupt` method. Normally this is done from a separate thread. Here's a way to implement a timeout using  `#interrupt`:
+To interrupt an ongoing query, use the `#interrupt` method. Normally this is
+done from a separate thread. Here's a way to implement a timeout using
+`#interrupt`:
 
 ```ruby
 def run_query_with_timeout(sql, timeout)
@@ -912,6 +932,39 @@ run_query_with_timeout('select 1 as foo', 5)
 run_query_with_timeout(slow_sql, 5)
 #=> nil
 ```
+
+**Note**: you must not issue any query from within the progress handler.
+
+### Dealing with a Busy Database in the Progress Handler
+
+As mentioned above, the progress handler is also called when the database is
+busy, regardless of the progress period given to `#on_progress`. You can detect
+if the database is busy by checking the first argument passed to the progress
+handler, which will be true when busy:
+
+```ruby
+db.on_progress do |busy|
+  if busy
+    foo
+  else
+    bar
+  end
+end
+```
+
+This allows you to implement separate logic to deal with busy states, for
+example sleeping for a small period of time, or implementing a different timeout
+period.
+
+### Tuning the Progress Handler Period
+
+The progress period passed to `#on_progress` determines how often the progress
+handler will be called. For very simple queries and a big enough period, the
+progress handler will not be called at all. On the other hand, setting the
+period too low might hurt the performance of your queries, since there's some
+overhead to invoking the progress handler, even if it does nothing. Therefore
+you might want to experiment with different period values to see what offers the
+best performance for your specific situation.
 
 ### Extralite and Fibers
 

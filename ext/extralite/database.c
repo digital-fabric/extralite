@@ -16,14 +16,15 @@ ID ID_call;
 ID ID_each;
 ID ID_keys;
 ID ID_new;
+ID ID_pragma;
 ID ID_strip;
 ID ID_to_s;
 ID ID_track;
 
 VALUE SYM_gvl_release_threshold;
+VALUE SYM_pragma;
 VALUE SYM_read_only;
-VALUE SYM_synchronous;
-VALUE SYM_wal_journal_mode;
+VALUE SYM_wal;
 
 #define DB_GVL_MODE(db) Database_prepare_gvl_mode(db)
 
@@ -57,7 +58,7 @@ static const rb_data_type_t Database_type = {
 
 static VALUE Database_allocate(VALUE klass) {
   Database_t *db = ALLOC(Database_t);
-  db->sqlite3_db = 0;
+  db->sqlite3_db = NULL;
   return TypedData_Wrap_Struct(klass, &Database_type, db);
 }
 
@@ -103,35 +104,42 @@ VALUE Database_execute(int argc, VALUE *argv, VALUE self);
 void Database_apply_opts(VALUE self, Database_t *db, VALUE opts) {
   VALUE value = Qnil;
 
+  // :gvl_release_threshold
   value = rb_hash_aref(opts, SYM_gvl_release_threshold);
   if (!NIL_P(value)) db->gvl_release_threshold = NUM2INT(value);
 
-  value = rb_hash_aref(opts, SYM_wal_journal_mode);
-  if (RTEST(value)) {
-    value = rb_str_new_literal("PRAGMA journal_mode=wal");
-    Database_execute(1, &value, self);
-  }
+  // :pragma
+  value = rb_hash_aref(opts, SYM_pragma);
+  if (!NIL_P(value)) rb_funcall(self, ID_pragma, 1, value);
 
-  value = rb_hash_aref(opts, SYM_synchronous);
+  // :wal
+  value = rb_hash_aref(opts, SYM_wal);
   if (RTEST(value)) {
-    value = rb_str_new_literal("PRAGMA synchronous=1");
-    Database_execute(1, &value, self);
+    int rc = sqlite3_exec(db->sqlite3_db, "PRAGMA journal_mode=wal", NULL, NULL, NULL);
+    if (rc != SQLITE_OK)
+      rb_raise(cError, "Failed to set WAL journaling mode: %s", sqlite3_errstr(rc));
+    rc = sqlite3_exec(db->sqlite3_db, "PRAGMA synchronous=1", NULL, NULL, NULL);
+    if (rc != SQLITE_OK)
+      rb_raise(cError, "Failed to set synchronous mode: %s", sqlite3_errstr(rc));
   }
-
-  RB_GC_GUARD(value);
 }
 
-/* Initializes a new SQLite database with the given path and options.
+/* Initializes a new SQLite database with the given path and options:
+ *
+ * - `:gvl_release_threshold` (`Integer`): sets the GVL release threshold (see
+ *   `#gvl_release_threshold=`).
+ * - `:pragma` (`Hash`): one or more pragmas to set upon opening the database.
+ * - `:read_only` (`true`/`false`): opens the database in read-only mode if true.
+ * - `:wal` (`true`/`false`): sets up the database for [WAL journaling
+ *   mode](https://www.sqlite.org/wal.html) by setting `PRAGMA journal_mode=wal`
+ *   and `PRAGMA synchronous=1`.
  *
  * @overload initialize(path)
  *   @param path [String] file path (or ':memory:' for memory database)
  *   @return [void]
- * @overload initialize(path, gvl_release_threshold: , read_only: , synchronous: , wal_journal_mode: )
+ * @overload initialize(path, gvl_release_threshold: , on_progress: , read_only: , wal: )
  *   @param path [String] file path (or ':memory:' for memory database)
- *   @param gvl_release_threshold [Integer] GVL release threshold
- *   @param read_only [boolean] true for opening the database for reading only
- *   @param synchronous [boolean] true to set PRAGMA synchronous=1
- *   @param wal_journal_mode [boolean] true to set PRAGMA journal_mode=wal
+ *   @param options [Hash] options for opening the database
  *   @return [void]
  */
 VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
@@ -145,6 +153,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   int rc = sqlite3_open_v2(StringValueCStr(path), &db->sqlite3_db, flags, NULL);
   if (rc) {
     sqlite3_close_v2(db->sqlite3_db);
+    db->sqlite3_db = NULL;
     rb_raise(cError, "%s", sqlite3_errstr(rc));
   }
 
@@ -195,7 +204,7 @@ VALUE Database_close(VALUE self) {
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
   }
 
-  db->sqlite3_db = 0;
+  db->sqlite3_db = NULL;
   return self;
 }
 
@@ -1258,24 +1267,25 @@ void Init_ExtraliteDatabase(void) {
   cParameterError = rb_define_class_under(mExtralite, "ParameterError", cError);
   eArgumentError  = rb_const_get(rb_cObject, rb_intern("ArgumentError"));
 
-  ID_bind   = rb_intern("bind");
-  ID_call   = rb_intern("call");
-  ID_each   = rb_intern("each");
-  ID_keys   = rb_intern("keys");
-  ID_new    = rb_intern("new");
-  ID_strip  = rb_intern("strip");
-  ID_to_s   = rb_intern("to_s");
-  ID_track  = rb_intern("track");
+  ID_bind         = rb_intern("bind");
+  ID_call         = rb_intern("call");
+  ID_each         = rb_intern("each");
+  ID_keys         = rb_intern("keys");
+  ID_new          = rb_intern("new");
+  ID_pragma       = rb_intern("pragma");
+  ID_strip        = rb_intern("strip");
+  ID_to_s         = rb_intern("to_s");
+  ID_track        = rb_intern("track");
 
   SYM_gvl_release_threshold = ID2SYM(rb_intern("gvl_release_threshold"));
   SYM_read_only             = ID2SYM(rb_intern("read_only"));
-  SYM_synchronous           = ID2SYM(rb_intern("synchronous"));
-  SYM_wal_journal_mode      = ID2SYM(rb_intern("wal_journal_mode"));
+  SYM_pragma                = ID2SYM(rb_intern("pragma"));
+  SYM_wal                   = ID2SYM(rb_intern("wal"));
 
   rb_gc_register_mark_object(SYM_gvl_release_threshold);
   rb_gc_register_mark_object(SYM_read_only);
-  rb_gc_register_mark_object(SYM_synchronous);
-  rb_gc_register_mark_object(SYM_wal_journal_mode);
+  rb_gc_register_mark_object(SYM_pragma);
+  rb_gc_register_mark_object(SYM_wal);
 
   UTF8_ENCODING = rb_utf8_encoding();
 }
