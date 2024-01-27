@@ -14,6 +14,10 @@ VALUE cQuery;
 ID ID_inspect;
 ID ID_slice;
 
+VALUE SYM_hash;
+VALUE SYM_argv;
+VALUE SYM_ary;
+
 #define DB_GVL_MODE(query) Database_prepare_gvl_mode(query->db_struct)
 
 static size_t Query_size(const void *ptr) {
@@ -24,12 +28,14 @@ static void Query_mark(void *ptr) {
   Query_t *query = ptr;
   rb_gc_mark_movable(query->db);
   rb_gc_mark_movable(query->sql);
+  rb_gc_mark_movable(query->transform_proc);
 }
 
 static void Query_compact(void *ptr) {
   Query_t *query = ptr;
   query->db = rb_gc_location(query->db);
   query->sql = rb_gc_location(query->sql);
+  query->transform_proc = rb_gc_location(query->transform_proc);
 }
 
 static void Query_free(void *ptr) {
@@ -48,6 +54,7 @@ static VALUE Query_allocate(VALUE klass) {
   Query_t *query = ALLOC(Query_t);
   query->db = Qnil;
   query->sql = Qnil;
+  query->transform_proc = Qnil;
   query->sqlite3_db = NULL;
   query->stmt = NULL;
   return TypedData_Wrap_Struct(klass, &Query_type, query);
@@ -59,6 +66,27 @@ static inline Query_t *self_to_query(VALUE obj) {
   return query;
 }
 
+static inline enum query_mode symbol_to_query_mode(VALUE sym) {
+  if (sym == SYM_hash)          return QUERY_HASH;
+  if (sym == SYM_argv)          return QUERY_ARGV;
+  if (sym == SYM_ary)           return QUERY_ARY;
+
+  rb_raise(cError, "Invalid query mode");
+}
+
+static inline VALUE query_mode_to_symbol(enum query_mode query_mode) {
+  switch (query_mode) {
+    case QUERY_HASH:
+      return SYM_hash;
+    case QUERY_ARGV:
+      return SYM_argv;
+    case QUERY_ARY:
+      return SYM_ary;
+    default:
+      rb_raise(cError, "Invalid mode");
+  }
+}
+
 /* Initializes a new prepared query with the given database and SQL string. A
  * `Query` is normally instantiated by calling `Database#prepare`:
  *
@@ -66,9 +94,10 @@ static inline Query_t *self_to_query(VALUE obj) {
  *
  * @param db [Extralite::Database] associated database
  * @param sql [String] SQL string
+ * @param mode [Symbol] query mode
  * @return [void]
  */
-VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
+VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
   Query_t *query = self_to_query(self);
 
   sql = rb_funcall(sql, ID_strip, 0);
@@ -77,6 +106,8 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
 
   RB_OBJ_WRITE(self, &query->db, db);
   RB_OBJ_WRITE(self, &query->sql, sql);
+  if (rb_block_given_p())
+    RB_OBJ_WRITE(self, &query->transform_proc, rb_block_proc());
 
   query->db = db;
   query->db_struct = self_to_database(db);
@@ -84,6 +115,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql) {
   query->stmt = NULL;
   query->closed = 0;
   query->eof = 0;
+  query->query_mode = symbol_to_query_mode(mode);
 
   return Qnil;
 }
@@ -175,7 +207,7 @@ VALUE Query_eof_p(VALUE self) {
 
 #define MAX_ROWS(max_rows) (max_rows == SINGLE_ROW ? 1 : max_rows)
 
-static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(query_ctx *)) {
+static inline VALUE Query_perform_next(VALUE self, int max_rows, safe_query_impl call) {
   Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
@@ -187,18 +219,33 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
     query->db_struct,
     query->stmt,
     Qnil,
-    QUERY_MODE(max_rows == SINGLE_ROW ? QUERY_SINGLE_ROW : QUERY_MULTI_ROW),
+    query->transform_proc,
+    query->query_mode,
+    ROW_YIELD_OR_MODE(max_rows == SINGLE_ROW ? ROW_SINGLE : ROW_MULTI),
     MAX_ROWS(max_rows)
   );
   VALUE result = call(&ctx);
   query->eof = ctx.eof;
-  return (ctx.mode == QUERY_YIELD) ? self : result;
+  return (ctx.row_mode == ROW_YIELD) ? self : result;
 }
 
 #define MAX_ROWS_FROM_ARGV(argc, argv) (argc == 1 ? FIX2INT(argv[0]) : SINGLE_ROW)
 
-/* Returns the next 1 or more rows from the associated query's result set as a
- * hash.
+inline safe_query_impl query_impl(enum query_mode query_mode) {
+  switch (query_mode) {
+    case QUERY_HASH:
+      return safe_query_hash;
+    case QUERY_ARGV:
+      return safe_query_argv;
+    case QUERY_ARY:
+      return safe_query_ary;
+    default:
+      rb_raise(cError, "Invalid query mode (query_impl)");
+  }
+}
+
+/* Returns the next 1 or more rows from the associated query's result set. The
+ * row value is returned according to the query mode and the query transform.
  *
  * If no row count is given, a single row is returned. If a row count is given,
  * an array containing up to the `row_count` rows is returned. If `row_count` is
@@ -208,139 +255,40 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, VALUE (*call)(q
  * If a block is given, rows are passed to the block and self is returned.
  *
  * @overload next()
- *   @return [Hash, Extralite::Query] next row or self if block is given
- * @overload next_hash()
- *   @return [Hash, Extralite::Query] next row or self if block is given
+ *   @return [any, Extralite::Query] next row or self if block is given
  * @overload next(row_count)
  *   @param row_count [Integer] maximum row count or -1 for all rows
- *   @return [Array<Hash>, Extralite::Query] next rows or self if block is given
- * @overload next_hash(row_count)
- *   @param row_count [Integer] maximum row count or -1 for all rows
- *   @return [Array<Hash>, Extralite::Query] next rows or self if block is given
+ *   @return [Array<any>, Extralite::Query] next rows or self if block is given
  */
-VALUE Query_next_hash(int argc, VALUE *argv, VALUE self) {
+VALUE Query_next(int argc, VALUE *argv, VALUE self) {
+  Query_t *query = self_to_query(self);
   rb_check_arity(argc, 0, 1);
-  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_hash);
+  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), query_impl(query->query_mode));
 }
 
-/* Returns the next 1 or more rows from the associated query's result set as an
- * array.
+/* Returns all rows in the associated query's result set. Rows are returned
+ * according to the query mode and the query transform.
  *
- * If no row count is given, a single row is returned. If a row count is given,
- * an array containing up to the `row_count` rows is returned. If `row_count` is
- * -1, all rows are returned. If the end of the result set has been reached,
- * `nil` is returned.
- *
- * If a block is given, rows are passed to the block and self is returned.
- *
- * @overload next_ary()
- *   @return [Array, Extralite::Query] next row or self if block is given
- * @overload next_ary(row_count)
- *   @param row_count [Integer] maximum row count or -1 for all rows
- *   @return [Array<Array>, Extralite::Query] next rows or self if block is given
+ * @return [Array<any>] all rows
  */
-VALUE Query_next_ary(int argc, VALUE *argv, VALUE self) {
-  rb_check_arity(argc, 0, 1);
-  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_ary);
-}
-
-/* Returns the next 1 or more rows from the associated query's result set as an
- * single values. If the result set contains more than one column an error is
- * raised.
- *
- * If no row count is given, a single row is returned. If a row count is given,
- * an array containing up to the `row_count` rows is returned. If `row_count` is
- * -1, all rows are returned. If the end of the result set has been reached,
- * `nil` is returned.
- *
- * If a block is given, rows are passed to the block and self is returned.
- *
- * @overload next_ary()
- *   @return [Object, Extralite::Query] next row or self if block is given
- * @overload next_ary(row_count)
- *   @param row_count [Integer] maximum row count or -1 for all rows
- *   @return [Array<Object>, Extralite::Query] next rows or self if block is given
- */
-VALUE Query_next_single_column(int argc, VALUE *argv, VALUE self) {
-  rb_check_arity(argc, 0, 1);
-  return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), safe_query_single_column);
-}
-
-/* Returns all rows in the associated query's result set as hashes.
- *
- * @overload to_a()
- *   @return [Array<Hash>] all rows
- * @overload to_a_hash
- *   @return [Array<Hash>] all rows
- */
-VALUE Query_to_a_hash(VALUE self) {
+VALUE Query_to_a(VALUE self) {
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_hash);
+  return Query_perform_next(self, ALL_ROWS, query_impl(query->query_mode));
 }
 
-/* Returns all rows in the associated query's result set as arrays.
- *
- * @return [Array<Array>] all rows
- */
-VALUE Query_to_a_ary(VALUE self) {
-  Query_t *query = self_to_query(self);
-  query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_ary);
-}
-
-/* Returns all rows in the associated query's result set as single values. If
- * the result set contains more than one column an error is raised.
- *
- * @return [Array<Object>] all rows
- */
-VALUE Query_to_a_single_column(VALUE self) {
-  Query_t *query = self_to_query(self);
-  query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_single_column);
-}
-
-/* Iterates through the result set, passing each row to the given block as a
- * hash. If no block is given, returns a `Extralite::Iterator` instance in hash
- * mode.
+/* Iterates through the result set, passing each row to the given block. If no
+ * block is given, returns a `Extralite::Iterator` instance. Rows are given to
+ * the block according to the query mode and the query transform.
  *
  * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
  */
-VALUE Query_each_hash(VALUE self) {
-  if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_hash);
+VALUE Query_each(VALUE self) {
+  if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 1, self);
 
   Query_t *query = self_to_query(self);
   query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_hash);
-}
-
-/* Iterates through the result set, passing each row to the given block as an
- * array. If no block is given, returns a `Extralite::Iterator` instance in
- * array mode.
- *
- * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
- */
-VALUE Query_each_ary(VALUE self) {
-  if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_ary);
-
-  Query_t *query = self_to_query(self);
-  query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_ary);
-}
-
-/* Iterates through the result set, passing each row to the given block as a
- * single value. If the result set contains more than one column an error is
- * raised. If no block is given, returns a `Extralite::Iterator` instance in
- * single column mode.
- *
- * @return [Extralite::Query, Extralite::Iterator] self or an iterator if no block is given
- */
-VALUE Query_each_single_column(VALUE self) {
-  if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 2, self, SYM_single_column);
-
-  Query_t *query = self_to_query(self);
-  query_reset(query);
-  return Query_perform_next(self, ALL_ROWS, safe_query_single_column);
+  return Query_perform_next(self, ALL_ROWS, query_impl(query->query_mode));
 }
 
 /* call-seq:
@@ -443,7 +391,9 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
     query->db_struct,
     query->stmt,
     parameters,
-    QUERY_MODE(QUERY_MULTI_ROW),
+    Qnil,
+    QUERY_HASH,
+    ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
   );
   return safe_batch_execute(&ctx);
@@ -462,6 +412,8 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
  * invocation of the query, and the total number of changes is returned.
  * Otherwise, an array containing the resulting rows for each invocation is
  * returned.
+ * 
+ * Rows are returned according to the query mode and transform.
  *
  *     q = db.prepare('insert into foo values (?, ?) returning bar, baz')
  *     records = [
@@ -473,7 +425,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
  * *
  * @param sql [String] query SQL
  * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
- * @return [Array<Hash>, Integer] Total number of changes effected
+ * @return [Array<Array>, Integer] Returned rows or total number of changes effected
  */
 VALUE Query_batch_query(VALUE self, VALUE parameters) {
   Query_t *query = self_to_query(self);
@@ -487,98 +439,12 @@ VALUE Query_batch_query(VALUE self, VALUE parameters) {
     query->db_struct,
     query->stmt,
     parameters,
-    QUERY_MODE(QUERY_MULTI_ROW),
+    query->transform_proc,
+    query->query_mode,
+    ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
   );
   return safe_batch_query(&ctx);
-}
-
-/* call-seq:
- *   query.batch_query_ary(sql, params_array) -> rows
- *   query.batch_query_ary(sql, enumerable) -> rows
- *   query.batch_query_ary(sql, callable) -> rows
- *   query.batch_query_ary(sql, params_array) { |rows| ... } -> changes
- *   query.batch_query_ary(sql, enumerable) { |rows| ... } -> changes
- *   query.batch_query_ary(sql, callable) { |rows| ... } -> changes
- *
- * Executes the prepared query for each list of parameters in the given paramter
- * source. If a block is given, it is called with the resulting rows for each
- * invocation of the query, and the total number of changes is returned.
- * Otherwise, an array containing the resulting rows for each invocation is
- * returned. Rows are represented as arrays.
- *
- *     q = db.prepare('insert into foo values (?, ?) returning bar, baz')
- *     records = [
- *       [1, 2],
- *       [3, 4]
- *     ]
- *     q.batch_query_ary(records)
- *     #=> [{ bar: 1, baz: 2 }, { bar: 3, baz: 4}]
- * *
- * @param sql [String] query SQL
- * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
- * @return [Array<Hash>, Integer] Total number of changes effected
- */
-VALUE Query_batch_query_ary(VALUE self, VALUE parameters) {
-  Query_t *query = self_to_query(self);
-  if (query->closed) rb_raise(cError, "Query is closed");
-
-  if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
-
-  query_ctx ctx = QUERY_CTX(
-    self,
-    query->db_struct,
-    query->stmt,
-    parameters,
-    QUERY_MODE(QUERY_MULTI_ROW),
-    ALL_ROWS
-  );
-  return safe_batch_query_ary(&ctx);
-}
-
-/* call-seq:
- *   query.batch_query_single_column(sql, params_array) -> rows
- *   query.batch_query_single_column(sql, enumerable) -> rows
- *   query.batch_query_single_column(sql, callable) -> rows
- *   query.batch_query_single_column(sql, params_array) { |rows| ... } -> changes
- *   query.batch_query_single_column(sql, enumerable) { |rows| ... } -> changes
- *   query.batch_query_single_column(sql, callable) { |rows| ... } -> changes
- *
- * Executes the prepared query for each list of parameters in the given paramter
- * source. If a block is given, it is called with the resulting rows for each
- * invocation of the query, and the total number of changes is returned.
- * Otherwise, an array containing the resulting rows for each invocation is
- * returned. Rows are represented as single values.
- *
- *     q = db.prepare('insert into foo values (?, ?) returning bar, baz')
- *     records = [
- *       [1, 2],
- *       [3, 4]
- *     ]
- *     q.batch_query_single_column(records)
- *     #=> [{ bar: 1, baz: 2 }, { bar: 3, baz: 4}]
- * *
- * @param sql [String] query SQL
- * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
- * @return [Array<Hash>, Integer] Total number of changes effected
- */
-VALUE Query_batch_query_single_column(VALUE self, VALUE parameters) {
-  Query_t *query = self_to_query(self);
-  if (query->closed) rb_raise(cError, "Query is closed");
-
-  if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
-
-  query_ctx ctx = QUERY_CTX(
-    self,
-    query->db_struct,
-    query->stmt,
-    parameters,
-    QUERY_MODE(QUERY_MULTI_ROW),
-    ALL_ROWS
-  );
-  return safe_batch_query_single_column(&ctx);
 }
 
 /* Returns the database associated with the query.
@@ -622,7 +488,12 @@ VALUE Query_columns(VALUE self) {
  */
 VALUE Query_clone(VALUE self) {
   Query_t *query = self_to_query(self);
-  return rb_funcall(cQuery, ID_new, 2, query->db, query->sql);
+  VALUE args[] = {
+    query->db,
+    query->sql,
+    query_mode_to_symbol(query->query_mode)
+  };
+  return rb_funcall_with_block(cQuery, ID_new, 3, args, query->transform_proc);
 }
 
 /* Closes the query. Attempting to run a closed query will raise an error.
@@ -675,6 +546,27 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
   return INT2NUM(value);
 }
 
+/* Sets the transform block to the given block. If a transform block is set,
+ * calls to #to_a, #next, #each and #batch_query will transform values fetched
+ * from the database using the transform block before passing them to the
+ * application code. To remove the transform block, call `#transform`
+ * without a block. The transform for each row is done by passing the row hash
+ * to the block.
+ *
+ *     # fetch column c as an ORM object
+ *     q = db.prepare('select * from foo order by a').transform do |h|
+ *       MyModel.new(h)
+ *     end
+ *
+ * @return [Extralite::Query] query
+ */
+VALUE Query_transform(VALUE self) {
+  Query_t *query = self_to_query(self);
+
+  RB_OBJ_WRITE(self, &query->transform_proc, rb_block_given_p() ? rb_block_proc() : Qnil);
+  return self;
+}
+
 /* Returns a short string representation of the query instance, including the
  * SQL string.
  *
@@ -693,50 +585,67 @@ VALUE Query_inspect(VALUE self) {
   return rb_sprintf("#<%"PRIsVALUE":%p %"PRIsVALUE">", cname, (void*)self, sql);
 }
 
+/* Returns the query mode.
+ *
+ * @return [Symbol] query mode
+ */
+VALUE Query_mode_get(VALUE self) {
+  Query_t *query = self_to_query(self);
+  return query_mode_to_symbol(query->query_mode);
+}
+
+/* Sets the query mode. This can be one of `:hash`, `:argv`, `:ary`.
+ *
+ * @param [Symbol] query mode
+ * @return [Symbol] query mode
+ */
+VALUE Query_mode_set(VALUE self, VALUE mode) {
+  Query_t *query = self_to_query(self);
+  query->query_mode = symbol_to_query_mode(mode);
+  return mode;
+}
+
 void Init_ExtraliteQuery(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
   cQuery = rb_define_class_under(mExtralite, "Query", rb_cObject);
   rb_define_alloc_func(cQuery, Query_allocate);
 
-  rb_define_method(cQuery, "bind", Query_bind, -1);
-  rb_define_method(cQuery, "close", Query_close, 0);
-  rb_define_method(cQuery, "closed?", Query_closed_p, 0);
-  rb_define_method(cQuery, "columns", Query_columns, 0);
-  rb_define_method(cQuery, "clone", Query_clone, 0);
-  rb_define_method(cQuery, "database", Query_database, 0);
-  rb_define_method(cQuery, "db", Query_database, 0);
-  rb_define_method(cQuery, "dup", Query_clone, 0);
+  #define DEF(s, f, a) rb_define_method(cQuery, s, f, a)
 
-  rb_define_method(cQuery, "each", Query_each_hash, 0);
-  rb_define_method(cQuery, "each_ary", Query_each_ary, 0);
-  rb_define_method(cQuery, "each_hash", Query_each_hash, 0);
-  rb_define_method(cQuery, "each_single_column", Query_each_single_column, 0);
-
-  rb_define_method(cQuery, "eof?", Query_eof_p, 0);
-  rb_define_method(cQuery, "execute", Query_execute, -1);
-  rb_define_method(cQuery, "<<", Query_execute_chevrons, 1);
-  rb_define_method(cQuery, "batch_execute", Query_batch_execute, 1);
-  rb_define_method(cQuery, "batch_query", Query_batch_query, 1);
-  rb_define_method(cQuery, "batch_query_ary", Query_batch_query_ary, 1);
-  rb_define_method(cQuery, "batch_query_single_column", Query_batch_query_single_column, 1);
-  rb_define_method(cQuery, "initialize", Query_initialize, 2);
-  rb_define_method(cQuery, "inspect", Query_inspect, 0);
-
-  rb_define_method(cQuery, "next", Query_next_hash, -1);
-  rb_define_method(cQuery, "next_ary", Query_next_ary, -1);
-  rb_define_method(cQuery, "next_hash", Query_next_hash, -1);
-  rb_define_method(cQuery, "next_single_column", Query_next_single_column, -1);
-
-  rb_define_method(cQuery, "reset", Query_reset, 0);
-  rb_define_method(cQuery, "sql", Query_sql, 0);
-  rb_define_method(cQuery, "status", Query_status, -1);
-
-  rb_define_method(cQuery, "to_a", Query_to_a_hash, 0);
-  rb_define_method(cQuery, "to_a_ary", Query_to_a_ary, 0);
-  rb_define_method(cQuery, "to_a_hash", Query_to_a_hash, 0);
-  rb_define_method(cQuery, "to_a_single_column", Query_to_a_single_column, 0);
+  DEF("bind",           Query_bind, -1);
+  DEF("close",          Query_close, 0);
+  DEF("closed?",        Query_closed_p, 0);
+  DEF("columns",        Query_columns, 0);
+  DEF("clone",          Query_clone, 0);
+  DEF("database",       Query_database, 0);
+  DEF("db",             Query_database, 0);
+  DEF("dup",            Query_clone, 0);
+  DEF("each",           Query_each, 0);
+  DEF("eof?",           Query_eof_p, 0);
+  DEF("execute",        Query_execute, -1);
+  DEF("<<",             Query_execute_chevrons, 1);
+  DEF("batch_execute",  Query_batch_execute, 1);
+  DEF("batch_query",    Query_batch_query, 1);
+  DEF("initialize",     Query_initialize, 3);
+  DEF("inspect",        Query_inspect, 0);
+  DEF("mode",           Query_mode_get, 0);
+  DEF("mode=",          Query_mode_set, 1);
+  DEF("next",           Query_next, -1);
+  DEF("reset",          Query_reset, 0);
+  DEF("sql",            Query_sql, 0);
+  DEF("status",         Query_status, -1);
+  DEF("to_a",           Query_to_a, 0);
+  DEF("transform",      Query_transform, 0);
 
   ID_inspect  = rb_intern("inspect");
   ID_slice    = rb_intern("slice");
+
+  SYM_hash          = ID2SYM(rb_intern("hash"));
+  SYM_argv          = ID2SYM(rb_intern("argv"));
+  SYM_ary           = ID2SYM(rb_intern("ary"));
+
+  rb_gc_register_mark_object(SYM_hash);
+  rb_gc_register_mark_object(SYM_argv);
+  rb_gc_register_mark_object(SYM_ary);
 }

@@ -30,8 +30,20 @@ class IteratorTest < MiniTest::Test
     assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], buf
   end
 
+  def test_iterator_argv
+    @query.mode = :argv
+    iter = @query.each
+    assert_kind_of Extralite::Iterator, iter
+
+    buf = []
+    v = iter.each { |a, b, c| buf << [a, b, c] }
+    assert_equal iter, v
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
+  end
+
   def test_iterator_ary
-    iter = @query.each_ary
+    @query.mode = :ary
+    iter = @query.each
     assert_kind_of Extralite::Iterator, iter
 
     buf = []
@@ -41,8 +53,8 @@ class IteratorTest < MiniTest::Test
   end
 
   def test_iterator_single_column
-    query = @db.prepare('select x from t')
-    iter = query.each_single_column
+    query = @db.prepare_argv('select x from t')
+    iter = query.each
     assert_kind_of Extralite::Iterator, iter
 
     buf = []
@@ -59,14 +71,15 @@ class IteratorTest < MiniTest::Test
     assert_nil iter.next
     assert_nil iter.next
 
-    iter = @query.reset.each_ary
+    @query.mode = :ary
+    @query.reset
     assert_equal([1, 2, 3], iter.next)
     assert_equal([4, 5, 6], iter.next)
     assert_equal([7, 8, 9], iter.next)
     assert_nil iter.next
     assert_nil iter.next
 
-    iter = @db.prepare('select y from t').each_single_column
+    iter = @db.prepare_argv('select y from t').each
     assert_equal(2, iter.next)
     assert_equal(5, iter.next)
     assert_equal(8, iter.next)
@@ -78,10 +91,10 @@ class IteratorTest < MiniTest::Test
     iter = @query.each
     assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], iter.to_a
 
-    iter = @query.each_ary
+    @query.mode = :ary
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], iter.to_a
 
-    iter = @db.prepare('select x from t').each_single_column
+    iter = @db.prepare_argv('select x from t').each
     assert_equal [1, 4, 7], iter.to_a
   end
 
@@ -89,17 +102,19 @@ class IteratorTest < MiniTest::Test
     mapped = @query.each.map { |row| row[:x] * 10 }
     assert_equal [10, 40, 70], mapped
 
-    mapped = @query.each_ary.map { |row| row[1] * 10 }
+    @query.mode = :ary
+    mapped = @query.each.map { |row| row[1] * 10 }
     assert_equal [20, 50, 80], mapped
 
-    query = @db.prepare('select z from t')
-    mapped = query.each_single_column.map { |v| v * 10 }
+    query = @db.prepare_argv('select z from t')
+    mapped = query.each.map { |v| v * 10 }
     assert_equal [30, 60, 90], mapped
   end
 
   def test_iterator_inspect
-    i = @query.each_ary
-    assert_match /^\#\<Extralite::Iterator:0x[0-9a-f]+ ary\>$/, i.inspect
+    @query.mode = :ary
+    i = @query.each
+    assert_match /^\#\<Extralite::Iterator:0x[0-9a-f]+\>$/, i.inspect
   end
 
   def test_return_from_block_issue_26

@@ -40,9 +40,9 @@ extern ID ID_strip;
 extern ID ID_to_s;
 extern ID ID_track;
 
+extern VALUE SYM_argv;
 extern VALUE SYM_ary;
 extern VALUE SYM_hash;
-extern VALUE SYM_single_column;
 
 typedef struct {
   sqlite3 *sqlite3_db;
@@ -51,25 +51,33 @@ typedef struct {
   int     gvl_release_threshold;
 } Database_t;
 
+enum query_mode {
+  QUERY_HASH,
+  QUERY_ARGV,
+  QUERY_ARY
+};
+
 typedef struct {
-  VALUE         db;
-  VALUE         sql;
-  Database_t    *db_struct;
-  sqlite3       *sqlite3_db;
-  sqlite3_stmt  *stmt;
-  int           eof;
-  int           closed;
+  VALUE               db;
+  VALUE               sql;
+  VALUE               transform_proc;
+  Database_t          *db_struct;
+  sqlite3             *sqlite3_db;
+  sqlite3_stmt        *stmt;
+  int                 eof;
+  int                 closed;
+  enum query_mode     query_mode;
 } Query_t;
 
 enum iterator_mode {
   ITERATOR_HASH,
+  ITERATOR_ARGV,
   ITERATOR_ARY,
   ITERATOR_SINGLE_COLUMN
 };
 
 typedef struct {
   VALUE               query;
-  enum iterator_mode  mode;
 } Iterator_t;
 
 #ifdef EXTRALITE_ENABLE_CHANGESET
@@ -79,22 +87,27 @@ typedef struct {
 } Changeset_t;
 #endif
 
-enum query_mode {
-  QUERY_YIELD,
-  QUERY_MULTI_ROW,
-  QUERY_SINGLE_ROW
+enum row_mode {
+  ROW_YIELD,
+  ROW_MULTI,
+  ROW_SINGLE
 };
 
 typedef struct {
-  VALUE           self;
-  sqlite3         *sqlite3_db;
-  sqlite3_stmt    *stmt;
-  VALUE           params;
-  enum query_mode mode;
-  int             max_rows;
-  int             eof;
-  int             gvl_release_threshold;
-  int             step_count;
+  VALUE               self;
+  VALUE               params;
+  VALUE               transform_proc;
+
+  sqlite3             *sqlite3_db;
+  sqlite3_stmt        *stmt;
+
+  int                 gvl_release_threshold;
+  enum query_mode     query_mode;
+  enum row_mode       row_mode;
+  int                 max_rows;
+
+  int                 eof;
+  int                 step_count;
 } query_ctx;
 
 enum gvl_mode {
@@ -104,41 +117,46 @@ enum gvl_mode {
 
 #define ALL_ROWS -1
 #define SINGLE_ROW -2
-#define QUERY_MODE(default) (rb_block_given_p() ? QUERY_YIELD : default)
-#define MULTI_ROW_P(mode) (mode == QUERY_MULTI_ROW)
-#define QUERY_CTX(self, db, stmt, params, mode, max_rows) \
-  { self, db->sqlite3_db, stmt, params, mode, max_rows, 0, db->gvl_release_threshold, 0 }
+#define ROW_YIELD_OR_MODE(default) (rb_block_given_p() ? ROW_YIELD : default)
+#define ROW_MULTI_P(mode) (mode == ROW_MULTI)
+#define QUERY_CTX(self, db, stmt, params, transform_proc, query_mode, row_mode, max_rows) { \
+  self, \
+  params, \
+  transform_proc, \
+  db->sqlite3_db, \
+  stmt, \
+  db->gvl_release_threshold, \
+  query_mode, \
+  row_mode, \
+  max_rows, \
+  0, \
+  0 \
+}
 #define TRACE_SQL(db, sql) \
     if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
 
 #define DEFAULT_GVL_RELEASE_THRESHOLD 1000
 
-
 extern rb_encoding *UTF8_ENCODING;
+
+typedef VALUE (*safe_query_impl)(query_ctx *);
 
 VALUE safe_batch_execute(query_ctx *ctx);
 VALUE safe_batch_query(query_ctx *ctx);
+VALUE safe_batch_query_argv(query_ctx *ctx);
 VALUE safe_batch_query_ary(query_ctx *ctx);
-VALUE safe_batch_query_single_column(query_ctx *ctx);
+VALUE safe_query_argv(query_ctx *ctx);
 VALUE safe_query_ary(query_ctx *ctx);
 VALUE safe_query_changes(query_ctx *ctx);
 VALUE safe_query_columns(query_ctx *ctx);
 VALUE safe_query_hash(query_ctx *ctx);
-VALUE safe_query_single_column(query_ctx *ctx);
-VALUE safe_query_single_row(query_ctx *ctx);
-VALUE safe_query_single_value(query_ctx *ctx);
+VALUE safe_query_single_row_hash(query_ctx *ctx);
+VALUE safe_query_single_row_argv(query_ctx *ctx);
+VALUE safe_query_single_row_ary(query_ctx *ctx);
 
-VALUE Query_each_hash(VALUE self);
-VALUE Query_each_ary(VALUE self);
-VALUE Query_each_single_column(VALUE self);
-
-VALUE Query_next_hash(int argc, VALUE *argv, VALUE self);
-VALUE Query_next_ary(int argc, VALUE *argv, VALUE self);
-VALUE Query_next_single_column(int argc, VALUE *argv, VALUE self);
-
-VALUE Query_to_a_hash(VALUE self);
-VALUE Query_to_a_ary(VALUE self);
-VALUE Query_to_a_single_column(VALUE self);
+VALUE Query_each(VALUE self);
+VALUE Query_next(int argc, VALUE *argv, VALUE self);
+VALUE Query_to_a(VALUE self);
 
 void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
 void prepare_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
