@@ -362,7 +362,7 @@ module Sequel
       def fetch_rows(sql, &block)
         execute(sql) do |result, columns|
           self.columns = columns
-          max = columns.size
+          # max = columns.size
           result.each(&block)
         end
       end
