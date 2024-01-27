@@ -8,10 +8,17 @@ GEM
   specs:
     docile (1.4.0)
     json (2.7.1)
+    mini_portile2 (2.8.5)
     minitest (5.15.0)
+    nokogiri (1.16.0)
+      mini_portile2 (~> 2.8.2)
+      racc (~> 1.4)
+    racc (1.7.3)
     rake (13.1.0)
     rake-compiler (1.1.6)
       rake
+    ruby_memcheck (2.3.0)
+      nokogiri
     sequel (5.51.0)
     simplecov (0.17.1)
       docile (~> 1.1)
@@ -29,6 +36,7 @@ DEPENDENCIES
   extralite!
   minitest (= 5.15.0)
   rake-compiler (= 1.1.6)
+  ruby_memcheck (= 2.3.0)
   sequel (= 5.51.0)
   simplecov (= 0.17.1)
   yard (= 0.9.27)
