@@ -114,7 +114,7 @@ class IteratorTest < MiniTest::Test
   def test_iterator_inspect
     @query.mode = :ary
     i = @query.each
-    assert_match /^\#\<Extralite::Iterator:0x[0-9a-f]+\>$/, i.inspect
+    assert_match(/^\#\<Extralite::Iterator:0x[0-9a-f]+\>$/, i.inspect)
   end
 
   def test_return_from_block_issue_26

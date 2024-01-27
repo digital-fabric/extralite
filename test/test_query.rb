@@ -963,7 +963,7 @@ class QueryTest < MiniTest::Test
 
   def test_query_inspect
     q = @db.prepare('select x from t')
-    assert_match /^\#\<Extralite::Query:0x[0-9a-f]+ #{q.sql.inspect}\>$/, q.inspect
+    assert_match(/^\#\<Extralite::Query:0x[0-9a-f]+ #{q.sql.inspect}\>$/, q.inspect)
   end
 
   def test_query_clone

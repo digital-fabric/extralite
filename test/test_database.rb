@@ -75,14 +75,6 @@ class DatabaseTest < MiniTest::Test
     assert_nil r
   end
 
-  def test_query_argv
-    r = @db.query_argv('select y from t')
-    assert_equal [2, 5], r
-
-    r = @db.query_argv('select y from t where x = 2')
-    assert_equal [], r
-  end
-
   def test_query_single_argv
     r = @db.query_single_argv('select z from t order by Z desc limit 1')
     assert_equal 6, r
@@ -246,12 +238,12 @@ class DatabaseTest < MiniTest::Test
     assert_nil @db.query_single_argv('select ?', nil)
 
     # 32-bit integers
-    assert_equal -2** 31, @db.query_single_argv('select ?', -2**31)
-    assert_equal 2**31 - 1, @db.query_single_argv('select ?', 2**31 - 1)
+    assert_equal(-2** 31, @db.query_single_argv('select ?', -2**31))
+    assert_equal(2**31 - 1, @db.query_single_argv('select ?', 2**31 - 1))
 
     # 64-bit integers
-    assert_equal -2 ** 63, @db.query_single_argv('select ?', -2 ** 63)
-    assert_equal 2**63 - 1, @db.query_single_argv('select ?', 2**63 - 1)
+    assert_equal(-2 ** 63, @db.query_single_argv('select ?', -2 ** 63))
+    assert_equal(2**63 - 1, @db.query_single_argv('select ?', 2**63 - 1))
 
     # floats
     assert_equal Float::MIN, @db.query_single_argv('select ?', Float::MIN)
@@ -723,6 +715,8 @@ class DatabaseTest < MiniTest::Test
       SQL
     }
     t.join
+  ensure
+    t&.kill
   end
 
   def test_database_status
@@ -786,6 +780,8 @@ class DatabaseTest < MiniTest::Test
 
     db2.busy_timeout = nil
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
+  ensure
+    t&.kill
   end
 
   def test_database_total_changes
@@ -837,25 +833,26 @@ class DatabaseTest < MiniTest::Test
     db = Extralite::Database.new(':memory:', gvl_release_threshold: 23)
     assert_equal 23, db.gvl_release_threshold
 
-    fn = Tempfile.new('extralite_test_database_initialize_options_1').path
-    db = Extralite::Database.new(fn, wal_journal_mode: true)
+    fn = Tempfile.new('extralite_test_database_initialize_options_wal').path
+    db = Extralite::Database.new(fn, wal: true)
     assert_equal 'wal', db.pragma(:journal_mode)
-
-    fn = Tempfile.new('extralite_test_database_initialize_options_2').path
-    db = Extralite::Database.new(fn, synchronous: true)
     assert_equal 1, db.pragma(:synchronous)
+
+    fn = Tempfile.new('extralite_test_database_initialize_options_pragma').path
+    db = Extralite::Database.new(fn, pragma: { application_id: 42 })
+    assert_equal 42, db.pragma(:application_id)
   end
 
   def test_database_inspect
     db = Extralite::Database.new(':memory:')
-    assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect
+    assert_match(/^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect)
   end
 
   def test_database_inspect_on_closed_database
     db = Extralite::Database.new(':memory:')
-    assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect
+    assert_match(/^\#\<Extralite::Database:0x[0-9a-f]+ :memory:\>$/, db.inspect)
     db.close
-    assert_match /^\#\<Extralite::Database:0x[0-9a-f]+ \(closed\)\>$/, db.inspect
+    assert_match(/^\#\<Extralite::Database:0x[0-9a-f]+ \(closed\)\>$/, db.inspect)
   end
 
   def test_string_encoding
@@ -876,7 +873,7 @@ class DatabaseTest < MiniTest::Test
 
     q1 = Queue.new
     q2 = Queue.new
-    th = Thread.new do
+    t = Thread.new do
       db1.transaction do
         assert_equal true, db1.transaction_active?
         db1.execute('insert into foo values (42)')
@@ -891,9 +888,11 @@ class DatabaseTest < MiniTest::Test
     assert_equal [], db2.query('select * from foo')
 
     q2 << true
-    th.join
+    t.join
     # transaction now committed
     assert_equal [{ x: 42 }], db2.query('select * from foo')
+  ensure
+    t&.kill
   end
 
   def test_database_transaction_rollback
@@ -1083,6 +1082,8 @@ class ScenarioTest < MiniTest::Test
 
     result = @db.query_argv('select x from t')
     assert_equal [1, 4, 7], result
+  ensure
+    t&.kill
   end
 
   def test_concurrent_queries
@@ -1109,6 +1110,9 @@ class ScenarioTest < MiniTest::Test
     t2.join
 
     assert_equal (1..100).to_a, @db.query_argv('select x from t order by x')
+  ensure
+    t1&.kill
+    t2&.kill
   end
 
   def test_database_trace
@@ -1217,6 +1221,9 @@ class ConcurrencyTest < Minitest::Test
 
     assert delays.size > 4
     assert_equal 0, delays.select { |d| d > 0.15 }.size
+  ensure
+    t1&.kill
+    t2&.kill
   end
 
   def test_gvl_always_hold
@@ -1251,6 +1258,9 @@ class ConcurrencyTest < Minitest::Test
 
     assert delays.size >= 1
     assert delays.first > 0.2
+  ensure
+    t1&.kill
+    t2&.kill
   end
 
   def test_gvl_mode_get_set
