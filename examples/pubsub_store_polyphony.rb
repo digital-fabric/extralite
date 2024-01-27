@@ -41,10 +41,8 @@ class PubSub
   end
 
   def get_messages(&block)
-    @db.transaction do
-      @db.execute('update subscribers set stamp = ? where id = ?', Time.now.to_i, @id)
+    #   @db.execute('update subscribers set stamp = ? where id = ?', Time.now.to_i, @id)
       @db.query_argv('delete from messages where subscriber_id = ? returning topic, message', @id, &block)
-    end
   end
 
   SCHEMA = <<~SQL
