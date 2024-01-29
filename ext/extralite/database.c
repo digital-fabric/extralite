@@ -35,13 +35,13 @@ static size_t Database_size(const void *ptr) {
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
   rb_gc_mark_movable(db->trace_proc);
-  rb_gc_mark_movable(db->progress_handler_proc);
+  rb_gc_mark_movable(db->progress_handler.proc);
 }
 
 static void Database_compact(void *ptr) {
   Database_t *db = ptr;
-  db->trace_proc = rb_gc_location(db->trace_proc);
-  db->progress_handler_proc = rb_gc_location(db->progress_handler_proc);
+  db->trace_proc            = rb_gc_location(db->trace_proc);
+  db->progress_handler.proc = rb_gc_location(db->progress_handler.proc);
 }
 
 static void Database_free(void *ptr) {
@@ -98,8 +98,6 @@ static inline int db_open_flags_from_opts(VALUE opts) {
 default_flags:
   return SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
 }
-
-VALUE Database_execute(int argc, VALUE *argv, VALUE self);
 
 void Database_apply_opts(VALUE self, Database_t *db, VALUE opts) {
   VALUE value = Qnil;
@@ -173,8 +171,10 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
 #endif
 
   db->trace_proc = Qnil;
-  db->progress_handler_proc = Qnil;
   db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
+
+  db->progress_handler.mode = PROGRESS_NONE;
+  db->progress_handler.proc = Qnil;
 
   if (!NIL_P(opts)) Database_apply_opts(self, db, opts);
 
@@ -245,16 +245,19 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   sql = rb_funcall(argv[0], ID_strip, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  TRACE_SQL(db, sql);
+  Database_issue_query(db, sql);
   prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
   query_ctx ctx = QUERY_CTX(
-    self, db, stmt, Qnil, transform, query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
+    self, sql, db, stmt, Qnil, transform,
+    query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
   );
-  
-  return rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+
+  VALUE result = rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+  RB_GC_GUARD(result);
+  return result;
 }
 
 /* call-seq:
@@ -477,7 +480,10 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(
+    self, sql, db, stmt, parameters,
+    Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS
+  );
 
   return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -508,7 +514,10 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(
+    self, sql, db, stmt, parameters,
+    Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS
+  );
 
   return rb_ensure(SAFE(safe_batch_query), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -539,7 +548,10 @@ VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_ARY, ROW_MULTI, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(
+    self, sql, db, stmt, parameters,
+    Qnil, QUERY_ARY, ROW_MULTI, ALL_ROWS
+  );
 
   return rb_ensure(SAFE(safe_batch_query_ary), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -570,7 +582,10 @@ VALUE Database_batch_query_argv(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  query_ctx ctx = QUERY_CTX(self, db, stmt, parameters, Qnil, QUERY_ARGV, ROW_MULTI, ALL_ROWS);
+  query_ctx ctx = QUERY_CTX(
+    self, sql, db, stmt, parameters,
+    Qnil, QUERY_ARGV, ROW_MULTI, ALL_ROWS
+  );
 
   return rb_ensure(SAFE(safe_batch_query_argv), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
@@ -1004,20 +1019,50 @@ VALUE Database_track_changes(int argc, VALUE *argv, VALUE self) {
 
 int Database_progress_handler(void *ptr) {
   Database_t *db = (Database_t *)ptr;
-  rb_funcall(db->progress_handler_proc, ID_call, 0);
+  db->progress_handler.tick_count += db->progress_handler.tick;
+  if (db->progress_handler.tick_count < db->progress_handler.period)
+    goto done;
+
+  db->progress_handler.tick_count -= db->progress_handler.period;
+  db->progress_handler.call_count += 1;
+  rb_funcall(db->progress_handler.proc, ID_call, 0);
+done:
   return 0;
 }
 
 int Database_busy_handler(void *ptr, int v) {
   Database_t *db = (Database_t *)ptr;
-  rb_funcall(db->progress_handler_proc, ID_call, 1, Qtrue);
+  rb_funcall(db->progress_handler.proc, ID_call, 1, Qtrue);
   return 1;
 }
 
 void Database_reset_progress_handler(VALUE self, Database_t *db) {
-  RB_OBJ_WRITE(self, &db->progress_handler_proc, Qnil);
+  db->progress_handler.mode = PROGRESS_NONE;
+  RB_OBJ_WRITE(self, &db->progress_handler.proc, Qnil);
   sqlite3_progress_handler(db->sqlite3_db, 0, NULL, NULL);
   sqlite3_busy_handler(db->sqlite3_db, NULL, NULL);
+}
+
+static inline enum progress_handler_mode max_calls_to_progress_mode(VALUE max_calls) {
+  switch (NUM2INT(max_calls)) {
+    case 1:
+      return PROGRESS_ONCE;
+    case -1:
+      return PROGRESS_AT_LEAST_ONCE;
+    default:
+      return PROGRESS_NORMAL;
+  }
+}
+
+inline void Database_issue_query(Database_t *db, VALUE sql) {
+  if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
+  switch (db->progress_handler.mode) {
+    case PROGRESS_AT_LEAST_ONCE:
+    case PROGRESS_ONCE:
+      rb_funcall(db->progress_handler.proc, ID_call, 0);
+    default:
+      // do nothing
+  }
 }
 
 /* Installs or removes a progress handler that will be executed periodically
@@ -1068,23 +1113,52 @@ void Database_reset_progress_handler(VALUE self, Database_t *db) {
  * @param period [Integer] progress handler period
  * @returns [Extralite::Database] database
  */
-VALUE Database_on_progress(VALUE self, VALUE period) {
+VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
   Database_t *db = self_to_open_database(self);
+  VALUE period;
+  VALUE opt;
+  static ID kw_ids[2];
+  VALUE kw_args[2];
+
+  rb_scan_args(argc, argv, "10:", &period, &opt);
   int period_int = NUM2INT(period);
 
-  if (period_int > 0 && rb_block_given_p()) {
-    RB_OBJ_WRITE(self, &db->progress_handler_proc, rb_block_proc());
-    db->gvl_release_threshold = -1;
-
-    sqlite3_progress_handler(db->sqlite3_db, period_int, &Database_progress_handler, db);
-    sqlite3_busy_handler(db->sqlite3_db, &Database_busy_handler, db);
-  }
-  else {
-    RB_OBJ_WRITE(self, &db->progress_handler_proc, Qnil);
+  if (!rb_block_given_p() || period_int == 0) {
+    Database_reset_progress_handler(self, db);
     db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
-    sqlite3_progress_handler(db->sqlite3_db, 0, NULL, NULL);
-    sqlite3_busy_handler(db->sqlite3_db, NULL, NULL);
+    return self;
   }
+
+  int tick_int = 10;
+  enum progress_handler_mode mode = PROGRESS_NORMAL;
+
+  if (!NIL_P(opt)) {
+    if (!kw_ids[0]) {
+      CONST_ID(kw_ids[0], "tick");
+      CONST_ID(kw_ids[1], "max_calls");
+    }
+
+    rb_get_kwargs(opt, kw_ids, 0, 2, kw_args);
+    if (kw_args[0] != Qundef) { tick_int = NUM2INT(kw_args[0]); }
+    if (kw_args[1] != Qundef) { mode = max_calls_to_progress_mode(kw_args[1]); }
+  }
+  if (tick_int > period_int) tick_int = period_int;
+
+  db->gvl_release_threshold = -1;
+  db->progress_handler.mode = mode;
+  RB_OBJ_WRITE(self, &db->progress_handler.proc, rb_block_proc());
+  db->progress_handler.period     = period_int;
+  db->progress_handler.tick       = tick_int;
+  db->progress_handler.tick_count = 0;
+  db->progress_handler.call_count = 0;
+
+  // The PROGRESS_ONCE mode works by invoking the progress handler proc exactly
+  // once, before iterating over the result set, so in that mode we don't
+  // actually need to set the progress handler at the sqlite level.
+  if (mode != PROGRESS_ONCE)
+    sqlite3_progress_handler(db->sqlite3_db, tick_int, &Database_progress_handler, db);
+
+  sqlite3_busy_handler(db->sqlite3_db, &Database_busy_handler, db);
 
   return self;
 }
@@ -1178,7 +1252,7 @@ VALUE Database_gvl_release_threshold_set(VALUE self, VALUE value) {
         if (value_int < -1)
           rb_raise(eArgumentError, "Invalid GVL release threshold value (expect integer >= -1)");
 
-        if (value_int > -1 && !NIL_P(db->progress_handler_proc))
+        if (value_int > -1 && db->progress_handler.mode != PROGRESS_NONE)
           Database_reset_progress_handler(self, db);
         db->gvl_release_threshold = value_int;
         break;
@@ -1235,7 +1309,7 @@ void Init_ExtraliteDatabase(void) {
   DEF("load_extension",         Database_load_extension, 1);
   #endif
 
-  DEF("on_progress",            Database_on_progress, 1);
+  DEF("on_progress",            Database_on_progress, -1);
   DEF("prepare",                Database_prepare_hash, -1);
   DEF("prepare_argv",           Database_prepare_argv, -1);
   DEF("prepare_ary",            Database_prepare_ary, -1);

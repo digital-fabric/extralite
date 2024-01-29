@@ -44,11 +44,27 @@ extern VALUE SYM_argv;
 extern VALUE SYM_ary;
 extern VALUE SYM_hash;
 
+enum progress_handler_mode {
+  PROGRESS_NONE,
+  PROGRESS_NORMAL,
+  PROGRESS_ONCE,
+  PROGRESS_AT_LEAST_ONCE,
+};
+
+struct progress_handler {
+  enum progress_handler_mode  mode;
+  VALUE                       proc;
+  int                         period;
+  int                         tick;
+  int                         tick_count;
+  int                         call_count;
+};
+
 typedef struct {
-  sqlite3 *sqlite3_db;
-  VALUE   trace_proc;
-  VALUE   progress_handler_proc;
-  int     gvl_release_threshold;
+  sqlite3                 *sqlite3_db;
+  VALUE                   trace_proc;
+  int                     gvl_release_threshold;
+  struct progress_handler progress_handler;
 } Database_t;
 
 enum query_mode {
@@ -95,9 +111,11 @@ enum row_mode {
 
 typedef struct {
   VALUE               self;
+  VALUE               sql;
   VALUE               params;
   VALUE               transform_proc;
 
+  Database_t          *db;
   sqlite3             *sqlite3_db;
   sqlite3_stmt        *stmt;
 
@@ -119,10 +137,12 @@ enum gvl_mode {
 #define SINGLE_ROW -2
 #define ROW_YIELD_OR_MODE(default) (rb_block_given_p() ? ROW_YIELD : default)
 #define ROW_MULTI_P(mode) (mode == ROW_MULTI)
-#define QUERY_CTX(self, db, stmt, params, transform_proc, query_mode, row_mode, max_rows) { \
+#define QUERY_CTX(self, sql, db, stmt, params, transform_proc, query_mode, row_mode, max_rows) { \
   self, \
+  sql, \
   params, \
   transform_proc, \
+  db, \
   db->sqlite3_db, \
   stmt, \
   db->gvl_release_threshold, \
@@ -132,8 +152,6 @@ enum gvl_mode {
   0, \
   0 \
 }
-#define TRACE_SQL(db, sql) \
-    if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
 
 #define DEFAULT_GVL_RELEASE_THRESHOLD 1000
 
@@ -165,6 +183,7 @@ void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);
 int stmt_iterate(query_ctx *ctx);
 VALUE cleanup_stmt(query_ctx *ctx);
 
+void Database_issue_query(Database_t *db, VALUE sql);
 sqlite3 *Database_sqlite3_db(VALUE self);
 enum gvl_mode Database_prepare_gvl_mode(Database_t *db);
 Database_t *self_to_database(VALUE self);

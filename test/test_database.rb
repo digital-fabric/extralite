@@ -1297,6 +1297,60 @@ class ConcurrencyTest < Minitest::Test
     assert_in_range 2..4, buf.size
   end
 
+  def test_progress_handler_normal_mode
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    db.on_progress(1, tick: 1) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 50, count
+
+    count = 0
+    db.on_progress(10, tick: 1) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 5, count
+  end
+
+  def test_progress_handler_at_least_once_mode
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    db.on_progress(1, tick: 1, max_calls: -1) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 50 + 10, count
+
+    count = 0
+    db.on_progress(10, tick: 1, max_calls: -1) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 5 + 10, count
+  end
+
+  def test_progress_handler_once_mode
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    db.on_progress(1, tick: 1, max_calls: 1) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress(10, tick: 1, max_calls: 1) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+  end
+
+  def test_progress_handler_once_mode_batch_query
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    db.on_progress(1, tick: 1, max_calls: 1) { count += 1 }
+    db.batch_query('select ?', 1..10)
+    assert_equal 10, count
+
+    db.batch_query('select ?', 1..3)
+    assert_equal 13, count
+  end
+
   LONG_QUERY = <<~SQL
     WITH RECURSIVE
       fibo (curr, next)
