@@ -100,7 +100,7 @@ typedef struct {
 
 #ifdef EXTRALITE_ENABLE_CHANGESET
 typedef struct {
-  int             changeset_len;
+  long            changeset_len;
   void            *changeset_ptr;
 } Changeset_t;
 #endif

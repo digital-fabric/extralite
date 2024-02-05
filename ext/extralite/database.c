@@ -1063,7 +1063,8 @@ inline void Database_issue_query(Database_t *db, VALUE sql) {
     case PROGRESS_ONCE:
       rb_funcall(db->progress_handler.proc, ID_call, 0);
     default:
-      // do nothing
+      ; // do nothing
+
   }
 }
 
