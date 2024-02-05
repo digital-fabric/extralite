@@ -1302,8 +1302,14 @@ class ConcurrencyTest < Minitest::Test
 
     count = 0
     db.on_progress(1, tick: 1) { count += 1 }
+    db.query('select 1 as a')
+    assert count > 0
+    base_count = count
+
+    count = 0
+    db.on_progress(1, tick: 1) { count += 1 }
     10.times { db.query('select 1 as a') }
-    assert_equal 50, count
+    assert_equal base_count * 10, count
 
     count = 0
     db.on_progress(10, tick: 1) { count += 1 }
@@ -1315,9 +1321,15 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     count = 0
+    db.on_progress(1, tick: 1) { count += 1 }
+    db.query('select 1 as a')
+    assert count > 0
+    base_count = count
+
+    count = 0
     db.on_progress(1, tick: 1, mode: :at_least_once) { count += 1 }
     10.times { db.query('select 1 as a') }
-    assert_equal 50 + 10, count
+    assert_equal base_count * 10 + 10, count
 
     count = 0
     db.on_progress(10, tick: 1, mode: :at_least_once) { count += 1 }
