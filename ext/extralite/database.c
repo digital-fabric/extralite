@@ -1075,6 +1075,24 @@ inline void Database_issue_query(Database_t *db, VALUE sql) {
  * machine instructions that are evaluated between successive invocations of the
  * progress handler. A period of less than 1 removes the progress handler.
  *
+ * The optional `tick` parameter specifies the granularity of how often the
+ * progress handler is called. By default the tick value is 10, which means that
+ * Extralite's underlying progress callback will be called every 10 SQLite VM
+ * instructions. The given progress proc, however, will be only called every
+ * `period` (cumulative) VM instructions. This allows the progress handler to
+ * work correctly also when running simple queries that don't include many
+ * VM instructions.
+ * 
+ * The optional `mode` parameter controls the progress handler mode, which is
+ * one of the following:
+ * 
+ * - `:normal` (default): the progress handler proc is invoked on query
+ *   progress.
+ * - `:once`: the progress handler proc is invoked only once, when preparing the
+ *   query.
+ * - `:at_least_once`: the progress handler proc is invoked when prearing the
+ *   query, and on query progress.
+ *
  * The progress handler is called also when the database is busy. This lets the
  * application perform work while waiting for the database to become unlocked,
  * or implement a timeout. Note that setting the database's busy_timeout _after_
@@ -1085,34 +1103,37 @@ inline void Database_issue_query(Database_t *db, VALUE sql) {
  * -1, which means that the GVL will not be released at all when preparing or
  * running queries. It is the application's responsibility to let other threads
  * or fibers run by calling e.g. Thread.pass:
- * 
+ *
  *     db.on_progress(1000) do
  *       do_something_interesting
  *       Thread.pass # let other threads run
  *     end
- * 
- * Note that the progress handler is set globally for the database and that 
+ *
+ * Note that the progress handler is set globally for the database and that
  * Extralite does provide any hooks for telling which queries are currently
- * running or at what time they were started. This means that you'll need
- * to wrap the stock #query_xxx and #execute methods with your own code that
+ * running or at what time they were started. This means that you'll need to
+ * wrap the stock #query_xxx and #execute methods with your own code that
  * calculates timeouts, for example:
- * 
+ *
  *     def setup_progress_handler
  *       @db.on_progress(1000) do
  *         raise TimeoutError if Time.now - @t0 >= @timeout
  *         Thread.pass
  *       end
  *     end
- * 
+ *
  *     def query(sql, *)
  *       @t0 = Time.now
  *       @db.query(sql, *)
  *     end
- * 
+ *
  * If the gvl release threshold is set to a value equal to or larger than 0
  * after setting the progress handler, the progress handler will be reset.
  *
  * @param period [Integer] progress handler period
+ * @param [Hash] opts progress options
+ * @option opts [Integer] :tick tick value (`10` by default)
+ * @option opts [Symbol] :mode progress handler mode (`:normal` by default)
  * @returns [Extralite::Database] database
  */
 VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
