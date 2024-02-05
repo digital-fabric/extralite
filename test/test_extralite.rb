@@ -2,7 +2,7 @@
 
 require_relative 'helper'
 
-class ExtraliteTest < MiniTest::Test
+class ExtraliteTest < Minitest::Test
   def test_sqlite3_version
     assert_match(/^3\.\d+\.\d+$/, Extralite.sqlite3_version)
   end

@@ -4,7 +4,7 @@ require_relative 'helper'
 require 'date'
 require 'json'
 
-class QueryTest < MiniTest::Test
+class QueryTest < Minitest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table if not exists t (x,y,z)')
@@ -1007,7 +1007,7 @@ class QueryTest < MiniTest::Test
   end
 end
 
-class QueryTransformTest < MiniTest::Test
+class QueryTransformTest < Minitest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table t (a, b, c)')

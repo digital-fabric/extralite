@@ -6,7 +6,7 @@ require 'date'
 require 'tempfile'
 require 'json'
 
-class DatabaseTest < MiniTest::Test
+class DatabaseTest < Minitest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table if not exists t (x,y,z)')
@@ -1017,7 +1017,7 @@ class DatabaseTest < MiniTest::Test
   end
 end
 
-class ScenarioTest < MiniTest::Test
+class ScenarioTest < Minitest::Test
   def setup
     @fn = Tempfile.new('extralite_scenario_test').path
     @db = Extralite::Database.new(@fn)
@@ -1141,7 +1141,7 @@ class ScenarioTest < MiniTest::Test
   end
 end
 
-class BackupTest < MiniTest::Test
+class BackupTest < Minitest::Test
   def setup
     @src = Extralite::Database.new(':memory:')
     @dst = Extralite::Database.new(':memory:')
@@ -1604,7 +1604,7 @@ class RactorTest < Minitest::Test
   end
 end
 
-class DatabaseTransformTest < MiniTest::Test
+class DatabaseTransformTest < Minitest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table t (a, b, c)')
