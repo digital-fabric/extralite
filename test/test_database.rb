@@ -1314,7 +1314,7 @@ class ConcurrencyTest < Minitest::Test
     count = 0
     db.on_progress(10, tick: 1) { count += 1 }
     10.times { db.query('select 1 as a') }
-    assert_equal 5, count
+    assert_equal base_count, count
   end
 
   def test_progress_handler_at_least_once_mode
@@ -1334,7 +1334,7 @@ class ConcurrencyTest < Minitest::Test
     count = 0
     db.on_progress(10, tick: 1, mode: :at_least_once) { count += 1 }
     10.times { db.query('select 1 as a') }
-    assert_equal 5 + 10, count
+    assert_equal base_count + 10, count
   end
 
   def test_progress_handler_once_mode
