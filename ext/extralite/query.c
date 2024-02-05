@@ -131,9 +131,7 @@ static inline void query_reset(Query_t *query) {
 static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
-
   Database_issue_query(query->db_struct, query->sql);
-
   sqlite3_reset(query->stmt);
   query->eof = 0;
   if (argc > 0) {
@@ -160,8 +158,6 @@ VALUE Query_reset(VALUE self) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   query_reset(query);
-  Database_issue_query(query->db_struct, query->sql);
-
   return self;
 }
 

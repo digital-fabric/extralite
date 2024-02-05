@@ -21,7 +21,10 @@ ID ID_strip;
 ID ID_to_s;
 ID ID_track;
 
+VALUE SYM_at_least_once;
 VALUE SYM_gvl_release_threshold;
+VALUE SYM_once;
+VALUE SYM_normal;
 VALUE SYM_pragma;
 VALUE SYM_read_only;
 VALUE SYM_wal;
@@ -59,6 +62,9 @@ static const rb_data_type_t Database_type = {
 static VALUE Database_allocate(VALUE klass) {
   Database_t *db = ALLOC(Database_t);
   db->sqlite3_db = NULL;
+  db->trace_proc = Qnil;
+  db->progress_handler.proc = Qnil;
+  db->progress_handler.mode = PROGRESS_NONE;
   return TypedData_Wrap_Struct(klass, &Database_type, db);
 }
 
@@ -1043,15 +1049,11 @@ void Database_reset_progress_handler(VALUE self, Database_t *db) {
   sqlite3_busy_handler(db->sqlite3_db, NULL, NULL);
 }
 
-static inline enum progress_handler_mode max_calls_to_progress_mode(VALUE max_calls) {
-  switch (NUM2INT(max_calls)) {
-    case 1:
-      return PROGRESS_ONCE;
-    case -1:
-      return PROGRESS_AT_LEAST_ONCE;
-    default:
-      return PROGRESS_NORMAL;
-  }
+static inline enum progress_handler_mode symbol_to_progress_mode(VALUE mode) {
+  if (mode == SYM_at_least_once)  return PROGRESS_AT_LEAST_ONCE;
+  if (mode == SYM_once)           return PROGRESS_ONCE;
+  if (mode == SYM_normal)         return PROGRESS_NORMAL;
+  rb_raise(eArgumentError, "Invalid progress handler mode");
 }
 
 inline void Database_issue_query(Database_t *db, VALUE sql) {
@@ -1135,12 +1137,12 @@ VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
   if (!NIL_P(opt)) {
     if (!kw_ids[0]) {
       CONST_ID(kw_ids[0], "tick");
-      CONST_ID(kw_ids[1], "max_calls");
+      CONST_ID(kw_ids[1], "mode");
     }
 
     rb_get_kwargs(opt, kw_ids, 0, 2, kw_args);
     if (kw_args[0] != Qundef) { tick_int = NUM2INT(kw_args[0]); }
-    if (kw_args[1] != Qundef) { mode = max_calls_to_progress_mode(kw_args[1]); }
+    if (kw_args[1] != Qundef) { mode = symbol_to_progress_mode(kw_args[1]); }
   }
   if (tick_int > period_int) tick_int = period_int;
 
@@ -1351,9 +1353,12 @@ void Init_ExtraliteDatabase(void) {
   ID_to_s         = rb_intern("to_s");
   ID_track        = rb_intern("track");
 
+  SYM_at_least_once         = ID2SYM(rb_intern("at_least_once"));
   SYM_gvl_release_threshold = ID2SYM(rb_intern("gvl_release_threshold"));
-  SYM_read_only             = ID2SYM(rb_intern("read_only"));
+  SYM_once                  = ID2SYM(rb_intern("once"));
+  SYM_normal                = ID2SYM(rb_intern("normal"));
   SYM_pragma                = ID2SYM(rb_intern("pragma"));
+  SYM_read_only             = ID2SYM(rb_intern("read_only"));
   SYM_wal                   = ID2SYM(rb_intern("wal"));
 
   rb_gc_register_mark_object(SYM_gvl_release_threshold);

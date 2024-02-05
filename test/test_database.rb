@@ -1315,12 +1315,12 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     count = 0
-    db.on_progress(1, tick: 1, max_calls: -1) { count += 1 }
+    db.on_progress(1, tick: 1, mode: :at_least_once) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal 50 + 10, count
 
     count = 0
-    db.on_progress(10, tick: 1, max_calls: -1) { count += 1 }
+    db.on_progress(10, tick: 1, mode: :at_least_once) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal 5 + 10, count
   end
@@ -1329,26 +1329,55 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     count = 0
-    db.on_progress(1, tick: 1, max_calls: 1) { count += 1 }
+    db.on_progress(1, tick: 1, mode: :once) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal 10, count
 
     count = 0
-    db.on_progress(10, tick: 1, max_calls: 1) { count += 1 }
+    db.on_progress(10, tick: 1, mode: :once) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal 10, count
   end
 
-  def test_progress_handler_once_mode_batch_query
+  def test_progress_handler_once_mode_with_batch_query
     db = Extralite::Database.new(':memory:')
 
     count = 0
-    db.on_progress(1, tick: 1, max_calls: 1) { count += 1 }
+    db.on_progress(1, tick: 1, mode: :once) { count += 1 }
     db.batch_query('select ?', 1..10)
     assert_equal 10, count
 
     db.batch_query('select ?', 1..3)
     assert_equal 13, count
+  end
+
+  def test_progress_handler_once_mode_with_prepared_query
+    db = Extralite::Database.new(':memory:')
+    db.execute 'create table foo (x)'
+    db.batch_query('insert into foo values (?)', 1..10)
+    q = db.prepare('select x from foo')
+
+    count = 0
+    db.on_progress(1, tick: 1, mode: :once) { count += 1 }
+
+    q.to_a
+    assert_equal 1, count
+
+    q.reset
+    record_count = 0
+    assert_equal 2, count
+    while q.next
+      record_count += 1
+    end
+    assert_equal 10, record_count
+    assert_equal 2, count
+
+    q.reset
+    assert_equal 3, count
+    while q.next
+      record_count += 1
+    end
+    assert_equal 3, count
   end
 
   LONG_QUERY = <<~SQL
@@ -1539,31 +1568,35 @@ class RactorTest < Minitest::Test
     assert_equal 'Database is closed', ex.message
   end
 
-  STRESS_DB_NAME = Tempfile.new('extralite_test_ractor_stress').path
-
   # Adapted from here: https://github.com/sparklemotion/sqlite3-ruby/pull/365/files
   def test_ractor_stress
     skip if SKIP_RACTOR_TESTS
-    
-    Ractor.make_shareable(STRESS_DB_NAME)
 
-    db = Extralite::Database.new(STRESS_DB_NAME)
-    db.execute('PRAGMA journal_mode=WAL') # A little slow without this
-    db.execute('create table stress_test (a integer primary_key, b text)')
+    fn = Tempfile.new('extralite_test_ractor_stress').path
     random = Random.new.freeze
+
     ractors = (0..9).map do |ractor_number|
-      Ractor.new(random, ractor_number) do |r, n|
-        db_in_ractor = Extralite::Database.new(STRESS_DB_NAME)
-        db_in_ractor.busy_timeout = 3
+      sleep 0.05
+      Ractor.new(fn, random, ractor_number) do |rfn, r, n|
+        rdb = Extralite::Database.new(rfn)
+        rdb.busy_timeout = 3
+        rdb.pragma(journal_mode: 'wal', synchronous: 1)
+        rdb.execute('create table if not exists stress_test (a integer primary_key, b text)')
+        changes = 0
         10.times do |i|
-          db_in_ractor.execute('insert into stress_test(a, b) values (?, ?)', n * 100 + i, r.rand)
+          changes += rdb.execute('insert into stress_test(a, b) values (?, ?)', n * 100 + i, r.rand)
         end
+        Ractor.yield changes
       end
     end
-    ractors.each { |r| r.take }
-    final_check = Ractor.new do
-      db_in_ractor = Extralite::Database.new(STRESS_DB_NAME)
-      count = db_in_ractor.query_single_argv('select count(*) from stress_test')
+
+    buf = []
+    ractors.each { |r| buf << r.take }
+    assert_equal [10] * 10, buf
+
+    final_check = Ractor.new(fn) do |rfn|
+      rdb = Extralite::Database.new(rfn, wal: true)
+      count = rdb.query_single_argv('select count(*) from stress_test')
       Ractor.yield count
     end
     count = final_check.take

@@ -17,6 +17,8 @@
   VALUE s = rb_funcall(obj, rb_intern("inspect"), 0); \
   printf(": %s\n", StringValueCStr(s)); \
 }
+#define CALLER() rb_funcall(rb_mKernel, rb_intern("caller"), 0)
+#define TRACE_CALLER() INSPECT("caller: ", CALLER())
 
 #define SAFE(f) (VALUE (*)(VALUE))(f)
 
