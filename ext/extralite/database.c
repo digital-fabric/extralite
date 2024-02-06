@@ -24,6 +24,7 @@ ID ID_track;
 VALUE SYM_at_least_once;
 VALUE SYM_gvl_release_threshold;
 VALUE SYM_once;
+VALUE SYM_none;
 VALUE SYM_normal;
 VALUE SYM_pragma;
 VALUE SYM_read_only;
@@ -1053,6 +1054,7 @@ static inline enum progress_handler_mode symbol_to_progress_mode(VALUE mode) {
   if (mode == SYM_at_least_once)  return PROGRESS_AT_LEAST_ONCE;
   if (mode == SYM_once)           return PROGRESS_ONCE;
   if (mode == SYM_normal)         return PROGRESS_NORMAL;
+  if (mode == SYM_none)           return PROGRESS_NONE;
   rb_raise(eArgumentError, "Invalid progress handler mode");
 }
 
@@ -1072,20 +1074,22 @@ inline void Database_issue_query(Database_t *db, VALUE sql) {
  * while a query is running. This method can be used to support switching
  * between fibers and threads or implementing timeouts for running queries.
  *
- * The given period parameter specifies the approximate number of SQLite virtual
- * machine instructions that are evaluated between successive invocations of the
- * progress handler. A period of less than 1 removes the progress handler.
+ * The `period` parameter specifies the approximate number of SQLite
+ * virtual machine instructions that are evaluated between successive
+ * invocations of the progress handler. A period of less than 1 removes the
+ * progress handler. The default period value is 1000.
  *
  * The optional `tick` parameter specifies the granularity of how often the
- * progress handler is called. By default the tick value is 10, which means that
+ * progress handler is called. The default tick value is 10, which means that
  * Extralite's underlying progress callback will be called every 10 SQLite VM
  * instructions. The given progress proc, however, will be only called every
  * `period` (cumulative) VM instructions. This allows the progress handler to
  * work correctly also when running simple queries that don't include many
- * VM instructions.
+ * VM instructions. If the `tick` value is greater than the period value it is
+ * automatically capped to the period value.
  * 
- * The optional `mode` parameter controls the progress handler mode, which is
- * one of the following:
+ * The `mode` parameter controls the progress handler mode, which is one of the
+ * following:
  * 
  * - `:normal` (default): the progress handler proc is invoked on query
  *   progress.
@@ -1098,14 +1102,15 @@ inline void Database_issue_query(Database_t *db, VALUE sql) {
  * application perform work while waiting for the database to become unlocked,
  * or implement a timeout. Note that setting the database's busy_timeout _after_
  * setting a progress handler may lead to undefined behaviour in a concurrent
- * application.
+ * application. When busy, the progress handler proc is passed `true` as the
+ * first argument.
  *
  * When the progress handler is set, the gvl release threshold value is set to
  * -1, which means that the GVL will not be released at all when preparing or
  * running queries. It is the application's responsibility to let other threads
  * or fibers run by calling e.g. Thread.pass:
  *
- *     db.on_progress(1000) do
+ *     db.on_progress do
  *       do_something_interesting
  *       Thread.pass # let other threads run
  *     end
@@ -1117,7 +1122,7 @@ inline void Database_issue_query(Database_t *db, VALUE sql) {
  * calculates timeouts, for example:
  *
  *     def setup_progress_handler
- *       @db.on_progress(1000) do
+ *       @db.on_progress do
  *         raise TimeoutError if Time.now - @t0 >= @timeout
  *         Thread.pass
  *       end
@@ -1133,40 +1138,42 @@ inline void Database_issue_query(Database_t *db, VALUE sql) {
  *
  * @param period [Integer] progress handler period
  * @param [Hash] opts progress options
+ * @option opts [Integer] :period period value (`1000` by default)
  * @option opts [Integer] :tick tick value (`10` by default)
  * @option opts [Symbol] :mode progress handler mode (`:normal` by default)
  * @returns [Extralite::Database] database
  */
 VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
   Database_t *db = self_to_open_database(self);
-  VALUE period;
   VALUE opt;
-  static ID kw_ids[2];
-  VALUE kw_args[2];
+  static ID kw_ids[3];
+  VALUE kw_args[3];
 
-  rb_scan_args(argc, argv, "10:", &period, &opt);
-  int period_int = NUM2INT(period);
+  rb_scan_args(argc, argv, "00:", &opt);
 
-  if (!rb_block_given_p() || period_int == 0) {
-    Database_reset_progress_handler(self, db);
-    db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
-    return self;
-  }
-
+  int period_int = 1000;
   int tick_int = 10;
   enum progress_handler_mode mode = PROGRESS_NORMAL;
 
   if (!NIL_P(opt)) {
     if (!kw_ids[0]) {
-      CONST_ID(kw_ids[0], "tick");
-      CONST_ID(kw_ids[1], "mode");
+      CONST_ID(kw_ids[0], "period");
+      CONST_ID(kw_ids[1], "tick");
+      CONST_ID(kw_ids[2], "mode");
     }
 
-    rb_get_kwargs(opt, kw_ids, 0, 2, kw_args);
-    if (kw_args[0] != Qundef) { tick_int = NUM2INT(kw_args[0]); }
-    if (kw_args[1] != Qundef) { mode = symbol_to_progress_mode(kw_args[1]); }
+    rb_get_kwargs(opt, kw_ids, 0, 3, kw_args);
+    if (kw_args[0] != Qundef) { period_int  = NUM2INT(kw_args[0]); }
+    if (kw_args[1] != Qundef) { tick_int    = NUM2INT(kw_args[1]); }
+    if (kw_args[2] != Qundef) { mode        = symbol_to_progress_mode(kw_args[2]); }
+    if (tick_int > period_int) tick_int = period_int;
   }
-  if (tick_int > period_int) tick_int = period_int;
+
+  if (!rb_block_given_p() || mode == PROGRESS_NONE || period_int == 0) {
+    Database_reset_progress_handler(self, db);
+    db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
+    return self;
+  }
 
   db->gvl_release_threshold = -1;
   db->progress_handler.mode = mode;
@@ -1378,14 +1385,19 @@ void Init_ExtraliteDatabase(void) {
   SYM_at_least_once         = ID2SYM(rb_intern("at_least_once"));
   SYM_gvl_release_threshold = ID2SYM(rb_intern("gvl_release_threshold"));
   SYM_once                  = ID2SYM(rb_intern("once"));
+  SYM_none                  = ID2SYM(rb_intern("none"));
   SYM_normal                = ID2SYM(rb_intern("normal"));
   SYM_pragma                = ID2SYM(rb_intern("pragma"));
   SYM_read_only             = ID2SYM(rb_intern("read_only"));
   SYM_wal                   = ID2SYM(rb_intern("wal"));
 
+  rb_gc_register_mark_object(SYM_at_least_once);
   rb_gc_register_mark_object(SYM_gvl_release_threshold);
-  rb_gc_register_mark_object(SYM_read_only);
+  rb_gc_register_mark_object(SYM_once);
+  rb_gc_register_mark_object(SYM_none);
+  rb_gc_register_mark_object(SYM_normal);
   rb_gc_register_mark_object(SYM_pragma);
+  rb_gc_register_mark_object(SYM_read_only);
   rb_gc_register_mark_object(SYM_wal);
 
   UTF8_ENCODING = rb_utf8_encoding();

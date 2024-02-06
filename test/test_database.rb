@@ -1283,14 +1283,14 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     buf = []
-    db.on_progress(1) { buf << :progress }
+    db.on_progress(period: 1) { buf << :progress }
 
     result = db.query_single('select 1 as a, 2 as b, 3 as c')
     assert_equal({ a: 1, b: 2, c: 3 }, result)
     assert_in_range 5..7, buf.size
 
     buf = []
-    db.on_progress(2) { buf << :progress }
+    db.on_progress(period: 2) { buf << :progress }
 
     result = db.query_single('select 1 as a, 2 as b, 3 as c')
     assert_equal({ a: 1, b: 2, c: 3 }, result)
@@ -1301,18 +1301,18 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     count = 0
-    db.on_progress(1, tick: 1) { count += 1 }
+    db.on_progress(period: 1) { count += 1 }
     db.query('select 1 as a')
     assert count > 0
     base_count = count
 
     count = 0
-    db.on_progress(1, tick: 1) { count += 1 }
+    db.on_progress(period: 1) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal base_count * 10, count
 
     count = 0
-    db.on_progress(10, tick: 1) { count += 1 }
+    db.on_progress(period: 10, tick: 1) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal base_count, count
   end
@@ -1321,18 +1321,18 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     count = 0
-    db.on_progress(1, tick: 1) { count += 1 }
+    db.on_progress(period: 1) { count += 1 }
     db.query('select 1 as a')
     assert count > 0
     base_count = count
 
     count = 0
-    db.on_progress(1, tick: 1, mode: :at_least_once) { count += 1 }
+    db.on_progress(period: 1, mode: :at_least_once) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal base_count * 10 + 10, count
 
     count = 0
-    db.on_progress(10, tick: 1, mode: :at_least_once) { count += 1 }
+    db.on_progress(period: 10, tick: 1, mode: :at_least_once) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal base_count + 10, count
   end
@@ -1341,12 +1341,17 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     count = 0
-    db.on_progress(1, tick: 1, mode: :once) { count += 1 }
+    db.on_progress(mode: :once) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal 10, count
 
     count = 0
-    db.on_progress(10, tick: 1, mode: :once) { count += 1 }
+    db.on_progress(period: 1, mode: :once) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress(period: 10, tick: 1, mode: :once) { count += 1 }
     10.times { db.query('select 1 as a') }
     assert_equal 10, count
   end
@@ -1355,12 +1360,57 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     count = 0
-    db.on_progress(1, tick: 1, mode: :once) { count += 1 }
+    db.on_progress(period: 1, mode: :once) { count += 1 }
     db.batch_query('select ?', 1..10)
     assert_equal 10, count
 
     db.batch_query('select ?', 1..3)
     assert_equal 13, count
+  end
+
+  def test_progress_handler_reset
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    set_progress = -> {
+      count = 0
+      db.on_progress(mode: :once) { count += 1 }
+    }
+
+    set_progress.()
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress(mode: :none)
+    10.times { db.query('select 1 as a') }
+    assert_equal 0, count
+
+    set_progress.()
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress(period: 0) { foo }
+    10.times { db.query('select 1 as a') }
+    assert_equal 0, count
+
+    set_progress.()
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress
+    10.times { db.query('select 1 as a') }
+    assert_equal 0, count
+  end
+
+  def test_progress_handler_invalid_arg
+    db = Extralite::Database.new(':memory:')
+    
+    assert_raises(TypeError) { db.on_progress(period: :foo) }
+    assert_raises(TypeError) { db.on_progress(tick: :foo) }
+    assert_raises(ArgumentError) { db.on_progress(mode: :foo) }
   end
 
   def test_progress_handler_once_mode_with_prepared_query
@@ -1370,7 +1420,7 @@ class ConcurrencyTest < Minitest::Test
     q = db.prepare('select x from foo')
 
     count = 0
-    db.on_progress(1, tick: 1, mode: :once) { count += 1 }
+    db.on_progress(period: 1, mode: :once) { count += 1 }
 
     q.to_a
     assert_equal 1, count
@@ -1406,7 +1456,7 @@ class ConcurrencyTest < Minitest::Test
   def test_progress_handler_timeout_interrupt
     db = Extralite::Database.new(':memory:')
     t0 = Time.now
-    db.on_progress(1000) do
+    db.on_progress do
       Thread.pass
       db.interrupt if Time.now - t0 >= 0.2
     end
@@ -1448,7 +1498,7 @@ class ConcurrencyTest < Minitest::Test
   def test_progress_handler_timeout_raise
     db = Extralite::Database.new(':memory:')
     t0 = Time.now
-    db.on_progress(1000) do
+    db.on_progress do
       Thread.pass
       raise CustomTimeoutError if Time.now - t0 >= 0.2
     end
@@ -1493,7 +1543,7 @@ class ConcurrencyTest < Minitest::Test
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
 
     t0 = Time.now
-    db2.on_progress(1000) do
+    db2.on_progress do
       Thread.pass
       raise CustomTimeoutError if Time.now - t0 >= 0.2
     end
