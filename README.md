@@ -877,8 +877,7 @@ that specifies the approximate number of SQLite VM instructions between
 successive calls to the progress handler:
 
 ```ruby
-# Run progress handler every 100 SQLite VM instructions
-db.on_progress(100) do
+db.on_progress do
   check_for_timeout
   # Allow other threads to run
   Thread.pass
@@ -891,7 +890,7 @@ above, calling `#interrupt` causes the query to raise a
 `Extralite::InterruptError` exception:
 
 ```ruby
-db.on_progress(100) { db.interrupt }
+db.on_progress { db.interrupt }
 db.query('select 1')
 #=> Extralite::InterruptError!
 ```
@@ -900,7 +899,7 @@ You can also interrupt queries in progress by raising an exception. The query
 will be stopped, and the exception will propagate to the call site:
 
 ```ruby
-db.on_progress(100) do
+db.on_progress do
   raise 'BOOM!'
 end
 
@@ -912,7 +911,7 @@ Here's how a timeout might be implemented using the progress handler:
 
 ```ruby
 def setup_progress_handler
-  @db.on_progress(100) do
+  @db.on_progress do
     raise TimeoutError if Time.now - @t0 >= @timeout
     Thread.pass
   end
@@ -956,15 +955,41 @@ This allows you to implement separate logic to deal with busy states, for
 example sleeping for a small period of time, or implementing a different timeout
 period.
 
-### Tuning the Progress Handler Period
+### Advanced Progress Handler Settings
 
-The progress period passed to `#on_progress` determines how often the progress
-handler will be called. For very simple queries and a big enough period, the
-progress handler will not be called at all. On the other hand, setting the
-period too low might hurt the performance of your queries, since there's some
-overhead to invoking the progress handler, even if it does nothing. Therefore
-you might want to experiment with different period values to see what offers the
-best performance for your specific situation.
+You can further tune the behaviour of the progress handler with the following
+options passed to `#on_progress`:
+
+- `:mode`: the following modes are supported:
+  - `:none` : the progress handler is disabled.
+  - `:normal`: the progress handler is called on query progress (this is the
+    default mode).
+  - `:once`: the progress handler is called once before running the query.
+  - `:at_least_once`: the progress handler is called once before running the
+    query, and on query progress.
+- `:period`: controls the approximate number of SQLite VM instructions executed
+  between consecutive calls to the progress handler. Default value: 1000.
+- `:tick`: controls the granularity of the progress handler. This is the value
+  passed internally to the SQLite library. Default value: 10.
+
+```ruby
+db.on_progress(mode: :at_least_once, period: 640, tick: 5) { snooze }
+```
+
+### Global Progress Handler Settings
+
+You can set the global progress handler behaviour by calling
+`Extralite.on_progress`. You can use this API to set the global progress
+settings, without needing to set a progress handler individually for each
+`Database` instance. This method takes the same options as
+`Database#on_progress`:
+
+```ruby
+Extralite.on_progress(mode: :at_least_once, period: 640, tick: 5) { snooze }
+
+# the new database instance uses the global progress handler settings
+db = Database.new(':memory:')
+```
 
 ### Extralite and Fibers
 
