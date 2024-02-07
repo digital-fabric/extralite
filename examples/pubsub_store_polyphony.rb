@@ -103,9 +103,9 @@ db2.pragma(journal_mode: :wal, synchronous: 1)
 db3 = Extralite::Database.new(fn)
 db3.pragma(journal_mode: :wal, synchronous: 1)
 
-db1.on_progress(50) { |b| b ? sleep(0.0001) : snooze }
-db2.on_progress(50) { |b| b ? sleep(0.0001) : snooze }
-db3.on_progress(50) { |b| b ? sleep(0.0001) : snooze }
+db1.on_progress(1000) { |b| b ? sleep(0.0001) : snooze }
+db2.on_progress(1000) { |b| b ? sleep(0.0001) : snooze }
+db3.on_progress(1000) { |b| b ? sleep(0.0001) : snooze }
 
 producer = PubSub.new(db1)
 producer.setup
@@ -163,7 +163,7 @@ end
 
 db4 = Extralite::Database.new(fn)
 db4.pragma(journal_mode: :wal, synchronous: 1)
-db4.on_progress(10) { sleep 0.05 }
+db4.on_progress(1000) { |busy| busy ? sleep(0.05) : snooze }
 
 last_t = Time.now
 last_publish_count = 0

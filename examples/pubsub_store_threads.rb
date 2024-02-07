@@ -34,14 +34,21 @@ class PubSub
   end
 
   def get_messages(&block)
-      messages = @db.query_ary('delete from messages where subscriber_id = ? returning topic, message', @id)
-      if block
-        messages.each(&block)
-        nil
-      else
-        messages
-      end
-    # end
+    @db.transaction(:deferred) do
+      results = @db.query_ary('select topic, message from messages where subscriber_id = ?', @id)
+      return [] if results.empty?
+
+      @db.execute('delete from messages where subscriber_id = ?', @id)
+      results
+    end
+
+      # messages = @db.query_ary('delete from messages where subscriber_id = ? returning topic, message', @id)
+      # if block
+      #   messages.each(&block)
+      #   nil
+      # else
+      #   messages
+      # end
   rescue Extralite::BusyError
     p busy: :get_message
     block_given? ? nil : []

@@ -3,7 +3,7 @@
 require_relative 'helper'
 require 'sequel'
 
-class SequelExtraliteTest < MiniTest::Test
+class SequelExtraliteTest < Minitest::Test
   def setup
     @db = Sequel.connect('extralite::memory:')
     @db.create_table :items do

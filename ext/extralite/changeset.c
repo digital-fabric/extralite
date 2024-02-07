@@ -186,13 +186,13 @@ static inline VALUE convert_value(sqlite3_value *value) {
     case SQLITE_BLOB:
       {
         int len = sqlite3_value_bytes(value);
-        void *blob = sqlite3_value_blob(value);
+        const void *blob = sqlite3_value_blob(value);
         return rb_str_new(blob, len);
       }
     case SQLITE_TEXT:
       {
         int len = sqlite3_value_bytes(value);
-        void *text = sqlite3_value_text(value);
+        const void *text = sqlite3_value_text(value);
         return rb_enc_str_new(text, len, UTF8_ENCODING);
       }
     default:
@@ -339,7 +339,7 @@ VALUE Changeset_to_a(VALUE self) {
 
 // copied from: https://sqlite.org/sessionintro.html
 static int xConflict(void *pCtx, int eConflict, sqlite3_changeset_iter *pIter){
-  int ret = (long)pCtx;
+  int ret = (int)pCtx;
   return ret;
 }
 

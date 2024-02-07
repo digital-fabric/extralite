@@ -6,7 +6,7 @@ require 'date'
 require 'tempfile'
 require 'json'
 
-class DatabaseTest < MiniTest::Test
+class DatabaseTest < Minitest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table if not exists t (x,y,z)')
@@ -1017,7 +1017,7 @@ class DatabaseTest < MiniTest::Test
   end
 end
 
-class ScenarioTest < MiniTest::Test
+class ScenarioTest < Minitest::Test
   def setup
     @fn = Tempfile.new('extralite_scenario_test').path
     @db = Extralite::Database.new(@fn)
@@ -1141,7 +1141,7 @@ class ScenarioTest < MiniTest::Test
   end
 end
 
-class BackupTest < MiniTest::Test
+class BackupTest < Minitest::Test
   def setup
     @src = Extralite::Database.new(':memory:')
     @dst = Extralite::Database.new(':memory:')
@@ -1283,18 +1283,163 @@ class ConcurrencyTest < Minitest::Test
     db = Extralite::Database.new(':memory:')
 
     buf = []
-    db.on_progress(1) { buf << :progress }
+    db.on_progress(period: 1) { buf << :progress }
 
     result = db.query_single('select 1 as a, 2 as b, 3 as c')
     assert_equal({ a: 1, b: 2, c: 3 }, result)
     assert_in_range 5..7, buf.size
 
     buf = []
-    db.on_progress(2) { buf << :progress }
+    db.on_progress(period: 2) { buf << :progress }
 
     result = db.query_single('select 1 as a, 2 as b, 3 as c')
     assert_equal({ a: 1, b: 2, c: 3 }, result)
     assert_in_range 2..4, buf.size
+  end
+
+  def test_progress_handler_normal_mode
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    db.on_progress(period: 1) { count += 1 }
+    db.query('select 1 as a')
+    assert count > 0
+    base_count = count
+
+    count = 0
+    db.on_progress(period: 1) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal base_count * 10, count
+
+    count = 0
+    db.on_progress(period: 10, tick: 1) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal base_count, count
+  end
+
+  def test_progress_handler_at_least_once_mode
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    db.on_progress(period: 1) { count += 1 }
+    db.query('select 1 as a')
+    assert count > 0
+    base_count = count
+
+    count = 0
+    db.on_progress(period: 1, mode: :at_least_once) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal base_count * 10 + 10, count
+
+    count = 0
+    db.on_progress(period: 10, tick: 1, mode: :at_least_once) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal base_count + 10, count
+  end
+
+  def test_progress_handler_once_mode
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    db.on_progress(mode: :once) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress(period: 1, mode: :once) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress(period: 10, tick: 1, mode: :once) { count += 1 }
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+  end
+
+  def test_progress_handler_once_mode_with_batch_query
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    db.on_progress(period: 1, mode: :once) { count += 1 }
+    db.batch_query('select ?', 1..10)
+    assert_equal 10, count
+
+    db.batch_query('select ?', 1..3)
+    assert_equal 13, count
+  end
+
+  def test_progress_handler_reset
+    db = Extralite::Database.new(':memory:')
+
+    count = 0
+    set_progress = -> {
+      count = 0
+      db.on_progress(mode: :once) { count += 1 }
+    }
+
+    set_progress.()
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress(mode: :none)
+    10.times { db.query('select 1 as a') }
+    assert_equal 0, count
+
+    set_progress.()
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress(period: 0) { foo }
+    10.times { db.query('select 1 as a') }
+    assert_equal 0, count
+
+    set_progress.()
+    10.times { db.query('select 1 as a') }
+    assert_equal 10, count
+
+    count = 0
+    db.on_progress
+    10.times { db.query('select 1 as a') }
+    assert_equal 0, count
+  end
+
+  def test_progress_handler_invalid_arg
+    db = Extralite::Database.new(':memory:')
+    
+    assert_raises(TypeError) { db.on_progress(period: :foo) }
+    assert_raises(TypeError) { db.on_progress(tick: :foo) }
+    assert_raises(ArgumentError) { db.on_progress(mode: :foo) }
+  end
+
+  def test_progress_handler_once_mode_with_prepared_query
+    db = Extralite::Database.new(':memory:')
+    db.execute 'create table foo (x)'
+    db.batch_query('insert into foo values (?)', 1..10)
+    q = db.prepare('select x from foo')
+
+    count = 0
+    db.on_progress(period: 1, mode: :once) { count += 1 }
+
+    q.to_a
+    assert_equal 1, count
+
+    q.reset
+    record_count = 0
+    assert_equal 2, count
+    while q.next
+      record_count += 1
+    end
+    assert_equal 10, record_count
+    assert_equal 2, count
+
+    q.reset
+    assert_equal 3, count
+    while q.next
+      record_count += 1
+    end
+    assert_equal 3, count
   end
 
   LONG_QUERY = <<~SQL
@@ -1311,7 +1456,7 @@ class ConcurrencyTest < Minitest::Test
   def test_progress_handler_timeout_interrupt
     db = Extralite::Database.new(':memory:')
     t0 = Time.now
-    db.on_progress(1000) do
+    db.on_progress do
       Thread.pass
       db.interrupt if Time.now - t0 >= 0.2
     end
@@ -1353,7 +1498,7 @@ class ConcurrencyTest < Minitest::Test
   def test_progress_handler_timeout_raise
     db = Extralite::Database.new(':memory:')
     t0 = Time.now
-    db.on_progress(1000) do
+    db.on_progress do
       Thread.pass
       raise CustomTimeoutError if Time.now - t0 >= 0.2
     end
@@ -1398,7 +1543,7 @@ class ConcurrencyTest < Minitest::Test
     assert_raises(Extralite::BusyError) { db2.query('begin exclusive') }
 
     t0 = Time.now
-    db2.on_progress(1000) do
+    db2.on_progress do
       Thread.pass
       raise CustomTimeoutError if Time.now - t0 >= 0.2
     end
@@ -1430,6 +1575,29 @@ class ConcurrencyTest < Minitest::Test
     assert_nil result
     assert_equal 1, ((t1 - t0) * 5).round.to_i
     assert_kind_of CustomTimeoutError, err
+  end
+
+  def test_global_progress_handler
+    count = 0
+    Extralite.on_progress(tick: 1, period: 1) { count += 1 }
+
+    db = Extralite::Database.new(':memory:')
+    10.times { db.query('select 1') }
+    refute_equal 0, count
+
+    old_count = count
+    Extralite.on_progress # remove global progress handler
+
+    # already opened db should preserve progress handler behaviour
+    10.times { db.query('select 1') }
+    refute_equal old_count, count
+
+    old_count = count
+    db2 = Extralite::Database.new(':memory:')
+    10.times { db2.query('select 1') }
+    assert_equal old_count, count
+  ensure
+    Extralite.on_progress(mode: :none)
   end
 end
 
@@ -1485,31 +1653,35 @@ class RactorTest < Minitest::Test
     assert_equal 'Database is closed', ex.message
   end
 
-  STRESS_DB_NAME = Tempfile.new('extralite_test_ractor_stress').path
-
   # Adapted from here: https://github.com/sparklemotion/sqlite3-ruby/pull/365/files
   def test_ractor_stress
     skip if SKIP_RACTOR_TESTS
-    
-    Ractor.make_shareable(STRESS_DB_NAME)
 
-    db = Extralite::Database.new(STRESS_DB_NAME)
-    db.execute('PRAGMA journal_mode=WAL') # A little slow without this
-    db.execute('create table stress_test (a integer primary_key, b text)')
+    fn = Tempfile.new('extralite_test_ractor_stress').path
     random = Random.new.freeze
+
     ractors = (0..9).map do |ractor_number|
-      Ractor.new(random, ractor_number) do |r, n|
-        db_in_ractor = Extralite::Database.new(STRESS_DB_NAME)
-        db_in_ractor.busy_timeout = 3
+      sleep 0.05
+      Ractor.new(fn, random, ractor_number) do |rfn, r, n|
+        rdb = Extralite::Database.new(rfn)
+        rdb.busy_timeout = 3
+        rdb.pragma(journal_mode: 'wal', synchronous: 1)
+        rdb.execute('create table if not exists stress_test (a integer primary_key, b text)')
+        changes = 0
         10.times do |i|
-          db_in_ractor.execute('insert into stress_test(a, b) values (?, ?)', n * 100 + i, r.rand)
+          changes += rdb.execute('insert into stress_test(a, b) values (?, ?)', n * 100 + i, r.rand)
         end
+        Ractor.yield changes
       end
     end
-    ractors.each { |r| r.take }
-    final_check = Ractor.new do
-      db_in_ractor = Extralite::Database.new(STRESS_DB_NAME)
-      count = db_in_ractor.query_single_argv('select count(*) from stress_test')
+
+    buf = []
+    ractors.each { |r| buf << r.take }
+    assert_equal [10] * 10, buf
+
+    final_check = Ractor.new(fn) do |rfn|
+      rdb = Extralite::Database.new(rfn, wal: true)
+      count = rdb.query_single_argv('select count(*) from stress_test')
       Ractor.yield count
     end
     count = final_check.take
@@ -1517,7 +1689,7 @@ class RactorTest < Minitest::Test
   end
 end
 
-class DatabaseTransformTest < MiniTest::Test
+class DatabaseTransformTest < Minitest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table t (a, b, c)')

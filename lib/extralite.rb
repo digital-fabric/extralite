@@ -32,7 +32,7 @@ module Extralite
   # This class encapsulates an SQLite database connection.
   class Database
     # @!visibility private
-    TABLES_SQL = <<~SQL
+    TABLES_SQL = (<<~SQL).freeze
       SELECT name FROM %<db>s.sqlite_master
       WHERE type ='table'
         AND name NOT LIKE 'sqlite_%%';

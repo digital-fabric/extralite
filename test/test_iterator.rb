@@ -2,7 +2,7 @@
 
 require_relative 'helper'
 
-class IteratorTest < MiniTest::Test
+class IteratorTest < Minitest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     @db.query('create table if not exists t (x,y,z)')

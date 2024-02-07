@@ -5,7 +5,7 @@ require_relative 'helper'
 require 'date'
 require 'tempfile'
 
-class ChangesetTest < MiniTest::Test
+class ChangesetTest < Minitest::Test
   def setup
     @db = Extralite::Database.new(':memory:')
     skip if !@db.respond_to?(:track_changes)
