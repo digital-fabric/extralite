@@ -1016,7 +1016,14 @@ as long as the following conditions are met:
 
 ### Use with Ractors
 
-Extralite databases can safely be used inside ractors. Note that ractors are still an experimental feature of Ruby. A ractor has the benefit of using a separate GVL from the maine one, which allows true parallelism for Ruby apps. So when you use Extralite to access SQLite databases from within a ractor, you can do so without any considerations for what's happening outside the ractor when it runs queries.
+Extralite databases can safely be used inside ractors. A ractor has the benefit
+of using a separate GVL from the maine one, which allows true parallelism for
+Ruby apps. So when you use Extralite to access SQLite databases from within a
+ractor, you can do so without any considerations for what's happening outside
+the ractor when it runs queries.
+
+**Note**: Ractors are considered an experimental feature of Ruby. You may
+encounter errors or inconsistent behaviour when using ractors.
 
 ## Advanced Usage
 
