@@ -1492,5 +1492,7 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(SYM_read_only);
   rb_gc_register_mark_object(SYM_wal);
 
+  rb_gc_register_mark_object(global_progress_handler.proc);
+
   UTF8_ENCODING = rb_utf8_encoding();
 }
