@@ -100,7 +100,7 @@ typedef struct {
 
 #ifdef EXTRALITE_ENABLE_CHANGESET
 typedef struct {
-  long            changeset_len;
+  int             changeset_len;
   void            *changeset_ptr;
 } Changeset_t;
 #endif
@@ -156,6 +156,8 @@ enum gvl_mode {
 }
 
 #define DEFAULT_GVL_RELEASE_THRESHOLD 1000
+#define DEFAULT_PROGRESS_HANDLER_PERIOD 1000
+#define DEFAULT_PROGRESS_HANDLER_TICK 10
 
 extern rb_encoding *UTF8_ENCODING;
 

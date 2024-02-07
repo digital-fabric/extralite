@@ -1576,6 +1576,29 @@ class ConcurrencyTest < Minitest::Test
     assert_equal 1, ((t1 - t0) * 5).round.to_i
     assert_kind_of CustomTimeoutError, err
   end
+
+  def test_global_progress_handler
+    count = 0
+    Extralite.on_progress(tick: 1, period: 1) { count += 1 }
+
+    db = Extralite::Database.new(':memory:')
+    10.times { db.query('select 1') }
+    refute_equal 0, count
+
+    old_count = count
+    Extralite.on_progress # remove global progress handler
+
+    # already opened db should preserve progress handler behaviour
+    10.times { db.query('select 1') }
+    refute_equal old_count, count
+
+    old_count = count
+    db2 = Extralite::Database.new(':memory:')
+    10.times { db2.query('select 1') }
+    assert_equal old_count, count
+  ensure
+    Extralite.on_progress(mode: :none)
+  end
 end
 
 class RactorTest < Minitest::Test
