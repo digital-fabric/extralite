@@ -63,6 +63,7 @@ latest features and enhancements.
 - [Getting Started](#getting-started)
 - [Query Modes](#query-modes)
 - [Parameter binding](#parameter-binding)
+- [Value Transforms](#value-transforms)
 - [Data Types](#data-types)
 - [Prepared Queries](#prepared-queries)
 - [Batch Execution of Queries](#batch-execution-of-queries)
@@ -1207,7 +1208,8 @@ large number of rows.
 
 ### Rows as Hashes
 
- [Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb)
+[Benchmark source
+code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb)
 
 |Row count|sqlite3 1.7.0|Extralite 2.5|Advantage|
 |-:|-:|-:|-:|
@@ -1217,7 +1219,8 @@ large number of rows.
 
 ### Rows as Arrays
 
-[Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
+[Benchmark source
+code](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
 
 |Row count|sqlite3 1.7.0|Extralite 2.5|Advantage|
 |-:|-:|-:|-:|
@@ -1227,7 +1230,8 @@ large number of rows.
 
 ### Prepared Queries (Prepared Statements)
 
-[Benchmark source code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash_prepared.rb)
+[Benchmark source
+code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash_prepared.rb)
 
 |Row count|sqlite3 1.7.0|Extralite 2.5|Advantage|
 |-:|-:|-:|-:|
@@ -1238,7 +1242,10 @@ large number of rows.
 As those benchmarks show, Extralite is capabale of reading up to 2.4M rows per
 second, and can be more than 14 times faster than the `sqlite3` gem.
 
-Note that the benchmarks above were performed on synthetic data, in a single-threaded environment, with the GVL release threshold set to -1, which means that both Extralite and the `sqlite3` gem hold the GVL for the duration of the query.
+Note that the benchmarks above were performed on synthetic data, in a
+single-threaded environment, with the GVL release threshold set to -1, which
+means that both Extralite and the `sqlite3` gem hold the GVL for the duration of
+the query.
 
 ## License
 

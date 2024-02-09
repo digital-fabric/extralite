@@ -1,3 +1,13 @@
+# 2.7 2024-02-09
+
+- Improve progress handler API, add mode, period, tick options, global progress
+  handler. [#68](https://github.com/digital-fabric/extralite/pull/68)
+- Rework `Database#initialize` options
+- Add argv row mode (for passing column values as argv)
+- Streamline and improve query methods
+  [#67](https://github.com/digital-fabric/extralite/pull/67)
+- Implement row transforms
+
 # 2.6 2024-01-23
 
 - Implement changeset API.
