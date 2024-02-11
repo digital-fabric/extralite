@@ -721,15 +721,16 @@ static inline VALUE Database_prepare(int argc, VALUE *argv, VALUE self, VALUE mo
 }
 
 /* call-seq:
- *   db.prepare(sql) -> Extralite::Query
- *   db.prepare(sql, ...) -> Extralite::Query
- *   db.prepare(sql, ...) { ... } -> Extralite::Query
+ *   db.prepare(sql) -> query
+ *   db.prepare(sql, *params) -> query
+ *   db.prepare(sql, *params) { ... } -> query
  *
  * Creates a prepared query with the given SQL query in hash mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
  * 
  * @param sql [String] SQL statement
+ * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query
  */
 VALUE Database_prepare_hash(int argc, VALUE *argv, VALUE self) {
@@ -738,14 +739,15 @@ VALUE Database_prepare_hash(int argc, VALUE *argv, VALUE self) {
 
 /* call-seq:
  *   db.prepare_argv(sql) -> Extralite::Query
- *   db.prepare_argv(sql, ...) -> Extralite::Query
- *   db.prepare_argv(sql, ...) { ... } -> Extralite::Query
+ *   db.prepare_argv(sql, *params) -> Extralite::Query
+ *   db.prepare_argv(sql, *params) { ... } -> Extralite::Query
  *
  * Creates a prepared query with the given SQL query in argv mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
  * 
  * @param sql [String] SQL statement
+ * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query
  */
 VALUE Database_prepare_argv(int argc, VALUE *argv, VALUE self) {
@@ -754,14 +756,15 @@ VALUE Database_prepare_argv(int argc, VALUE *argv, VALUE self) {
 
 /* call-seq:
  *   db.prepare_ary(sql) -> Extralite::Query
- *   db.prepare_ary(sql, ...) -> Extralite::Query
- *   db.prepare_ary(sql, ...) { ... } -> Extralite::Query
+ *   db.prepare_ary(sql, *params) -> Extralite::Query
+ *   db.prepare_ary(sql, *params) { ... } -> Extralite::Query
  *
  * Creates a prepared query with the given SQL query in ary mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
  * 
  * @param sql [String] SQL statement
+ * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query
  */
 VALUE Database_prepare_ary(int argc, VALUE *argv, VALUE self) {
@@ -850,7 +853,11 @@ VALUE backup_cleanup(VALUE ptr) {
   return Qnil;
 }
 
-/* Creates a backup of the database to the given destination, which can be
+/* call-seq:
+ *   db.backup(dest, src_db_name = 'main', dst_db_name = 'main') { |remaining, total| ... } -> db
+ *
+ * 
+ * Creates a backup of the database to the given destination, which can be
  * either a filename or a database instance. In order to monitor the backup
  * progress you can pass a block that will be called periodically by the backup
  * method with two arguments: the remaining page count, and the total page
@@ -862,6 +869,8 @@ VALUE backup_cleanup(VALUE ptr) {
  *     end
  * 
  * @param dest [String, Extralite::Database] backup destination
+ * @param src_db_name [String] source database name (default: "main")
+ * @param dst_db_name [String] Destination database name (default: "main")
  * @return [Extralite::Database] source database
  */
 VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
@@ -1030,7 +1039,10 @@ VALUE Database_trace(VALUE self) {
 }
 
 #ifdef EXTRALITE_ENABLE_CHANGESET
-/* Tracks changes to the database and returns a changeset. The changeset can
+/* call-seq:
+ *   db.track_changes(*tables) { ... } -> changeset
+ *
+ * Tracks changes to the database and returns a changeset. The changeset can
  * then be used to store the changes to a file, apply them to another database,
  * or undo the changes. The given table names specify which tables should be
  * tracked for changes. Passing a value of nil causes all tables to be tracked.
@@ -1041,7 +1053,7 @@ VALUE Database_trace(VALUE self) {
  * 
  *     File.open('my.changes', 'w+') { |f| f << changeset.to_blob }
  * 
- * @param table [String, Symbol] table to track
+ * @param *tables [Array<String, Symbol>] table(s) to track
  * @return [Extralite::Changeset] changeset
 */
 VALUE Database_track_changes(int argc, VALUE *argv, VALUE self) {
@@ -1185,7 +1197,7 @@ struct progress_handler parse_progress_handler_opts(VALUE opts) {
  * @option opts [Integer] :period period value (`1000` by default)
  * @option opts [Integer] :tick tick value (`10` by default)
  * @option opts [Symbol] :mode progress handler mode (`:normal` by default)
- * @returns [Extralite::Database] database
+ * @return [Extralite::Database] database
  */
 VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
   Database_t *db = self_to_open_database(self);
@@ -1220,7 +1232,10 @@ VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
   return self;
 }
 
-/* Installs or removes a global progress handler that will be executed
+/* call-seq:
+ *   Extralite.on_progress(**opts) { ... }
+ * 
+ * Installs or removes a global progress handler that will be executed
  * periodically while a query is running. This method can be used to support
  * switching between fibers and threads or implementing timeouts for running
  * queries.
@@ -1275,7 +1290,7 @@ VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
  * @option opts [Integer] :period period value (`1000` by default)
  * @option opts [Integer] :tick tick value (`10` by default)
  * @option opts [Symbol] :mode progress handler mode (`:normal` by default)
- * @returns [Extralite::Database] database
+ * @return [Extralite::Database] database
  */
 VALUE Extralite_on_progress(int argc, VALUE *argv, VALUE self) {
   VALUE opts;
@@ -1361,7 +1376,7 @@ VALUE Database_gvl_release_threshold_get(VALUE self) {
  * A value of nil sets the threshold to the default value, which is
  * currently 1000.
  *
- * @param [Integer, nil] GVL release threshold
+ * @param threshold [Integer, nil] GVL release threshold
  * @return [Integer] GVL release threshold
  */
 VALUE Database_gvl_release_threshold_set(VALUE self, VALUE value) {
@@ -1398,63 +1413,61 @@ void Init_ExtraliteDatabase(void) {
   cDatabase = rb_define_class_under(mExtralite, "Database", rb_cObject);
   rb_define_alloc_func(cDatabase, Database_allocate);
 
-  #define DEF(s, f, a) rb_define_method(cDatabase, s, f, a)
-
-  DEF("backup",                 Database_backup, -1);
-  DEF("batch_execute",          Database_batch_execute, 2);
-  DEF("batch_query",            Database_batch_query, 2);
-  DEF("batch_query_ary",        Database_batch_query_ary, 2);
-  DEF("batch_query_argv",       Database_batch_query_argv, 2);
-  DEF("batch_query_hash",       Database_batch_query, 2);
-  DEF("busy_timeout=",          Database_busy_timeout_set, 1);
-  DEF("changes",                Database_changes, 0);
-  DEF("close",                  Database_close, 0);
-  DEF("closed?",                Database_closed_p, 0);
-  DEF("columns",                Database_columns, 1);
-  DEF("errcode",                Database_errcode, 0);
-  DEF("errmsg",                 Database_errmsg, 0);
+  rb_define_method(cDatabase, "backup",                 Database_backup, -1);
+  rb_define_method(cDatabase, "batch_execute",          Database_batch_execute, 2);
+  rb_define_method(cDatabase, "batch_query",            Database_batch_query, 2);
+  rb_define_method(cDatabase, "batch_query_ary",        Database_batch_query_ary, 2);
+  rb_define_method(cDatabase, "batch_query_argv",       Database_batch_query_argv, 2);
+  rb_define_method(cDatabase, "batch_query_hash",       Database_batch_query, 2);
+  rb_define_method(cDatabase, "busy_timeout=",          Database_busy_timeout_set, 1);
+  rb_define_method(cDatabase, "changes",                Database_changes, 0);
+  rb_define_method(cDatabase, "close",                  Database_close, 0);
+  rb_define_method(cDatabase, "closed?",                Database_closed_p, 0);
+  rb_define_method(cDatabase, "columns",                Database_columns, 1);
+  rb_define_method(cDatabase, "errcode",                Database_errcode, 0);
+  rb_define_method(cDatabase, "errmsg",                 Database_errmsg, 0);
 
   #ifdef HAVE_SQLITE3_ERROR_OFFSET
-  DEF("error_offset",           Database_error_offset, 0);
+  rb_define_method(cDatabase, "error_offset",           Database_error_offset, 0);
   #endif
 
-  DEF("execute",                Database_execute, -1);
-  DEF("filename",               Database_filename, -1);
-  DEF("gvl_release_threshold",  Database_gvl_release_threshold_get, 0);
-  DEF("gvl_release_threshold=", Database_gvl_release_threshold_set, 1);
-  DEF("initialize",             Database_initialize, -1);
-  DEF("inspect",                Database_inspect, 0);
-  DEF("interrupt",              Database_interrupt, 0);
-  DEF("last_insert_rowid",      Database_last_insert_rowid, 0);
-  DEF("limit",                  Database_limit, -1);
+  rb_define_method(cDatabase, "execute",                Database_execute, -1);
+  rb_define_method(cDatabase, "filename",               Database_filename, -1);
+  rb_define_method(cDatabase, "gvl_release_threshold",  Database_gvl_release_threshold_get, 0);
+  rb_define_method(cDatabase, "gvl_release_threshold=", Database_gvl_release_threshold_set, 1);
+  rb_define_method(cDatabase, "initialize",             Database_initialize, -1);
+  rb_define_method(cDatabase, "inspect",                Database_inspect, 0);
+  rb_define_method(cDatabase, "interrupt",              Database_interrupt, 0);
+  rb_define_method(cDatabase, "last_insert_rowid",      Database_last_insert_rowid, 0);
+  rb_define_method(cDatabase, "limit",                  Database_limit, -1);
 
   #ifdef HAVE_SQLITE3_LOAD_EXTENSION
-  DEF("load_extension",         Database_load_extension, 1);
+  rb_define_method(cDatabase, "load_extension",         Database_load_extension, 1);
   #endif
 
-  DEF("on_progress",            Database_on_progress, -1);
-  DEF("prepare",                Database_prepare_hash, -1);
-  DEF("prepare_argv",           Database_prepare_argv, -1);
-  DEF("prepare_ary",            Database_prepare_ary, -1);
-  DEF("prepare_hash",           Database_prepare_hash, -1);
-  DEF("query",                  Database_query, -1);
-  DEF("query_argv",             Database_query_argv, -1);
-  DEF("query_ary",              Database_query_ary, -1);
-  DEF("query_hash",             Database_query, -1);
-  DEF("query_single",           Database_query_single, -1);
-  DEF("query_single_ary",       Database_query_single_ary, -1);
-  DEF("query_single_argv",      Database_query_single_argv, -1);
-  DEF("query_single_hash",      Database_query_single, -1);
-  DEF("read_only?",             Database_read_only_p, 0);
-  DEF("status",                 Database_status, -1);
-  DEF("total_changes",          Database_total_changes, 0);
-  DEF("trace",                  Database_trace, 0);
+  rb_define_method(cDatabase, "on_progress",            Database_on_progress, -1);
+  rb_define_method(cDatabase, "prepare",                Database_prepare_hash, -1);
+  rb_define_method(cDatabase, "prepare_argv",           Database_prepare_argv, -1);
+  rb_define_method(cDatabase, "prepare_ary",            Database_prepare_ary, -1);
+  rb_define_method(cDatabase, "prepare_hash",           Database_prepare_hash, -1);
+  rb_define_method(cDatabase, "query",                  Database_query, -1);
+  rb_define_method(cDatabase, "query_argv",             Database_query_argv, -1);
+  rb_define_method(cDatabase, "query_ary",              Database_query_ary, -1);
+  rb_define_method(cDatabase, "query_hash",             Database_query, -1);
+  rb_define_method(cDatabase, "query_single",           Database_query_single, -1);
+  rb_define_method(cDatabase, "query_single_ary",       Database_query_single_ary, -1);
+  rb_define_method(cDatabase, "query_single_argv",      Database_query_single_argv, -1);
+  rb_define_method(cDatabase, "query_single_hash",      Database_query_single, -1);
+  rb_define_method(cDatabase, "read_only?",             Database_read_only_p, 0);
+  rb_define_method(cDatabase, "status",                 Database_status, -1);
+  rb_define_method(cDatabase, "total_changes",          Database_total_changes, 0);
+  rb_define_method(cDatabase, "trace",                  Database_trace, 0);
 
   #ifdef EXTRALITE_ENABLE_CHANGESET
-  DEF("track_changes",          Database_track_changes, -1);
+  rb_define_method(cDatabase, "track_changes",          Database_track_changes, -1);
   #endif
   
-  DEF("transaction_active?",    Database_transaction_active_p, 0);
+  rb_define_method(cDatabase, "transaction_active?",    Database_transaction_active_p, 0);
 
   cBlob           = rb_define_class_under(mExtralite, "Blob", rb_cString);
   cError          = rb_define_class_under(mExtralite, "Error", rb_eStandardError);

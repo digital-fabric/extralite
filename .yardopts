@@ -5,4 +5,4 @@
 --no-private
 --exclude sqlite3_constants.rb
 ./lib
-./ext/extralite
+./ext/extralite/*.c

@@ -29,7 +29,6 @@ module Extralite
   class ParameterError < Error
   end
 
-  # This class encapsulates an SQLite database connection.
   class Database
     # @!visibility private
     TABLES_SQL = (<<~SQL).freeze

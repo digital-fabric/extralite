@@ -593,9 +593,12 @@ VALUE Query_mode_get(VALUE self) {
   return query_mode_to_symbol(query->query_mode);
 }
 
-/* Sets the query mode. This can be one of `:hash`, `:argv`, `:ary`.
+/* call-seq:
+ *   query.mode = mode
+ * 
+ * Sets the query mode. This can be one of `:hash`, `:argv`, `:ary`.
  *
- * @param [Symbol] query mode
+ * @param mode [Symbol] query mode
  * @return [Symbol] query mode
  */
 VALUE Query_mode_set(VALUE self, VALUE mode) {
@@ -610,32 +613,30 @@ void Init_ExtraliteQuery(void) {
   cQuery = rb_define_class_under(mExtralite, "Query", rb_cObject);
   rb_define_alloc_func(cQuery, Query_allocate);
 
-  #define DEF(s, f, a) rb_define_method(cQuery, s, f, a)
-
-  DEF("bind",           Query_bind, -1);
-  DEF("close",          Query_close, 0);
-  DEF("closed?",        Query_closed_p, 0);
-  DEF("columns",        Query_columns, 0);
-  DEF("clone",          Query_clone, 0);
-  DEF("database",       Query_database, 0);
-  DEF("db",             Query_database, 0);
-  DEF("dup",            Query_clone, 0);
-  DEF("each",           Query_each, 0);
-  DEF("eof?",           Query_eof_p, 0);
-  DEF("execute",        Query_execute, -1);
-  DEF("<<",             Query_execute_chevrons, 1);
-  DEF("batch_execute",  Query_batch_execute, 1);
-  DEF("batch_query",    Query_batch_query, 1);
-  DEF("initialize",     Query_initialize, 3);
-  DEF("inspect",        Query_inspect, 0);
-  DEF("mode",           Query_mode_get, 0);
-  DEF("mode=",          Query_mode_set, 1);
-  DEF("next",           Query_next, -1);
-  DEF("reset",          Query_reset, 0);
-  DEF("sql",            Query_sql, 0);
-  DEF("status",         Query_status, -1);
-  DEF("to_a",           Query_to_a, 0);
-  DEF("transform",      Query_transform, 0);
+  rb_define_method(cQuery, "bind",           Query_bind, -1);
+  rb_define_method(cQuery, "close",          Query_close, 0);
+  rb_define_method(cQuery, "closed?",        Query_closed_p, 0);
+  rb_define_method(cQuery, "columns",        Query_columns, 0);
+  rb_define_method(cQuery, "clone",          Query_clone, 0);
+  rb_define_method(cQuery, "database",       Query_database, 0);
+  rb_define_method(cQuery, "db",             Query_database, 0);
+  rb_define_method(cQuery, "dup",            Query_clone, 0);
+  rb_define_method(cQuery, "each",           Query_each, 0);
+  rb_define_method(cQuery, "eof?",           Query_eof_p, 0);
+  rb_define_method(cQuery, "execute",        Query_execute, -1);
+  rb_define_method(cQuery, "<<",             Query_execute_chevrons, 1);
+  rb_define_method(cQuery, "batch_execute",  Query_batch_execute, 1);
+  rb_define_method(cQuery, "batch_query",    Query_batch_query, 1);
+  rb_define_method(cQuery, "initialize",     Query_initialize, 3);
+  rb_define_method(cQuery, "inspect",        Query_inspect, 0);
+  rb_define_method(cQuery, "mode",           Query_mode_get, 0);
+  rb_define_method(cQuery, "mode=",          Query_mode_set, 1);
+  rb_define_method(cQuery, "next",           Query_next, -1);
+  rb_define_method(cQuery, "reset",          Query_reset, 0);
+  rb_define_method(cQuery, "sql",            Query_sql, 0);
+  rb_define_method(cQuery, "status",         Query_status, -1);
+  rb_define_method(cQuery, "to_a",           Query_to_a, 0);
+  rb_define_method(cQuery, "transform",      Query_transform, 0);
 
   ID_inspect  = rb_intern("inspect");
   ID_slice    = rb_intern("slice");

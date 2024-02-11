@@ -50,7 +50,6 @@ static inline Iterator_t *self_to_iterator(VALUE obj) {
  *     ...
  *
  * @param query [Extralite::Query] associated query
- * @param mode [Symbol] iteration mode
  * @return [void]
  */
 VALUE Iterator_initialize(VALUE self, VALUE query) {

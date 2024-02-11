@@ -3,7 +3,7 @@
   Extralite
 </h1>
 
-<h4 align="center">SQLite for Ruby</h4>
+<h4 align="center">Ruby on SQLite</h4>
 
 <p align="center">
   <a href="http://rubygems.org/gems/extralite">
@@ -26,7 +26,7 @@
 Extralite is a fast and innovative SQLite wrapper for Ruby with a rich set of
 features. It provides multiple ways of retrieving data from SQLite databases,
 makes it possible to use SQLite databases in multi-threaded and multi-fibered
-Ruby apps, and provides a comprehensive set of tools for managing SQLite
+Ruby apps, and includes a comprehensive set of tools for managing SQLite
 databases.
 
 Extralite comes in two flavors: the `extralite` gem which uses the
@@ -891,7 +891,7 @@ above, calling `#interrupt` causes the query to raise a
 `Extralite::InterruptError` exception:
 
 ```ruby
-db.on_progress { db.interrupt }
+db.on_progress(period: 1) { db.interrupt }
 db.query('select 1')
 #=> Extralite::InterruptError!
 ```
@@ -900,7 +900,7 @@ You can also interrupt queries in progress by raising an exception. The query
 will be stopped, and the exception will propagate to the call site:
 
 ```ruby
-db.on_progress do
+db.on_progress(period: 1) do
   raise 'BOOM!'
 end
 
@@ -1003,7 +1003,7 @@ handler. This will work for switching between fibers using either Polyphony or
 any fiber scheduler gem, such as Async et al:
 
 ```ruby
-db.on_progress(100) { sleep(0) }
+db.on_progress { sleep(0) }
 ```
 
 For Polyphony-based apps, you can also call `snooze` to allow other fibers to
@@ -1011,7 +1011,7 @@ run while a query is progressing. If your Polyphony app is multi-threaded,
 you'll also need to call `Thread.pass` in order to allow other threads to run:
 
 ```ruby
-db.on_progress(100) do
+db.on_progress do
   snooze
   Thread.pass
 end
@@ -1022,7 +1022,7 @@ use the regular `#move_on_after` and `#cancel_after` methods to implement
 timeouts for queries:
 
 ```ruby
-db.on_progress(100) { snooze }
+db.on_progress { snooze }
 
 cancel_after(3) do
   db.query(long_running_query)
