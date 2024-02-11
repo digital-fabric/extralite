@@ -1,3 +1,7 @@
+# 2.7.1 2024-02-11
+
+- Fix API docs.
+
 # 2.7 2024-02-09
 
 - Improve progress handler API, add mode, period, tick options, global progress
