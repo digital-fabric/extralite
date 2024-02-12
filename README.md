@@ -163,7 +163,7 @@ get back a single row, use one of the `query_single_xxx` methods:
 
 ```ruby
 # alias #query_single_hash
-db.query('select 1') #=> { "1" => 1 }
+db.query_single('select 1') #=> { "1" => 1 }
 
 db.query_single_ary('select 1') #=> [1]
 
