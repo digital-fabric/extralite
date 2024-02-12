@@ -532,6 +532,8 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
 /* call-seq:
  *   db.batch_query(sql, params_source) -> rows
  *   db.batch_query(sql, params_source) { |rows| ... } -> changes
+ *   db.batch_query_hash(sql, params_source) -> rows
+ *   db.batch_query_hash(sql, params_source) { |rows| ... } -> changes
  *
  * Executes the given query for each list of parameters in the given paramter
  * source. If a block is given, it is called with the resulting rows for each
@@ -853,11 +855,7 @@ VALUE backup_cleanup(VALUE ptr) {
   return Qnil;
 }
 
-/* call-seq:
- *   db.backup(dest, src_db_name = 'main', dst_db_name = 'main') { |remaining, total| ... } -> db
- *
- * 
- * Creates a backup of the database to the given destination, which can be
+/* Creates a backup of the database to the given destination, which can be
  * either a filename or a database instance. In order to monitor the backup
  * progress you can pass a block that will be called periodically by the backup
  * method with two arguments: the remaining page count, and the total page
@@ -871,6 +869,8 @@ VALUE backup_cleanup(VALUE ptr) {
  * @param dest [String, Extralite::Database] backup destination
  * @param src_db_name [String] source database name (default: "main")
  * @param dst_db_name [String] Destination database name (default: "main")
+ * @yieldparam remaining [Integer] remaining page count
+ * @yieldparam total [Integer] total page count
  * @return [Extralite::Database] source database
  */
 VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
