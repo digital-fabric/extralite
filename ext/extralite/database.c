@@ -1060,7 +1060,7 @@ VALUE Database_track_changes(int argc, VALUE *argv, VALUE self) {
   self_to_open_database(self);
 
   VALUE changeset = rb_funcall(cChangeset, ID_new, 0);
-  VALUE tables = rb_array_new_from_values(argc, argv);
+  VALUE tables = rb_ary_new_from_values(argc, argv);
 
   rb_funcall(changeset, ID_track, 2, self, tables);
 
