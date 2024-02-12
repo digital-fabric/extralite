@@ -40,11 +40,11 @@ class DatabaseTest < Minitest::Test
     assert_equal [], r
   end
 
-  def test_query_ary
-    r = @db.query_ary('select * from t')
+  def test_query_array
+    r = @db.query_array('select * from t')
     assert_equal [[1, 2, 3], [4, 5, 6]], r
 
-    r = @db.query_ary('select * from t where x = 2')
+    r = @db.query_array('select * from t where x = 2')
     assert_equal [], r
   end
 
@@ -342,13 +342,13 @@ class DatabaseTest < Minitest::Test
   def test_execute_with_params
     changes = @db.execute('update t set x = ? where z = ?', 42, 6)
     assert_equal 1, changes
-    assert_equal [[1, 2, 3], [42, 5, 6]], @db.query_ary('select * from t order by x')
+    assert_equal [[1, 2, 3], [42, 5, 6]], @db.query_array('select * from t order by x')
   end
 
   def test_execute_with_params_array
     changes = @db.execute('update t set x = ? where z = ?', [42, 6])
     assert_equal 1, changes
-    assert_equal [[1, 2, 3], [42, 5, 6]], @db.query_ary('select * from t order by x')
+    assert_equal [[1, 2, 3], [42, 5, 6]], @db.query_array('select * from t order by x')
   end
 
   def test_batch_execute
@@ -513,7 +513,7 @@ class DatabaseTest < Minitest::Test
     ], array
   end
 
-  def test_batch_query_ary_with_array
+  def test_batch_query_array_with_array
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')
 
@@ -521,20 +521,20 @@ class DatabaseTest < Minitest::Test
       [1, '2', 3],
       ['4', 5, 6]
     ]
-    results = @db.batch_query_ary('insert into foo values (?, ?, ?) returning *', data)
+    results = @db.batch_query_array('insert into foo values (?, ?, ?) returning *', data)
     assert_equal [
       [[1, '2', 3]],
       [['4', 5, 6]]
     ], results
 
-    results = @db.batch_query_ary('update foo set c = ? returning *', [42, 43])
+    results = @db.batch_query_array('update foo set c = ? returning *', [42, 43])
     assert_equal [
       [[1, '2', 42], ['4', 5, 42]],
       [[1, '2', 43], ['4', 5, 43]]
     ], results
 
     array = []
-    changes = @db.batch_query_ary('update foo set c = ? returning *', [44, 45]) do |rows|
+    changes = @db.batch_query_array('update foo set c = ? returning *', [44, 45]) do |rows|
       array << rows
     end
     assert_equal 4, changes
@@ -544,25 +544,25 @@ class DatabaseTest < Minitest::Test
     ], array
   end
 
-  def test_batch_query_ary_with_enumerable
+  def test_batch_query_array_with_enumerable
     @db.query('create table foo (a integer primary key, b)')
     assert_equal [], @db.query('select * from foo')
 
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', 11..13)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', 11..13)
     assert_equal [
       [[1, 11]],
       [[2, 12]],
       [[3, 13]]
     ], results
 
-    results = @db.batch_query_ary('update foo set b = ? returning *', [42, 43])
+    results = @db.batch_query_array('update foo set b = ? returning *', [42, 43])
     assert_equal [
       [[1, 42], [2, 42], [3, 42]],
       [[1, 43], [2, 43], [3, 43]]
     ], results
 
     array = []
-    changes = @db.batch_query_ary('update foo set b = ? returning *', [44, 45]) do |rows|
+    changes = @db.batch_query_array('update foo set b = ? returning *', [44, 45]) do |rows|
       array << rows
     end
     assert_equal 6, changes
@@ -572,13 +572,13 @@ class DatabaseTest < Minitest::Test
     ], array
   end
 
-  def test_batch_query_ary_with_proc
+  def test_batch_query_array_with_proc
     @db.query('create table foo (a integer primary key, b)')
     assert_equal [], @db.query('select * from foo')
 
     pr = parameter_source_proc([5, 4, 3])
     assert_kind_of Proc, pr
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', pr)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', pr)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
@@ -586,7 +586,7 @@ class DatabaseTest < Minitest::Test
     ], results
 
     pr = parameter_source_proc([42, 43])
-    results = @db.batch_query_ary('update foo set b = ? returning *', pr)
+    results = @db.batch_query_array('update foo set b = ? returning *', pr)
     assert_equal [
       [[1, 42], [2, 42], [3, 42]],
       [[1, 43], [2, 43], [3, 43]]
@@ -594,7 +594,7 @@ class DatabaseTest < Minitest::Test
 
     array = []
     pr = parameter_source_proc([44, 45])
-    changes = @db.batch_query_ary('update foo set b = ? returning *', pr) do |rows|
+    changes = @db.batch_query_array('update foo set b = ? returning *', pr) do |rows|
       array << rows
     end
     assert_equal 6, changes
@@ -982,8 +982,8 @@ class DatabaseTest < Minitest::Test
     assert_equal [3, 6], buf
   end
 
-  def test_prepare_ary
-    q = @db.prepare_ary('select * from t order by x')
+  def test_prepare_array
+    q = @db.prepare_array('select * from t order by x')
     assert_kind_of Extralite::Query, q
 
     assert_equal [
@@ -1008,8 +1008,8 @@ class DatabaseTest < Minitest::Test
     ], q.to_a
   end
 
-  def test_prepare_ary_with_transform
-    q = @db.prepare_ary('select * from t order by x') { |r| r * 2 }
+  def test_prepare_array_with_transform
+    q = @db.prepare_array('select * from t order by x') { |r| r * 2 }
     assert_equal [
       [1, 2, 3, 1, 2, 3],
       [4, 5, 6, 4, 5, 6]
@@ -1153,19 +1153,19 @@ class BackupTest < Minitest::Test
 
   def test_backup
     @src.backup(@dst)
-    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_ary('select * from t')
+    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_array('select * from t')
   end
 
   def test_backup_with_block
     progress = []
     @src.backup(@dst) { |r, t| progress << [r, t] }
-    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_ary('select * from t')
+    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_array('select * from t')
     assert_equal [[2, 2]], progress
   end
 
   def test_backup_with_schema_names
     @src.backup(@dst, 'main', 'temp')
-    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_ary('select * from temp.t')
+    assert_equal [[1, 2, 3], [4, 5, 6]], @dst.query_array('select * from temp.t')
   end
 
   def test_backup_with_fn
@@ -1173,7 +1173,7 @@ class BackupTest < Minitest::Test
     @src.backup(tmp_fn)
 
     db = Extralite::Database.new(tmp_fn)
-    assert_equal [[1, 2, 3], [4, 5, 6]], db.query_ary('select * from t')
+    assert_equal [[1, 2, 3], [4, 5, 6]], db.query_array('select * from t')
   end
 end
 
@@ -1739,15 +1739,15 @@ class DatabaseTransformTest < Minitest::Test
     ], buf
   end
 
-  def test_query_ary_transform
+  def test_query_array_transform
     transform = ->(h) { MyModel.new(h) }
 
     sql = 'select a, b from t where a = ?'
-    o = @db.query_ary(transform, sql, 1).first
+    o = @db.query_array(transform, sql, 1).first
     assert_kind_of MyModel, o
     assert_equal([1, 2], o.values)
 
-    o = @db.query_ary(transform, sql, 4).first
+    o = @db.query_array(transform, sql, 4).first
     assert_kind_of MyModel, o
     assert_equal([4, 5], o.values)
 
@@ -1755,10 +1755,10 @@ class DatabaseTransformTest < Minitest::Test
     assert_equal [
       [1, 2],
       [4, 5]
-    ], @db.query_ary(transform, sql).map(&:values)
+    ], @db.query_array(transform, sql).map(&:values)
 
     buf = []
-    @db.query_ary(transform, sql) { |r| buf << r.values }
+    @db.query_array(transform, sql) { |r| buf << r.values }
     assert_equal [
       [1, 2],
       [4, 5]
@@ -1778,15 +1778,15 @@ class DatabaseTransformTest < Minitest::Test
     assert_equal({ a: 4, b: 5 }, o.values)
   end
 
-  def test_query_ary_single_row_transform
+  def test_query_array_single_row_transform
     transform = ->(h) { MyModel.new(h) }
 
     sql = 'select a, b from t where a = ?'
-    o = @db.query_single_ary(transform, sql, 1)
+    o = @db.query_single_array(transform, sql, 1)
     assert_kind_of MyModel, o
     assert_equal([1, 2], o.values)
 
-    o = @db.query_single_ary(transform, sql, 4)
+    o = @db.query_single_array(transform, sql, 4)
     assert_kind_of MyModel, o
     assert_equal([4, 5], o.values)
   end

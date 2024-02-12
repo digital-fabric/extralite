@@ -38,9 +38,9 @@ end
 
 TRANSFORM = ->(b) { { b: b } }
 
-def extralite_run_ary_map(count)
+def extralite_run_array_map(count)
   results = []
-  $extralite_db.query_ary('select * from foo') { |(b)| results << { b: b } }
+  $extralite_db.query_array('select * from foo') { |(b)| results << { b: b } }
   raise unless results.size == count
 end
 
@@ -62,7 +62,7 @@ end
   bm = Benchmark.ips do |x|
     x.config(:time => 5, :warmup => 2)
 
-    x.report("ary_map")   { extralite_run_ary_map(c) }
+    x.report("array_map")   { extralite_run_array_map(c) }
     x.report("splat_map")  { extralite_run_splat_map(c) }
     x.report("transform") { extralite_run_transform(c) }
 

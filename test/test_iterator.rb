@@ -41,8 +41,8 @@ class IteratorTest < Minitest::Test
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
   end
 
-  def test_iterator_ary
-    @query.mode = :ary
+  def test_iterator_array
+    @query.mode = :array
     iter = @query.each
     assert_kind_of Extralite::Iterator, iter
 
@@ -71,7 +71,7 @@ class IteratorTest < Minitest::Test
     assert_nil iter.next
     assert_nil iter.next
 
-    @query.mode = :ary
+    @query.mode = :array
     @query.reset
     assert_equal([1, 2, 3], iter.next)
     assert_equal([4, 5, 6], iter.next)
@@ -91,7 +91,7 @@ class IteratorTest < Minitest::Test
     iter = @query.each
     assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], iter.to_a
 
-    @query.mode = :ary
+    @query.mode = :array
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], iter.to_a
 
     iter = @db.prepare_splat('select x from t').each
@@ -102,7 +102,7 @@ class IteratorTest < Minitest::Test
     mapped = @query.each.map { |row| row[:x] * 10 }
     assert_equal [10, 40, 70], mapped
 
-    @query.mode = :ary
+    @query.mode = :array
     mapped = @query.each.map { |row| row[1] * 10 }
     assert_equal [20, 50, 80], mapped
 
@@ -112,7 +112,7 @@ class IteratorTest < Minitest::Test
   end
 
   def test_iterator_inspect
-    @query.mode = :ary
+    @query.mode = :array
     i = @query.each
     assert_match(/^\#\<Extralite::Iterator:0x[0-9a-f]+\>$/, i.inspect)
   end

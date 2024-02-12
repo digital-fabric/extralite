@@ -33,7 +33,7 @@ def sqlite3_run(count)
 end
 
 def extralite_run(count)
-  results = $extralite_db.query_ary('select * from foo')
+  results = $extralite_db.query_array('select * from foo')
   raise unless results.size == count
 end
 
