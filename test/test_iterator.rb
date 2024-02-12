@@ -30,8 +30,8 @@ class IteratorTest < Minitest::Test
     assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], buf
   end
 
-  def test_iterator_argv
-    @query.mode = :argv
+  def test_iterator_splat
+    @query.mode = :splat
     iter = @query.each
     assert_kind_of Extralite::Iterator, iter
 
@@ -53,7 +53,7 @@ class IteratorTest < Minitest::Test
   end
 
   def test_iterator_single_column
-    query = @db.prepare_argv('select x from t')
+    query = @db.prepare_splat('select x from t')
     iter = query.each
     assert_kind_of Extralite::Iterator, iter
 
@@ -79,7 +79,7 @@ class IteratorTest < Minitest::Test
     assert_nil iter.next
     assert_nil iter.next
 
-    iter = @db.prepare_argv('select y from t').each
+    iter = @db.prepare_splat('select y from t').each
     assert_equal(2, iter.next)
     assert_equal(5, iter.next)
     assert_equal(8, iter.next)
@@ -94,7 +94,7 @@ class IteratorTest < Minitest::Test
     @query.mode = :ary
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], iter.to_a
 
-    iter = @db.prepare_argv('select x from t').each
+    iter = @db.prepare_splat('select x from t').each
     assert_equal [1, 4, 7], iter.to_a
   end
 
@@ -106,7 +106,7 @@ class IteratorTest < Minitest::Test
     mapped = @query.each.map { |row| row[1] * 10 }
     assert_equal [20, 50, 80], mapped
 
-    query = @db.prepare_argv('select z from t')
+    query = @db.prepare_splat('select z from t')
     mapped = query.each.map { |v| v * 10 }
     assert_equal [30, 60, 90], mapped
   end

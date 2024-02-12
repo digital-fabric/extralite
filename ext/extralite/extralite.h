@@ -42,7 +42,7 @@ extern ID ID_strip;
 extern ID ID_to_s;
 extern ID ID_track;
 
-extern VALUE SYM_argv;
+extern VALUE SYM_splat;
 extern VALUE SYM_ary;
 extern VALUE SYM_hash;
 
@@ -71,7 +71,7 @@ typedef struct {
 
 enum query_mode {
   QUERY_HASH,
-  QUERY_ARGV,
+  QUERY_SPLAT,
   QUERY_ARY
 };
 
@@ -165,15 +165,15 @@ typedef VALUE (*safe_query_impl)(query_ctx *);
 
 VALUE safe_batch_execute(query_ctx *ctx);
 VALUE safe_batch_query(query_ctx *ctx);
-VALUE safe_batch_query_argv(query_ctx *ctx);
+VALUE safe_batch_query_splat(query_ctx *ctx);
 VALUE safe_batch_query_ary(query_ctx *ctx);
-VALUE safe_query_argv(query_ctx *ctx);
+VALUE safe_query_splat(query_ctx *ctx);
 VALUE safe_query_ary(query_ctx *ctx);
 VALUE safe_query_changes(query_ctx *ctx);
 VALUE safe_query_columns(query_ctx *ctx);
 VALUE safe_query_hash(query_ctx *ctx);
 VALUE safe_query_single_row_hash(query_ctx *ctx);
-VALUE safe_query_single_row_argv(query_ctx *ctx);
+VALUE safe_query_single_row_splat(query_ctx *ctx);
 VALUE safe_query_single_row_ary(query_ctx *ctx);
 
 VALUE Query_each(VALUE self);

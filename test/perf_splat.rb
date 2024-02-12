@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
-# Run on Ruby 3.3 with YJIT enabled
-
 require 'bundler/inline'
 
 gemfile do
   source 'https://rubygems.org'
+  gem 'sqlite3'
   gem 'extralite', path: '..'
   gem 'benchmark-ips'
 end
@@ -16,55 +15,45 @@ require 'fileutils'
 DB_PATH = "/tmp/extralite_sqlite3_perf-#{Time.now.to_i}-#{rand(10000)}.db"
 puts "DB_PATH = #{DB_PATH.inspect}"
 
+$sqlite3_db = SQLite3::Database.new(DB_PATH)
 $extralite_db = Extralite::Database.new(DB_PATH, gvl_release_threshold: -1)
 
 def prepare_database(count)
-  $extralite_db.query('create table if not exists foo (b text)')
+  db = Extralite::Database.new(DB_PATH)
+  $extralite_db.query('create table if not exists foo ( a integer primary key, b text )')
   $extralite_db.query('delete from foo')
   $extralite_db.query('begin')
   count.times { $extralite_db.query('insert into foo (b) values (?)', "hello#{rand(1000)}" )}
   $extralite_db.query('commit')
 end
 
-class Model
-  def initialize(h)
-    @h = h
+def sqlite3_run(expected_count)
+  count = 0
+  $sqlite3_db.execute('select b from foo').each do |row|
+    b = row.first
+    count += 1
   end
+  raise unless count == expected_count
+end
 
-  def values
-    @h
+def extralite_run(expected_count)
+  count = 0
+  $extralite_db.query_splat('select * from foo') do |b|
+    count += 1
   end
-end
-
-TRANSFORM = ->(b) { { b: b } }
-
-def extralite_run_ary_map(count)
-  results = []
-  $extralite_db.query_ary('select * from foo') { |(b)| results << { b: b } }
-  raise unless results.size == count
-end
-
-def extralite_run_argv_map(count)
-  results = []
-  $extralite_db.query_argv('select * from foo') { |b| results << { b: b } }
-  raise unless results.size == count
-end
-
-def extralite_run_transform(count)
-  results = $extralite_db.query_argv(TRANSFORM, 'select * from foo')
-  raise unless results.size == count
+  raise unless count == expected_count
 end
 
 [10, 1000, 100000].each do |c|
-  puts "Record count: #{c}"
+  puts; puts; puts "Record count: #{c}"
+
   prepare_database(c)
 
   bm = Benchmark.ips do |x|
     x.config(:time => 5, :warmup => 2)
 
-    x.report("ary_map")   { extralite_run_ary_map(c) }
-    x.report("argv_map")  { extralite_run_argv_map(c) }
-    x.report("transform") { extralite_run_transform(c) }
+    x.report("sqlite3") { sqlite3_run(c) }
+    x.report("extralite") { extralite_run(c) }
 
     x.compare!
   end

@@ -45,7 +45,7 @@ module Extralite
     # @param db [String] name of attached database
     # @return [Array] list of tables
     def tables(db = 'main')
-      query_argv(format(TABLES_SQL, db: db))
+      query_splat(format(TABLES_SQL, db: db))
     end
 
     # Gets or sets one or more database pragmas. For a list of available pragmas
@@ -149,7 +149,7 @@ module Extralite
     end
 
     def pragma_get(key)
-      query_single_argv("pragma #{key}")
+      query_single_splat("pragma #{key}")
     end
   end
 

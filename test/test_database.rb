@@ -48,22 +48,22 @@ class DatabaseTest < Minitest::Test
     assert_equal [], r
   end
 
-  def test_query_argv
-    r = @db.query_argv('select * from t')
+  def test_query_splat
+    r = @db.query_splat('select * from t')
     assert_equal [[1, 2, 3], [4, 5, 6]], r
 
-    r = @db.query_argv('select * from t where x = 2')
+    r = @db.query_splat('select * from t where x = 2')
     assert_equal [], r
 
     # with block
     r = []
-    @db.query_argv('select * from t') { |a, b, c| r << [a, b, c] }
+    @db.query_splat('select * from t') { |a, b, c| r << [a, b, c] }
     assert_equal [[1, 2, 3], [4, 5, 6]], r
   end
 
-  def test_query_argv_with_too_many_columns
+  def test_query_splat_with_too_many_columns
     assert_raises(Extralite::Error) {
-      @db.query_argv('select 1, 2, 3, 4, 5, 6, 7, 8, 9');
+      @db.query_splat('select 1, 2, 3, 4, 5, 6, 7, 8, 9');
     }
   end
 
@@ -75,11 +75,11 @@ class DatabaseTest < Minitest::Test
     assert_nil r
   end
 
-  def test_query_single_argv
-    r = @db.query_single_argv('select z from t order by Z desc limit 1')
+  def test_query_single_splat
+    r = @db.query_single_splat('select z from t order by Z desc limit 1')
     assert_equal 6, r
 
-    r = @db.query_single_argv('select z from t where x = 2')
+    r = @db.query_single_splat('select z from t where x = 2')
     assert_nil r
   end
 
@@ -99,7 +99,7 @@ class DatabaseTest < Minitest::Test
   def test_multiple_statements
     @db.query("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');")
 
-    assert_equal [1, 4, 'a', 'd'], @db.query_argv('select x from t order by x')
+    assert_equal [1, 4, 'a', 'd'], @db.query_splat('select x from t order by x')
   end
 
   def test_multiple_statements_with_error
@@ -123,13 +123,13 @@ class DatabaseTest < Minitest::Test
 
   def test_close
     assert_equal false, @db.closed?
-    r = @db.query_single_argv('select 42')
+    r = @db.query_single_splat('select 42')
     assert_equal 42, r
 
     assert_equal @db, @db.close
     assert_equal true, @db.closed?
 
-    assert_raises(Extralite::Error) { @db.query_single_argv('select 42') }
+    assert_raises(Extralite::Error) { @db.query_single_splat('select 42') }
   end
 
   def test_parameter_binding_simple
@@ -139,7 +139,7 @@ class DatabaseTest < Minitest::Test
     r = @db.query('select x, y, z from t where z = ?', 6)
     assert_equal [{ x: 4, y: 5, z: 6 }], r
 
-    error = assert_raises(Extralite::ParameterError) { @db.query_single_argv('select ?', Date.today) }
+    error = assert_raises(Extralite::ParameterError) { @db.query_single_splat('select ?', Date.today) }
     assert_equal error.message, 'Cannot bind parameter at position 1 of type Date'
   end
 
@@ -173,24 +173,24 @@ class DatabaseTest < Minitest::Test
   class Foo; end
 
   def test_parameter_binding_from_hash
-    assert_equal 42, @db.query_single_argv('select :bar', foo: 41, bar: 42)
-    assert_equal 42, @db.query_single_argv('select :bar', 'foo' => 41, 'bar' => 42)
-    assert_equal 42, @db.query_single_argv('select ?8', 7 => 41, 8 => 42)
-    assert_nil @db.query_single_argv('select :bar', foo: 41)
+    assert_equal 42, @db.query_single_splat('select :bar', foo: 41, bar: 42)
+    assert_equal 42, @db.query_single_splat('select :bar', 'foo' => 41, 'bar' => 42)
+    assert_equal 42, @db.query_single_splat('select ?8', 7 => 41, 8 => 42)
+    assert_nil @db.query_single_splat('select :bar', foo: 41)
 
-    error = assert_raises(Extralite::ParameterError) { @db.query_single_argv('select ?', Foo.new => 42) }
+    error = assert_raises(Extralite::ParameterError) { @db.query_single_splat('select ?', Foo.new => 42) }
     assert_equal error.message, 'Cannot bind parameter with a key of type DatabaseTest::Foo'
 
-    error = assert_raises(Extralite::ParameterError) { @db.query_single_argv('select ?', %w[a b] => 42) }
+    error = assert_raises(Extralite::ParameterError) { @db.query_single_splat('select ?', %w[a b] => 42) }
     assert_equal error.message, 'Cannot bind parameter with a key of type Array'
   end
 
   def test_parameter_binding_from_struct
     foo_bar = Struct.new(:':foo', :bar)
     value = foo_bar.new(41, 42)
-    assert_equal 41, @db.query_single_argv('select :foo', value)
-    assert_equal 42, @db.query_single_argv('select :bar', value)
-    assert_nil @db.query_single_argv('select :baz', value)
+    assert_equal 41, @db.query_single_splat('select :foo', value)
+    assert_equal 42, @db.query_single_splat('select :bar', value)
+    assert_nil @db.query_single_splat('select :baz', value)
   end
 
   def test_parameter_binding_from_data_class
@@ -198,8 +198,8 @@ class DatabaseTest < Minitest::Test
 
     foo_bar = Data.define(:':foo', :bar)
     value = foo_bar.new(':foo': 41, bar: 42)
-    assert_equal 42, @db.query_single_argv('select :bar', value)
-    assert_nil @db.query_single_argv('select :baz', value)
+    assert_equal 42, @db.query_single_splat('select :bar', value)
+    assert_nil @db.query_single_splat('select :baz', value)
   end
 
   def test_parameter_binding_for_blobs
@@ -235,43 +235,43 @@ class DatabaseTest < Minitest::Test
   end
 
   def test_parameter_binding_for_simple_types
-    assert_nil @db.query_single_argv('select ?', nil)
+    assert_nil @db.query_single_splat('select ?', nil)
 
     # 32-bit integers
-    assert_equal(-2** 31, @db.query_single_argv('select ?', -2**31))
-    assert_equal(2**31 - 1, @db.query_single_argv('select ?', 2**31 - 1))
+    assert_equal(-2** 31, @db.query_single_splat('select ?', -2**31))
+    assert_equal(2**31 - 1, @db.query_single_splat('select ?', 2**31 - 1))
 
     # 64-bit integers
-    assert_equal(-2 ** 63, @db.query_single_argv('select ?', -2 ** 63))
-    assert_equal(2**63 - 1, @db.query_single_argv('select ?', 2**63 - 1))
+    assert_equal(-2 ** 63, @db.query_single_splat('select ?', -2 ** 63))
+    assert_equal(2**63 - 1, @db.query_single_splat('select ?', 2**63 - 1))
 
     # floats
-    assert_equal Float::MIN, @db.query_single_argv('select ?', Float::MIN)
-    assert_equal Float::MAX, @db.query_single_argv('select ?', Float::MAX)
+    assert_equal Float::MIN, @db.query_single_splat('select ?', Float::MIN)
+    assert_equal Float::MAX, @db.query_single_splat('select ?', Float::MAX)
 
     # boolean
-    assert_equal 1, @db.query_single_argv('select ?', true)
-    assert_equal 0, @db.query_single_argv('select ?', false)
+    assert_equal 1, @db.query_single_splat('select ?', true)
+    assert_equal 0, @db.query_single_splat('select ?', false)
 
     # strings and symbols
-    assert_equal 'foo', @db.query_single_argv('select ?', 'foo')
-    assert_equal 'foo', @db.query_single_argv('select ?', :foo)
+    assert_equal 'foo', @db.query_single_splat('select ?', 'foo')
+    assert_equal 'foo', @db.query_single_splat('select ?', :foo)
   end
 
   def test_value_casting
-    r = @db.query_single_argv("select 'abc'")
+    r = @db.query_single_splat("select 'abc'")
     assert_equal 'abc', r
 
-    r = @db.query_single_argv('select 123')
+    r = @db.query_single_splat('select 123')
     assert_equal 123, r
 
-    r = @db.query_single_argv('select 12.34')
+    r = @db.query_single_splat('select 12.34')
     assert_equal 12.34, r
 
-    r = @db.query_single_argv('select zeroblob(4)')
+    r = @db.query_single_splat('select zeroblob(4)')
     assert_equal "\x00\x00\x00\x00", r
 
-    r = @db.query_single_argv('select null')
+    r = @db.query_single_splat('select null')
     assert_nil r
   end
 
@@ -283,7 +283,7 @@ class DatabaseTest < Minitest::Test
       @db.load_extension(File.join(__dir__, 'extensions/text.dylib'))
     end
 
-    r = @db.query_single_argv("select reverse('abcd')")
+    r = @db.query_single_splat("select reverse('abcd')")
     assert_equal 'dcba', r
   end
 
@@ -604,7 +604,7 @@ class DatabaseTest < Minitest::Test
     ], array
   end
 
-  def test_batch_query_argv_with_array
+  def test_batch_query_splat_with_array
     @db.query('create table foo (a, b, c)')
     assert_equal [], @db.query('select * from foo')
 
@@ -612,20 +612,20 @@ class DatabaseTest < Minitest::Test
       [1, '2', 3],
       ['4', 5, 6]
     ]
-    results = @db.batch_query_argv('insert into foo values (?, ?, ?) returning c', data)
+    results = @db.batch_query_splat('insert into foo values (?, ?, ?) returning c', data)
     assert_equal [
       [3],
       [6]
     ], results
 
-    results = @db.batch_query_argv('update foo set c = ? returning c * 10 + cast(b as integer)', [42, 43])
+    results = @db.batch_query_splat('update foo set c = ? returning c * 10 + cast(b as integer)', [42, 43])
     assert_equal [
       [422, 425],
       [432, 435]
     ], results
 
     array = []
-    changes = @db.batch_query_argv('update foo set c = ? returning c * 10 + cast(b as integer)', [44, 45]) do |rows|
+    changes = @db.batch_query_splat('update foo set c = ? returning c * 10 + cast(b as integer)', [44, 45]) do |rows|
       array << rows
     end
     assert_equal 4, changes
@@ -635,25 +635,25 @@ class DatabaseTest < Minitest::Test
     ], array
   end
 
-  def test_batch_query_argv_with_enumerable
+  def test_batch_query_splat_with_enumerable
     @db.query('create table foo (a integer primary key, b)')
     assert_equal [], @db.query('select * from foo')
 
-    results = @db.batch_query_argv('insert into foo (b) values (?) returning b * 10 + a', 11..13)
+    results = @db.batch_query_splat('insert into foo (b) values (?) returning b * 10 + a', 11..13)
     assert_equal [
       [111],
       [122],
       [133]
     ], results
 
-    results = @db.batch_query_argv('update foo set b = ? returning b * 10 + a', 42..43)
+    results = @db.batch_query_splat('update foo set b = ? returning b * 10 + a', 42..43)
     assert_equal [
       [421, 422, 423],
       [431, 432, 433]
     ], results
 
     array = []
-    changes = @db.batch_query_argv('update foo set b = ? returning b * 10 + a', 44..45) do |rows|
+    changes = @db.batch_query_splat('update foo set b = ? returning b * 10 + a', 44..45) do |rows|
       array << rows
     end
     assert_equal 6, changes
@@ -663,13 +663,13 @@ class DatabaseTest < Minitest::Test
     ], array
   end
 
-  def test_batch_query_argv_with_proc
+  def test_batch_query_splat_with_proc
     @db.query('create table foo (a integer primary key, b)')
     assert_equal [], @db.query('select * from foo')
 
     pr = parameter_source_proc([5, 4, 3])
     assert_kind_of Proc, pr
-    results = @db.batch_query_argv('insert into foo (b) values (?) returning b', pr)
+    results = @db.batch_query_splat('insert into foo (b) values (?) returning b', pr)
     assert_equal [
       [5],
       [4],
@@ -677,7 +677,7 @@ class DatabaseTest < Minitest::Test
     ], results
 
     pr = parameter_source_proc([42, 43])
-    results = @db.batch_query_argv('update foo set b = ? returning b * 10 + a', pr)
+    results = @db.batch_query_splat('update foo set b = ? returning b * 10 + a', pr)
     assert_equal [
       [421, 422, 423],
       [431, 432, 433]
@@ -685,7 +685,7 @@ class DatabaseTest < Minitest::Test
 
     array = []
     pr = parameter_source_proc([44, 45])
-    changes = @db.batch_query_argv('update foo set b = ? returning b * 10 + a', pr) do |rows|
+    changes = @db.batch_query_splat('update foo set b = ? returning b * 10 + a', pr) do |rows|
       array << rows
     end
     assert_equal 6, changes
@@ -857,7 +857,7 @@ class DatabaseTest < Minitest::Test
 
   def test_string_encoding
     db = Extralite::Database.new(':memory:')
-    v = db.query_single_argv("select 'foo'")
+    v = db.query_single_splat("select 'foo'")
     assert_equal 'foo', v
     assert_equal 'UTF-8', v.encoding.name
   end
@@ -942,24 +942,24 @@ class DatabaseTest < Minitest::Test
       assert_equal [], db.query('select * from foo')
 
       db.execute('insert into foo values (42)')
-      assert_equal [42], db.query_argv('select x from foo')
+      assert_equal [42], db.query_splat('select x from foo')
 
       db.savepoint(:a)
 
       db.execute('insert into foo values (43)')
-      assert_equal [42, 43], db.query_argv('select x from foo')
+      assert_equal [42, 43], db.query_splat('select x from foo')
       
       db.savepoint(:b)
 
       db.execute('insert into foo values (44)')
-      assert_equal [42, 43, 44], db.query_argv('select x from foo')
+      assert_equal [42, 43, 44], db.query_splat('select x from foo')
 
       db.rollback_to(:b)
-      assert_equal [42, 43], db.query_argv('select x from foo')
+      assert_equal [42, 43], db.query_splat('select x from foo')
 
       db.release(:a)
 
-      assert_equal [42, 43], db.query_argv('select x from foo')
+      assert_equal [42, 43], db.query_splat('select x from foo')
     end
   end
 
@@ -973,8 +973,8 @@ class DatabaseTest < Minitest::Test
     ], q.to_a
   end
 
-  def test_prepare_argv
-    q = @db.prepare_argv('select * from t order by x')
+  def test_prepare_splat
+    q = @db.prepare_splat('select * from t order by x')
     assert_kind_of Extralite::Query, q
 
     buf = []
@@ -1000,8 +1000,8 @@ class DatabaseTest < Minitest::Test
     ], q.to_a
   end
 
-  def test_prepare_argv_with_transform
-    q = @db.prepare_argv('select * from t order by x') { |x, y, z| x * 100 + y * 10 + z }
+  def test_prepare_splat_with_transform
+    q = @db.prepare_splat('select * from t order by x') { |x, y, z| x * 100 + y * 10 + z }
     assert_equal [
       123,
       456
@@ -1046,7 +1046,7 @@ class ScenarioTest < Minitest::Test
 
     sleep 0.1
     @db.query 'begin deferred'
-    result = @db.query_argv('select x from t')
+    result = @db.query_splat('select x from t')
     assert_equal [1, 4], result
 
     assert_raises(Extralite::BusyError) do
@@ -1080,7 +1080,7 @@ class ScenarioTest < Minitest::Test
     @db.query('insert into t values (7, 8, 9)')
     @db.query('commit')
 
-    result = @db.query_argv('select x from t')
+    result = @db.query_splat('select x from t')
     assert_equal [1, 4, 7], result
   ensure
     t&.kill
@@ -1109,7 +1109,7 @@ class ScenarioTest < Minitest::Test
     t1.join
     t2.join
 
-    assert_equal (1..100).to_a, @db.query_argv('select x from t order by x')
+    assert_equal (1..100).to_a, @db.query_splat('select x from t order by x')
   ensure
     t1&.kill
     t2&.kill
@@ -1620,7 +1620,7 @@ class RactorTest < Minitest::Test
     r << 42
     r.take # wait for ractor to terminate
 
-    assert_equal 42, db.query_single_argv('select x from foo')
+    assert_equal 42, db.query_single_splat('select x from foo')
   end
 
   # Adapted from here: https://github.com/sparklemotion/sqlite3-ruby/pull/365/files
@@ -1681,7 +1681,7 @@ class RactorTest < Minitest::Test
 
     final_check = Ractor.new(fn) do |rfn|
       rdb = Extralite::Database.new(rfn, wal: true)
-      count = rdb.query_single_argv('select count(*) from stress_test')
+      count = rdb.query_single_splat('select count(*) from stress_test')
       Ractor.yield count
     end
     count = final_check.take
@@ -1791,61 +1791,61 @@ class DatabaseTransformTest < Minitest::Test
     assert_equal([4, 5], o.values)
   end
 
-  def test_query_argv_single_column_transform
+  def test_query_splat_single_column_transform
     transform = ->(c) { JSON.parse(c, symbolize_names: true) }
     sql = 'select c from t where a = ?'
 
-    assert_equal([{ foo: 42, bar: 43 }], @db.query_argv(transform, sql, 1))
-    assert_equal([{ foo: 45, bar: 46 }], @db.query_argv(transform, sql, 4))
+    assert_equal([{ foo: 42, bar: 43 }], @db.query_splat(transform, sql, 1))
+    assert_equal([{ foo: 45, bar: 46 }], @db.query_splat(transform, sql, 4))
 
     sql = 'select c from t order by a'
     assert_equal [
       { foo: 42, bar: 43 },
       { foo: 45, bar: 46 }
-    ], @db.query_argv(transform, sql)
+    ], @db.query_splat(transform, sql)
 
     buf = []
-    @db.query_argv(transform, sql) { |r| buf << r }
+    @db.query_splat(transform, sql) { |r| buf << r }
     assert_equal [
       { foo: 42, bar: 43 },
       { foo: 45, bar: 46 }
     ], buf
   end
 
-  def test_query_argv_single_row_single_column
+  def test_query_splat_single_row_single_column
     transform = ->(c) { JSON.parse(c, symbolize_names: true) }
     sql = 'select c from t where a = ?'
 
-    assert_equal({ foo: 42, bar: 43 }, @db.query_single_argv(transform, sql, 1))
-    assert_equal({ foo: 45, bar: 46 }, @db.query_single_argv(transform, sql, 4))
+    assert_equal({ foo: 42, bar: 43 }, @db.query_single_splat(transform, sql, 1))
+    assert_equal({ foo: 45, bar: 46 }, @db.query_single_splat(transform, sql, 4))
   end
 
-  def test_query_argv_multi_column
+  def test_query_splat_multi_column
     transform = ->(a, b, c) { { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     sql = 'select * from t where a = ?'
 
-    assert_equal([{ a: 1, b: 2, c: { foo: 42, bar: 43 }}], @db.query_argv(transform, sql, 1))
-    assert_equal([{ a: 4, b: 5, c: { foo: 45, bar: 46 }}], @db.query_argv(transform, sql, 4))
+    assert_equal([{ a: 1, b: 2, c: { foo: 42, bar: 43 }}], @db.query_splat(transform, sql, 1))
+    assert_equal([{ a: 4, b: 5, c: { foo: 45, bar: 46 }}], @db.query_splat(transform, sql, 4))
 
     sql = 'select * from t order by a'
     assert_equal [
       { a: 1, b: 2, c: { foo: 42, bar: 43 }},
       { a: 4, b: 5, c: { foo: 45, bar: 46 }}
-    ], @db.query_argv(transform, sql)
+    ], @db.query_splat(transform, sql)
 
     buf = []
-    @db.query_argv(transform, sql) { |r| buf << r }
+    @db.query_splat(transform, sql) { |r| buf << r }
     assert_equal [
       { a: 1, b: 2, c: { foo: 42, bar: 43 }},
       { a: 4, b: 5, c: { foo: 45, bar: 46 }}
     ], buf
   end
 
-  def test_query_argv_single_row_multi_column
+  def test_query_splat_single_row_multi_column
     transform = ->(a, b, c) { { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     sql = 'select * from t where a = ?'
 
-    assert_equal({ a: 1, b: 2, c: { foo: 42, bar: 43 }}, @db.query_single_argv(transform, sql, 1))
-    assert_equal({ a: 4, b: 5, c: { foo: 45, bar: 46 }}, @db.query_single_argv(transform, sql, 4))
+    assert_equal({ a: 1, b: 2, c: { foo: 42, bar: 43 }}, @db.query_single_splat(transform, sql, 1))
+    assert_equal({ a: 4, b: 5, c: { foo: 45, bar: 46 }}, @db.query_single_splat(transform, sql, 4))
   end
 end
