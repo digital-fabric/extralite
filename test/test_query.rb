@@ -28,35 +28,35 @@ class QueryTest < Minitest::Test
     query = @db.prepare('select 1')
     assert_equal :hash, query.mode
     
-    query.mode = :argv
-    assert_equal :argv, query.mode
+    query.mode = :splat
+    assert_equal :splat, query.mode
 
-    query.mode = :ary
-    assert_equal :ary, query.mode
+    query.mode = :array
+    assert_equal :array, query.mode
 
     assert_raises(Extralite::Error) { query.mode = :foo }
-    assert_equal :ary, query.mode
+    assert_equal :array, query.mode
 
     query.mode = :hash
     assert_equal :hash, query.mode
   end
 
-  def test_prepare_argv
-    query = @db.prepare_argv('select 1')
-    assert_equal :argv, query.mode
+  def test_prepare_splat
+    query = @db.prepare_splat('select 1')
+    assert_equal :splat, query.mode
 
     assert_equal 1, query.next
   end
 
-  def test_prepare_argv_with_too_many_columns
-    q = @db.prepare_argv('select 1, 2, 3, 4, 5, 6, 7, 8, 9')
+  def test_prepare_splat_with_too_many_columns
+    q = @db.prepare_splat('select 1, 2, 3, 4, 5, 6, 7, 8, 9')
 
     assert_raises(Extralite::Error) { q.next }
   end
 
-  def test_prepare_ary
-    query = @db.prepare_ary('select 1')
-    assert_equal :ary, query.mode
+  def test_prepare_array
+    query = @db.prepare_array('select 1')
+    assert_equal :array, query.mode
 
     assert_equal [1], query.next
   end
@@ -71,7 +71,7 @@ class QueryTest < Minitest::Test
   def test_bind
     @db.query("insert into t values ('a', 'b', 'c')")
 
-    q = @db.prepare_ary('select * from t where `z` = :foo')
+    q = @db.prepare_array('select * from t where `z` = :foo')
     results = q.bind(foo: 'c').to_a
 
     assert_equal [['a', 'b', 'c']], results
@@ -158,8 +158,8 @@ class QueryTest < Minitest::Test
     assert_equal [], buf
   end
 
-  def test_query_next_ary
-    query = @db.prepare_ary('select * from t')
+  def test_query_next_array
+    query = @db.prepare_array('select * from t')
     v = query.next
     assert_equal([1, 2, 3], v)
 
@@ -176,8 +176,8 @@ class QueryTest < Minitest::Test
     assert_nil v
   end
 
-  def test_query_next_ary_with_row_count
-    query = @db.prepare_ary('select * from t')
+  def test_query_next_array_with_row_count
+    query = @db.prepare_array('select * from t')
     v = query.next(1)
     assert_equal([[1, 2, 3]], v)
 
@@ -191,8 +191,8 @@ class QueryTest < Minitest::Test
     assert_nil v
   end
 
-  def test_query_next_ary_with_block
-    query = @db.prepare_ary('select * from t')
+  def test_query_next_array_with_block
+    query = @db.prepare_array('select * from t')
     buf = []
     v = query.next { |r| buf << r }
     assert_equal query, v
@@ -209,8 +209,8 @@ class QueryTest < Minitest::Test
     assert_equal [], buf
   end
 
-  def test_query_next_argv_single_column
-    query = @db.prepare_argv('select x from t')
+  def test_query_next_splat_single_column
+    query = @db.prepare_splat('select x from t')
     v = query.next
     assert_equal(1, v)
 
@@ -224,8 +224,8 @@ class QueryTest < Minitest::Test
     assert_nil v
   end
 
-  def test_query_next_argv_multi_column
-    query = @db.prepare_argv('select x, y from t')
+  def test_query_next_splat_multi_column
+    query = @db.prepare_splat('select x, y from t')
     v = query.next
     assert_equal([1, 2], v)
 
@@ -239,8 +239,8 @@ class QueryTest < Minitest::Test
     assert_nil v
   end
 
-  def test_query_next_argv_with_row_count
-    query = @db.prepare_argv('select x from t')
+  def test_query_next_splat_with_row_count
+    query = @db.prepare_splat('select x from t')
     v = query.next(1)
     assert_equal([1], v)
 
@@ -251,8 +251,8 @@ class QueryTest < Minitest::Test
     assert_nil v
   end
 
-  def test_query_next_argv_with_block
-    query = @db.prepare_argv('select x, y from t')
+  def test_query_next_splat_with_block
+    query = @db.prepare_splat('select x, y from t')
     buf = []
     v = query.next { |x, y| buf << [x, y] }
     assert_equal query, v
@@ -273,12 +273,12 @@ class QueryTest < Minitest::Test
     assert_equal [{ x: 1, y: 2, z: 3 }], @query.bind(1).to_a
     assert_equal [{ x: 4, y: 5, z: 6 }], @query.bind(4).to_a
 
-    @query.mode = :ary
+    @query.mode = :array
 
     assert_equal [[1, 2, 3]], @query.bind(1).to_a
     assert_equal [[4, 5, 6]], @query.bind(4).to_a
 
-    query = @db.prepare_argv('select y from t')
+    query = @db.prepare_splat('select y from t')
     assert_equal [2, 5, 8], query.to_a
   end
 
@@ -322,9 +322,9 @@ class QueryTest < Minitest::Test
     assert_equal [{x: 1, y: 2, z: 3},{ x: 4, y: 5, z: 6 }, { x: 7, y: 8, z: 9 }], buf
   end
 
-  def test_query_each_ary
+  def test_query_each_array
     buf = []
-    @query.mode = :ary
+    @query.mode = :array
     @query.bind(1).each { |r| buf << r }
     assert_equal [[1, 2, 3]], buf
 
@@ -333,14 +333,14 @@ class QueryTest < Minitest::Test
     @query.each { |r| buf << r }
     assert_equal [[1, 2, 3]], buf
 
-    query = @db.prepare_ary('select * from t')
+    query = @db.prepare_array('select * from t')
     buf = []
     query.each { |r| buf << r }
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
   end
 
-  def test_query_each_ary_without_block
-    query = @db.prepare_ary('select * from t')
+  def test_query_each_array_without_block
+    query = @db.prepare_array('select * from t')
     iter = query.each
     assert_kind_of Extralite::Iterator, iter
 
@@ -350,9 +350,9 @@ class QueryTest < Minitest::Test
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
   end
 
-  def test_query_each_argv
+  def test_query_each_splat
     buf = []
-    @query.mode = :argv
+    @query.mode = :splat
     @query.bind(1).each { |a, b, c| buf << [a, b, c] }
     assert_equal [[1, 2, 3]], buf
 
@@ -361,14 +361,14 @@ class QueryTest < Minitest::Test
     @query.each { |a, b, c| buf << [a, b, c] }
     assert_equal [[1, 2, 3]], buf
 
-    query = @db.prepare_argv('select * from t')
+    query = @db.prepare_splat('select * from t')
     buf = []
     query.each { |a, b, c| buf << [a, b, c] }
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
   end
 
-  def test_query_each_argv_without_block
-    query = @db.prepare_argv('select * from t')
+  def test_query_each_splat_without_block
+    query = @db.prepare_splat('select * from t')
     iter = query.each
     assert_kind_of Extralite::Iterator, iter
 
@@ -378,8 +378,8 @@ class QueryTest < Minitest::Test
     assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], buf
   end
 
-  def test_query_each_argv_single_column
-    query = @db.prepare_argv('select x from t where x = ?')
+  def test_query_each_splat_single_column
+    query = @db.prepare_splat('select x from t where x = ?')
     buf = []
     query.bind(1).each { |r| buf << r }
     assert_equal [1], buf
@@ -389,14 +389,14 @@ class QueryTest < Minitest::Test
     query.each { |r| buf << r }
     assert_equal [1], buf
 
-    query = @db.prepare_argv('select x from t')
+    query = @db.prepare_splat('select x from t')
     buf = []
     query.each { |r| buf << r }
     assert_equal [1, 4, 7], buf
   end
 
-  def test_query_each_argv_single_column_without_block
-    query = @db.prepare_argv('select x from t')
+  def test_query_each_splat_single_column_without_block
+    query = @db.prepare_splat('select x from t')
     iter = query.each
     assert_kind_of Extralite::Iterator, iter
 
@@ -484,24 +484,24 @@ class QueryTest < Minitest::Test
   class Foo; end
 
   def test_parameter_binding_from_hash
-    assert_equal 42, @db.prepare_argv('select :bar').bind(foo: 41, bar: 42).next
-    assert_equal 42, @db.prepare_argv('select :bar').bind('foo' => 41, 'bar' => 42).next
-    assert_equal 42, @db.prepare_argv('select ?8').bind(7 => 41, 8 => 42).next
-    assert_nil @db.prepare_argv('select :bar').bind(foo: 41).next
+    assert_equal 42, @db.prepare_splat('select :bar').bind(foo: 41, bar: 42).next
+    assert_equal 42, @db.prepare_splat('select :bar').bind('foo' => 41, 'bar' => 42).next
+    assert_equal 42, @db.prepare_splat('select ?8').bind(7 => 41, 8 => 42).next
+    assert_nil @db.prepare_splat('select :bar').bind(foo: 41).next
 
-    error = assert_raises(Extralite::ParameterError) { @db.prepare_argv('select ?').bind(Foo.new => 42).next }
+    error = assert_raises(Extralite::ParameterError) { @db.prepare_splat('select ?').bind(Foo.new => 42).next }
     assert_equal error.message, 'Cannot bind parameter with a key of type QueryTest::Foo'
 
-    error = assert_raises(Extralite::ParameterError) { @db.prepare_argv('select ?').bind(%w[a b] => 42).next }
+    error = assert_raises(Extralite::ParameterError) { @db.prepare_splat('select ?').bind(%w[a b] => 42).next }
     assert_equal error.message, 'Cannot bind parameter with a key of type Array'
   end
 
   def test_parameter_binding_from_struct
     foo_bar = Struct.new(:':foo', :bar)
     value = foo_bar.new(41, 42)
-    assert_equal 41, @db.prepare_argv('select :foo').bind(value).next
-    assert_equal 42, @db.prepare_argv('select :bar').bind(value).next
-    assert_nil @db.prepare_argv('select :baz').bind(value).next
+    assert_equal 41, @db.prepare_splat('select :foo').bind(value).next
+    assert_equal 42, @db.prepare_splat('select :bar').bind(value).next
+    assert_nil @db.prepare_splat('select :baz').bind(value).next
   end
 
   def test_parameter_binding_from_data_class
@@ -509,8 +509,8 @@ class QueryTest < Minitest::Test
 
     foo_bar = Data.define(:':foo', :bar)
     value = foo_bar.new(':foo': 41, bar: 42)
-    assert_equal 42, @db.prepare_argv('select :bar').bind(value).next
-    assert_nil @db.prepare_argv('select :baz').bind(value).next
+    assert_equal 42, @db.prepare_splat('select :bar').bind(value).next
+    assert_nil @db.prepare_splat('select :baz').bind(value).next
   end
 
   def test_query_columns
@@ -519,7 +519,7 @@ class QueryTest < Minitest::Test
   end
 
   def test_query_columns_with_parameterized_sql
-    q = @db.prepare_ary('select * from t where z = :z')
+    q = @db.prepare_array('select * from t where z = :z')
     q.bind(z: 9)
     assert_equal [:x, :y, :z], q.columns
     assert_equal [[7, 8, 9]], q.to_a
@@ -542,13 +542,13 @@ class QueryTest < Minitest::Test
   def test_query_execute
     q = @db.prepare('update t set x = 42')
     assert_equal 3, q.execute
-    assert_equal [[42, 2, 3], [42, 5, 6], [42, 8, 9]], @db.query_ary('select * from t order by z')
+    assert_equal [[42, 2, 3], [42, 5, 6], [42, 8, 9]], @db.query_array('select * from t order by z')
   end
 
   def test_query_execute_with_params
     q = @db.prepare('update t set x = ? where z = ?')
     assert_equal 1, q.execute(42, 9)
-    assert_equal [[1, 2, 3], [4, 5, 6], [42, 8, 9]], @db.query_ary('select * from t order by z')
+    assert_equal [[1, 2, 3], [4, 5, 6], [42, 8, 9]], @db.query_array('select * from t order by z')
   end
 
   def test_query_execute_with_mixed_params
@@ -559,13 +559,13 @@ class QueryTest < Minitest::Test
     q.execute([4, 5], 6)
     q.execute([7], 8, [9])
 
-    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], @db.query_ary('select * from t order by z')
+    assert_equal [[1, 2, 3], [4, 5, 6], [7, 8, 9]], @db.query_array('select * from t order by z')
   end
 
   def test_query_chverons
     q = @db.prepare('update t set x = ? where z = ?')
     assert_equal q, (q << [42, 9])
-    assert_equal [[1, 2, 3], [4, 5, 6], [42, 8, 9]], @db.query_ary('select * from t order by z')
+    assert_equal [[1, 2, 3], [4, 5, 6], [42, 8, 9]], @db.query_array('select * from t order by z')
   end
 
 
@@ -626,7 +626,7 @@ class QueryTest < Minitest::Test
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
@@ -657,7 +657,7 @@ class QueryTest < Minitest::Test
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
@@ -692,7 +692,7 @@ class QueryTest < Minitest::Test
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
@@ -720,19 +720,19 @@ class QueryTest < Minitest::Test
     ], array
   end
 
-  def test_query_batch_query_ary_with_array
+  def test_query_batch_query_array_with_array
     @db.query('create table foo (a integer primary key, b)')
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
       [[3, 3]]
     ], results
 
-    q = @db.prepare_ary('update foo set b = ? returning *')
+    q = @db.prepare_array('update foo set b = ? returning *')
 
     results = q.batch_query([42, 43])
     assert_equal [
@@ -751,19 +751,19 @@ class QueryTest < Minitest::Test
     ], array
   end
 
-  def test_query_batch_query_ary_with_enumerable
+  def test_query_batch_query_array_with_enumerable
     @db.query('create table foo (a integer primary key, b)')
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
       [[3, 3]]
     ], results
 
-    q = @db.prepare_ary('update foo set b = ? returning *')
+    q = @db.prepare_array('update foo set b = ? returning *')
 
     results = q.batch_query(42..43)
     assert_equal [
@@ -782,19 +782,19 @@ class QueryTest < Minitest::Test
     ], array
   end
 
-  def test_query_batch_query_ary_with_proc
+  def test_query_batch_query_array_with_proc
     @db.query('create table foo (a integer primary key, b)')
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
       [[3, 3]]
     ], results
 
-    q = @db.prepare_ary('update foo set b = ? returning *')
+    q = @db.prepare_array('update foo set b = ? returning *')
 
     pr = parameter_source_proc([42, 43])
     results = q.batch_query(pr)
@@ -820,14 +820,14 @@ class QueryTest < Minitest::Test
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
       [[3, 3]]
     ], results
 
-    q = @db.prepare_argv('update foo set b = ? returning b * 10 + a')
+    q = @db.prepare_splat('update foo set b = ? returning b * 10 + a')
 
     results = q.batch_query([42, 43])
     assert_equal [
@@ -851,14 +851,14 @@ class QueryTest < Minitest::Test
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
       [[3, 3]]
     ], results
 
-    q = @db.prepare_argv('update foo set b = ? returning b * 10 + a')
+    q = @db.prepare_splat('update foo set b = ? returning b * 10 + a')
 
     results = q.batch_query(42..43)
     assert_equal [
@@ -882,14 +882,14 @@ class QueryTest < Minitest::Test
     assert_equal [], @db.query('select * from foo')
 
     data = [5, 4, 3]
-    results = @db.batch_query_ary('insert into foo (b) values (?) returning *', data)
+    results = @db.batch_query_array('insert into foo (b) values (?) returning *', data)
     assert_equal [
       [[1, 5]],
       [[2, 4]],
       [[3, 3]]
     ], results
 
-    q = @db.prepare_argv('update foo set b = ? returning b * 10 + a')
+    q = @db.prepare_splat('update foo set b = ? returning b * 10 + a')
 
     pr = parameter_source_proc([42, 43])
     results = q.batch_query(pr)
@@ -936,7 +936,7 @@ class QueryTest < Minitest::Test
   end
 
   def test_query_eof
-    query = @db.prepare_argv('select x from t')
+    query = @db.prepare_splat('select x from t')
     assert_equal false, query.eof?
 
     query.next
@@ -985,18 +985,18 @@ class QueryTest < Minitest::Test
     assert_equal q1.sql, q2.sql
     refute_same  q1, q2
 
-    q1 = @db.prepare_argv('select x from t')
+    q1 = @db.prepare_splat('select x from t')
     q2 = q1.dup
 
     assert_kind_of Extralite::Query, q2
     assert_equal @db, q2.database
     assert_equal q1.sql, q2.sql
     refute_same  q1, q2
-    assert_equal :argv, q2.mode
+    assert_equal :splat, q2.mode
   end
 
   def test_query_dup_with_transform
-    q1 = @db.prepare_ary('select x, y from t') { |a| a * 2 }
+    q1 = @db.prepare_array('select x, y from t') { |a| a * 2 }
     q2 = q1.dup
 
     assert_equal [
@@ -1012,8 +1012,8 @@ class QueryTransformTest < Minitest::Test
     @db = Extralite::Database.new(':memory:')
     @db.query('create table t (a, b, c)')
 
-    @q1 = @db.prepare_argv('select c from t where a = ?')
-    @q2 = @db.prepare_argv('select c from t order by a')
+    @q1 = @db.prepare_splat('select c from t where a = ?')
+    @q2 = @db.prepare_splat('select c from t order by a')
     
     @q3 = @db.prepare('select * from t where a = ?')
     @q4 = @db.prepare('select * from t order by a')
@@ -1068,8 +1068,8 @@ class QueryTransformTest < Minitest::Test
     ], buf
   end
 
-  def test_transform_ary
-    @q5.mode = :ary
+  def test_transform_array
+    @q5.mode = :array
     q = @q5.transform { |h| MyModel.new(h) }
     assert_equal @q5, q
 
@@ -1086,7 +1086,7 @@ class QueryTransformTest < Minitest::Test
       [[4, 5]]
     ], @q5.batch_query([[1], [4]]).map { |a| a.map(&:values) }
 
-    @q6.mode = :ary
+    @q6.mode = :array
     @q6.transform { |h| MyModel.new(h) }
     assert_equal [
       [1, 2],
@@ -1101,7 +1101,7 @@ class QueryTransformTest < Minitest::Test
     ], buf
   end
 
-  def test_transform_argv_single_column
+  def test_transform_splat_single_column
     q = @q1.transform { |c| JSON.parse(c, symbolize_names: true) }
     assert_equal @q1, q
 
@@ -1127,8 +1127,8 @@ class QueryTransformTest < Minitest::Test
     ], buf
   end
 
-  def test_transform_argv_multi_column
-    @q3.mode = :argv
+  def test_transform_splat_multi_column
+    @q3.mode = :splat
     q = @q3.transform { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     assert_equal @q3, q
 
@@ -1140,7 +1140,7 @@ class QueryTransformTest < Minitest::Test
       [{ a: 4, b: 5, c: { foo: 45, bar: 46 }}]
     ], @q3.batch_query([[1], [4]])
 
-    @q4.mode = :argv
+    @q4.mode = :splat
     @q4.transform { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     assert_equal [
       { a: 1, b: 2, c: { foo: 42, bar: 43 }},

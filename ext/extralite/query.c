@@ -15,8 +15,8 @@ ID ID_inspect;
 ID ID_slice;
 
 VALUE SYM_hash;
-VALUE SYM_argv;
-VALUE SYM_ary;
+VALUE SYM_splat;
+VALUE SYM_array;
 
 #define DB_GVL_MODE(query) Database_prepare_gvl_mode(query->db_struct)
 
@@ -68,8 +68,8 @@ static inline Query_t *self_to_query(VALUE obj) {
 
 static inline enum query_mode symbol_to_query_mode(VALUE sym) {
   if (sym == SYM_hash)          return QUERY_HASH;
-  if (sym == SYM_argv)          return QUERY_ARGV;
-  if (sym == SYM_ary)           return QUERY_ARY;
+  if (sym == SYM_splat)         return QUERY_SPLAT;
+  if (sym == SYM_array)         return QUERY_ARRAY;
 
   rb_raise(cError, "Invalid query mode");
 }
@@ -78,10 +78,10 @@ static inline VALUE query_mode_to_symbol(enum query_mode query_mode) {
   switch (query_mode) {
     case QUERY_HASH:
       return SYM_hash;
-    case QUERY_ARGV:
-      return SYM_argv;
-    case QUERY_ARY:
-      return SYM_ary;
+    case QUERY_SPLAT:
+      return SYM_splat;
+    case QUERY_ARRAY:
+      return SYM_array;
     default:
       rb_raise(cError, "Invalid mode");
   }
@@ -232,10 +232,10 @@ inline safe_query_impl query_impl(enum query_mode query_mode) {
   switch (query_mode) {
     case QUERY_HASH:
       return safe_query_hash;
-    case QUERY_ARGV:
-      return safe_query_argv;
-    case QUERY_ARY:
-      return safe_query_ary;
+    case QUERY_SPLAT:
+      return safe_query_splat;
+    case QUERY_ARRAY:
+      return safe_query_array;
     default:
       rb_raise(cError, "Invalid query mode (query_impl)");
   }
@@ -596,7 +596,7 @@ VALUE Query_mode_get(VALUE self) {
 /* call-seq:
  *   query.mode = mode
  * 
- * Sets the query mode. This can be one of `:hash`, `:argv`, `:ary`.
+ * Sets the query mode. This can be one of `:hash`, `:splat`, `:array`.
  *
  * @param mode [Symbol] query mode
  * @return [Symbol] query mode
@@ -642,10 +642,10 @@ void Init_ExtraliteQuery(void) {
   ID_slice    = rb_intern("slice");
 
   SYM_hash          = ID2SYM(rb_intern("hash"));
-  SYM_argv          = ID2SYM(rb_intern("argv"));
-  SYM_ary           = ID2SYM(rb_intern("ary"));
+  SYM_splat          = ID2SYM(rb_intern("splat"));
+  SYM_array           = ID2SYM(rb_intern("array"));
 
   rb_gc_register_mark_object(SYM_hash);
-  rb_gc_register_mark_object(SYM_argv);
-  rb_gc_register_mark_object(SYM_ary);
+  rb_gc_register_mark_object(SYM_splat);
+  rb_gc_register_mark_object(SYM_array);
 }

@@ -42,8 +42,8 @@ extern ID ID_strip;
 extern ID ID_to_s;
 extern ID ID_track;
 
-extern VALUE SYM_argv;
-extern VALUE SYM_ary;
+extern VALUE SYM_splat;
+extern VALUE SYM_array;
 extern VALUE SYM_hash;
 
 enum progress_handler_mode {
@@ -71,8 +71,8 @@ typedef struct {
 
 enum query_mode {
   QUERY_HASH,
-  QUERY_ARGV,
-  QUERY_ARY
+  QUERY_SPLAT,
+  QUERY_ARRAY
 };
 
 typedef struct {
@@ -86,13 +86,6 @@ typedef struct {
   int                 closed;
   enum query_mode     query_mode;
 } Query_t;
-
-enum iterator_mode {
-  ITERATOR_HASH,
-  ITERATOR_ARGV,
-  ITERATOR_ARY,
-  ITERATOR_SINGLE_COLUMN
-};
 
 typedef struct {
   VALUE               query;
@@ -165,16 +158,16 @@ typedef VALUE (*safe_query_impl)(query_ctx *);
 
 VALUE safe_batch_execute(query_ctx *ctx);
 VALUE safe_batch_query(query_ctx *ctx);
-VALUE safe_batch_query_argv(query_ctx *ctx);
-VALUE safe_batch_query_ary(query_ctx *ctx);
-VALUE safe_query_argv(query_ctx *ctx);
-VALUE safe_query_ary(query_ctx *ctx);
+VALUE safe_batch_query_splat(query_ctx *ctx);
+VALUE safe_batch_query_array(query_ctx *ctx);
+VALUE safe_query_splat(query_ctx *ctx);
+VALUE safe_query_array(query_ctx *ctx);
 VALUE safe_query_changes(query_ctx *ctx);
 VALUE safe_query_columns(query_ctx *ctx);
 VALUE safe_query_hash(query_ctx *ctx);
 VALUE safe_query_single_row_hash(query_ctx *ctx);
-VALUE safe_query_single_row_argv(query_ctx *ctx);
-VALUE safe_query_single_row_ary(query_ctx *ctx);
+VALUE safe_query_single_row_splat(query_ctx *ctx);
+VALUE safe_query_single_row_array(query_ctx *ctx);
 
 VALUE Query_each(VALUE self);
 VALUE Query_next(int argc, VALUE *argv, VALUE self);

@@ -24,7 +24,7 @@ class KVStore
   end
 
   def setup_queries
-    @q_get = @db.prepare_argv('select value from kv where key = ?')
+    @q_get = @db.prepare_splat('select value from kv where key = ?')
     @q_set = @db.prepare('insert into kv (key, value) values($1, $2) on conflict (key) do update set value = $2')
   end
 

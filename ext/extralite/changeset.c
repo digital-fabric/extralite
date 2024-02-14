@@ -339,7 +339,7 @@ VALUE Changeset_to_a(VALUE self) {
 
 // copied from: https://sqlite.org/sessionintro.html
 static int xConflict(void *pCtx, int eConflict, sqlite3_changeset_iter *pIter){
-  int ret = (int)pCtx;
+  long ret = (long)pCtx;
   return ret;
 }
 

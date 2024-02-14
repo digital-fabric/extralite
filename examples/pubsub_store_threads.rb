@@ -35,14 +35,14 @@ class PubSub
 
   def get_messages(&block)
     @db.transaction(:deferred) do
-      results = @db.query_ary('select topic, message from messages where subscriber_id = ?', @id)
+      results = @db.query_array('select topic, message from messages where subscriber_id = ?', @id)
       return [] if results.empty?
 
       @db.execute('delete from messages where subscriber_id = ?', @id)
       results
     end
 
-      # messages = @db.query_ary('delete from messages where subscriber_id = ? returning topic, message', @id)
+      # messages = @db.query_array('delete from messages where subscriber_id = ? returning topic, message', @id)
       # if block
       #   messages.each(&block)
       #   nil
@@ -196,7 +196,7 @@ while true
   d_publish = publish_count - last_publish_count
   d_receive = receive_count - last_receive_count
 
-  count = db4.query_single_argv('select count(*) from messages')
+  count = db4.query_single_splat('select count(*) from messages')
   puts "#{Time.now} publish: #{d_publish/elapsed}/s receive: #{d_receive/elapsed}/s pending: #{count}"
   last_t = now
   last_publish_count = publish_count

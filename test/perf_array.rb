@@ -27,21 +27,14 @@ def prepare_database(count)
   $extralite_db.query('commit')
 end
 
-def sqlite3_run(expected_count)
-  count = 0
-  $sqlite3_db.execute('select b from foo').each do |row|
-    b = row.first
-    count += 1
-  end
-  raise unless count == expected_count
+def sqlite3_run(count)
+  results = $sqlite3_db.execute('select * from foo')
+  raise unless results.size == count
 end
 
-def extralite_run(expected_count)
-  count = 0
-  $extralite_db.query_argv('select * from foo') do |b|
-    count += 1
-  end
-  raise unless count == expected_count
+def extralite_run(count)
+  results = $extralite_db.query_array('select * from foo')
+  raise unless results.size == count
 end
 
 [10, 1000, 100000].each do |c|

@@ -142,9 +142,9 @@ For that purpose, Extralite offers three different ways, or modes, of retrieving
 records:
 
 - `:hash`: read rows as hashes (this is the default mode).
-- `:ary`: read rows as arrays.
-- `:argv`: similar to the `:ary`, except that for queries with a single column,
-  the single column value is returned.
+- `:array`: read rows as arrays.
+- `:splat`: similar to the `:array`, except that for queries with a single
+  column, the single column value is returned.
 
 Extralite provides separate methods for the different modes:
 
@@ -152,9 +152,9 @@ Extralite provides separate methods for the different modes:
 # alias #query_hash
 db.query('select 1') #=> [{ "1" => 1 }]
 
-db.query_ary('select 1') #=> [[1]]
+db.query_array('select 1') #=> [[1]]
 
-db.query_argv('select 1') #=> [1]
+db.query_splat('select 1') #=> [1]
 ```
 
 Notice how all the return values above are arrays. This is because the different
@@ -165,9 +165,9 @@ get back a single row, use one of the `query_single_xxx` methods:
 # alias #query_single_hash
 db.query_single('select 1') #=> { "1" => 1 }
 
-db.query_single_ary('select 1') #=> [1]
+db.query_single_array('select 1') #=> [1]
 
-db.query_single_argv('select 1') #=> 1
+db.query_single_splat('select 1') #=> 1
 ```
 
 ## Parameter binding
@@ -269,12 +269,12 @@ db.query(transform, 'select * from foo')
 #=> rows as instances of MyModel
 ```
 
-When using the `argv` mode, the different column values are passed as individual
+When using the `splat` mode, the different column values are passed as splatted
 values to the transform proc:
 
 ```ruby
 transform = ->(a, b, c) { { a:a, b: b, c: JSON.parse(c) } }
-db.query_argv(transform, 'select a, b, c from foo')
+db.query_splat(transform, 'select a, b, c from foo')
 #=> transformed rows
 ```
 
@@ -325,16 +325,16 @@ three different modes: as a hash, an array or as individual column values. To
 set the mode, you can use one of the `#prepare_xxx` methods:
 
 ```ruby
-# hash mode
+# hash mode (alias #prepare_hash)
 db.prepare('select * from foo').to_a
 #=> [{ x: 1, y: 2, z: 3}]
 
-# argv mode
-db.prepare_argv('select x from foo').to_a
+# splat mode
+db.prepare_splat('select x from foo').to_a
 #=> [1]
 
-# ary mode
-db.prepare_ary('select * from foo').to_a
+# array mode
+db.prepare_array('select * from foo').to_a
 #=> [[1, 2, 3]]
 ```
 
@@ -345,7 +345,7 @@ q = db.prepare('select * from foo')
 q.to_a #=> [{ x: 1, y: 2, z: 3}]
 
 q.mode #=> :hash
-q.mode = :ary
+q.mode = :array
 q.to_a "=> [[1, 2, 3]]
 ```
 
@@ -368,12 +368,12 @@ query.next(10)
 #=> [{ x: 1, y: 2, z: 3 }, { x: 4, y: 5, z: 6 }]
 
 # Fetch the next row as an array
-query = db.prepare_ary('select * from foo')
+query = db.prepare_array('select * from foo')
 query.next
 #=> [1, 2, 3]
 
 # Fetch the next row as a single column
-db.prepare_argv('select z from foo').next
+db.prepare_splat('select z from foo').next
 #=> 3
 ```
 
@@ -400,11 +400,11 @@ query = db.prepare('select * from foo')
 query.each { |r| ... }
 
 # iterate over records as arrays
-query = db.prepare_ary('select * from foo')
+query = db.prepare_array('select * from foo')
 query.each { |r| ... }
 
 # iterate over records as single values
-query = db.prepare_argv('select a, b, c from foo')
+query = db.prepare_splat('select a, b, c from foo')
 query.each { |a, b, c| ... }
 ```
 
@@ -437,7 +437,7 @@ iterator.each { |r| ... }
 
 Prepared queries can automatically transform their result sets by setting a
 transform block. The transform block receives values according to the query mode
-(hash, array or argv). To set a transform you can pass a block to one of the
+(hash, array or splat). To set a transform you can pass a block to one of the
 `Database#prepare_xxx` methods, or use `Query#transform`:
 
 ```ruby
@@ -449,12 +449,12 @@ q = db.prepare('select * from items where id = ?')
 q.transform { |h| Item.new(h) }
 ```
 
-The same can be done for queries in `argv` or `ary` mode:
+The same can be done for queries in `splat` or `array` mode:
 
 ```ruby
-db.prepare_argv('select * from foo') { |a, b, c| a + b + c }
+db.prepare_splat('select * from foo') { |a, b, c| a + b + c }
 
-db.prepare_ary('select * from foo') { |a| a.map(&:to_s).join }
+db.prepare_array('select * from foo') { |a| a.map(&:to_s).join }
 ```
 
 ## Batch Execution of Queries
@@ -1220,7 +1220,7 @@ code](https://github.com/digital-fabric/extralite/blob/main/test/perf_hash.rb)
 ### Rows as Arrays
 
 [Benchmark source
-code](https://github.com/digital-fabric/extralite/blob/main/test/perf_ary.rb)
+code](https://github.com/digital-fabric/extralite/blob/main/test/perf_array.rb)
 
 |Row count|sqlite3 1.7.0|Extralite 2.5|Advantage|
 |-:|-:|-:|-:|

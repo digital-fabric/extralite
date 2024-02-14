@@ -42,7 +42,7 @@ class PubSub
 
   def get_messages(&block)
     #   @db.execute('update subscribers set stamp = ? where id = ?', Time.now.to_i, @id)
-      @db.query_argv('delete from messages where subscriber_id = ? returning topic, message', @id, &block)
+      @db.query_splat('delete from messages where subscriber_id = ? returning topic, message', @id, &block)
   end
 
   SCHEMA = <<~SQL
@@ -174,7 +174,7 @@ while true
   elapsed = now - last_t
   d_publish = publish_count - last_publish_count
   d_receive = receive_count - last_receive_count
-  pending = db4.query_single_argv('select count(*) from messages')
+  pending = db4.query_single_splat('select count(*) from messages')
   puts "#{Time.now} publish: #{d_publish/elapsed}/s receive: #{d_receive/elapsed}/s pending: #{pending}"
   last_t = now
   last_publish_count = publish_count

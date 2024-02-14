@@ -342,18 +342,18 @@ VALUE Database_query(int argc, VALUE *argv, VALUE self) {
  * splatted:
  *
  *     transform = ->(a, b, c) { a * 100 + b * 10 + c }
- *     db.query_argv(transform, 'select a, b, c from foo where c = ?', 42)
+ *     db.query_splat(transform, 'select a, b, c from foo where c = ?', 42)
  *
- * @overload query_argv(sql, ...)
+ * @overload query_splat(sql, ...)
  *   @param sql [String] SQL statement
  *   @return [Array<Array, any>, Integer] rows or total changes
- * @overload query_argv(transform, sql, ...)
+ * @overload query_splat(transform, sql, ...)
  *   @param transform [Proc] transform proc
  *   @param sql [String] SQL statement
  *   @return [Array<Array, any>, Integer] rows or total changes
  */
-VALUE Database_query_argv(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_argv, QUERY_ARGV);
+VALUE Database_query_splat(int argc, VALUE *argv, VALUE self) {
+  return Database_perform_query(argc, argv, self, safe_query_splat, QUERY_SPLAT);
 }
 
 /* Runs a query returning rows as arrays. If a block is given, it will be called
@@ -364,26 +364,26 @@ VALUE Database_query_argv(int argc, VALUE *argv, VALUE self) {
  * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
- *     db.query_ary('select * from foo where x = ?', 42)
+ *     db.query_array('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
  * specified using a hash, where keys are either strings are symbols. String
  * keys can include or omit the `:` prefix. The following are equivalent:
  *
- *     db.query_ary('select * from foo where x = :bar', bar: 42)
- *     db.query_ary('select * from foo where x = :bar', 'bar' => 42)
- *     db.query_ary('select * from foo where x = :bar', ':bar' => 42)
+ *     db.query_array('select * from foo where x = :bar', bar: 42)
+ *     db.query_array('select * from foo where x = :bar', 'bar' => 42)
+ *     db.query_array('select * from foo where x = :bar', ':bar' => 42)
  * 
- * @overload query_ary(sql, ...)
+ * @overload query_array(sql, ...)
  *   @param sql [String] SQL statement
  *   @return [Array<Array>, Integer] rows or total changes
- * @overload query_ary(transform, sql, ...)
+ * @overload query_array(transform, sql, ...)
  *   @param transform [Proc] transform proc
  *   @param sql [String] SQL statement
  *   @return [Array<Array>, Integer] rows or total changes
  */
-VALUE Database_query_ary(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_ary, QUERY_ARY);
+VALUE Database_query_array(int argc, VALUE *argv, VALUE self) {
+  return Database_perform_query(argc, argv, self, safe_query_array, QUERY_ARRAY);
 }
 
 /* Runs a query returning a single row as a hash.
@@ -419,23 +419,23 @@ VALUE Database_query_single(int argc, VALUE *argv, VALUE self) {
  * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
- *     db.query_single_argv('select * from foo where x = ?', 42)
+ *     db.query_single_splat('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
  * specified using keyword arguments:
  *
- *     db.query_single_argv('select * from foo where x = :bar', bar: 42)
+ *     db.query_single_splat('select * from foo where x = :bar', bar: 42)
  * 
- * @overload query_single_argv(sql, ...) -> row
+ * @overload query_single_splat(sql, ...) -> row
  *   @param sql [String] SQL statement
  *   @return [Array, any] row
- * @overload query_single_argv(transform, sql, ...) -> row
+ * @overload query_single_splat(transform, sql, ...) -> row
  *   @param transform [Proc] transform proc
  *   @param sql [String] SQL statement
  *   @return [Array, any] row
  */
-VALUE Database_query_single_argv(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_row_argv, QUERY_ARGV);
+VALUE Database_query_single_splat(int argc, VALUE *argv, VALUE self) {
+  return Database_perform_query(argc, argv, self, safe_query_single_row_splat, QUERY_SPLAT);
 }
 
 /* Runs a query returning a single row as an array.
@@ -445,23 +445,23 @@ VALUE Database_query_single_argv(int argc, VALUE *argv, VALUE self) {
  * parameters are given as an array, the query should specify parameters using
  * `?`:
  *
- *     db.query_single_ary('select * from foo where x = ?', 42)
+ *     db.query_single_array('select * from foo where x = ?', 42)
  *
  * Named placeholders are specified using `:`. The placeholder values are
  * specified using keyword arguments:
  *
- *     db.query_single_ary('select * from foo where x = :bar', bar: 42)
+ *     db.query_single_array('select * from foo where x = :bar', bar: 42)
  * 
- * @overload query_single_ary(sql, ...) -> row
+ * @overload query_single_array(sql, ...) -> row
  *   @param sql [String] SQL statement
  *   @return [Array, any] row
- * @overload query_single_ary(transform, sql, ...) -> row
+ * @overload query_single_array(transform, sql, ...) -> row
  *   @param transform [Proc] transform proc
  *   @param sql [String] SQL statement
  *   @return [Array, any] row
  */
-VALUE Database_query_single_ary(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_row_ary, QUERY_ARY);
+VALUE Database_query_single_array(int argc, VALUE *argv, VALUE self) {
+  return Database_perform_query(argc, argv, self, safe_query_single_row_array, QUERY_ARRAY);
 }
 
 /* call-seq:
@@ -566,8 +566,8 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
 }
 
 /* call-seq:
- *   db.batch_query_ary(sql, params_source) -> rows
- *   db.batch_query_ary(sql, params_source) { |rows| ... } -> changes
+ *   db.batch_query_array(sql, params_source) -> rows
+ *   db.batch_query_array(sql, params_source) { |rows| ... } -> changes
  *
  * Executes the given query for each list of parameters in the given paramter
  * source. If a block is given, it is called with the resulting rows for each
@@ -579,29 +579,29 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
  *       [1, 2],
  *       [3, 4]
  *     ]
- *     db.batch_query_ary('insert into foo values (?, ?) returning bar, baz', records)
+ *     db.batch_query_array('insert into foo values (?, ?) returning bar, baz', records)
  *     #=> [[1, 2], [3, 4]]
  * *
  * @param sql [String] query SQL
  * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
  * @return [Array<Array>, Integer] Total number of changes effected
  */
-VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
+VALUE Database_batch_query_array(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
-    Qnil, QUERY_ARY, ROW_MULTI, ALL_ROWS
+    Qnil, QUERY_ARRAY, ROW_MULTI, ALL_ROWS
   );
 
-  return rb_ensure(SAFE(safe_batch_query_ary), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+  return rb_ensure(SAFE(safe_batch_query_array), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
 /* call-seq:
- *   db.batch_query_argv(sql, params_source) -> rows
- *   db.batch_query_argv(sql, params_source) { |rows| ... } -> changes
+ *   db.batch_query_splat(sql, params_source) -> rows
+ *   db.batch_query_splat(sql, params_source) { |rows| ... } -> changes
  *
  * Executes the given query for each list of parameters in the given paramter
  * source. If a block is given, it is called with the resulting rows for each
@@ -613,24 +613,24 @@ VALUE Database_batch_query_ary(VALUE self, VALUE sql, VALUE parameters) {
  *       [1, 2],
  *       [3, 4]
  *     ]
- *     db.batch_query_argv('insert into foo values (?, ?) returning baz', records)
+ *     db.batch_query_splat('insert into foo values (?, ?) returning baz', records)
  *     #=> [2, 4]
  * *
  * @param sql [String] query SQL
  * @param parameters [Array<Array, Hash>, Enumerable, Enumerator, Callable] parameters to run query with
  * @return [Array<any>, Integer] Total number of changes effected
  */
-VALUE Database_batch_query_argv(VALUE self, VALUE sql, VALUE parameters) {
+VALUE Database_batch_query_splat(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
   prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
-    Qnil, QUERY_ARGV, ROW_MULTI, ALL_ROWS
+    Qnil, QUERY_SPLAT, ROW_MULTI, ALL_ROWS
   );
 
-  return rb_ensure(SAFE(safe_batch_query_argv), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+  return rb_ensure(SAFE(safe_batch_query_splat), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
 
 /* Returns the column names for the given query, without running it.
@@ -740,9 +740,9 @@ VALUE Database_prepare_hash(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
- *   db.prepare_argv(sql) -> Extralite::Query
- *   db.prepare_argv(sql, *params) -> Extralite::Query
- *   db.prepare_argv(sql, *params) { ... } -> Extralite::Query
+ *   db.prepare_splat(sql) -> Extralite::Query
+ *   db.prepare_splat(sql, *params) -> Extralite::Query
+ *   db.prepare_splat(sql, *params) { ... } -> Extralite::Query
  *
  * Creates a prepared query with the given SQL query in argv mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
@@ -752,16 +752,16 @@ VALUE Database_prepare_hash(int argc, VALUE *argv, VALUE self) {
  * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query
  */
-VALUE Database_prepare_argv(int argc, VALUE *argv, VALUE self) {
-  return Database_prepare(argc, argv, self, SYM_argv);
+VALUE Database_prepare_splat(int argc, VALUE *argv, VALUE self) {
+  return Database_prepare(argc, argv, self, SYM_splat);
 }
 
 /* call-seq:
- *   db.prepare_ary(sql) -> Extralite::Query
- *   db.prepare_ary(sql, *params) -> Extralite::Query
- *   db.prepare_ary(sql, *params) { ... } -> Extralite::Query
+ *   db.prepare_array(sql) -> Extralite::Query
+ *   db.prepare_array(sql, *params) -> Extralite::Query
+ *   db.prepare_array(sql, *params) { ... } -> Extralite::Query
  *
- * Creates a prepared query with the given SQL query in ary mode. If query
+ * Creates a prepared query with the given SQL query in array mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
  * 
@@ -769,8 +769,8 @@ VALUE Database_prepare_argv(int argc, VALUE *argv, VALUE self) {
  * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query
  */
-VALUE Database_prepare_ary(int argc, VALUE *argv, VALUE self) {
-  return Database_prepare(argc, argv, self, SYM_ary);
+VALUE Database_prepare_array(int argc, VALUE *argv, VALUE self) {
+  return Database_prepare(argc, argv, self, SYM_array);
 }
 
 /* Interrupts a long running query. This method is to be called from a different
@@ -1416,8 +1416,8 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "backup",                 Database_backup, -1);
   rb_define_method(cDatabase, "batch_execute",          Database_batch_execute, 2);
   rb_define_method(cDatabase, "batch_query",            Database_batch_query, 2);
-  rb_define_method(cDatabase, "batch_query_ary",        Database_batch_query_ary, 2);
-  rb_define_method(cDatabase, "batch_query_argv",       Database_batch_query_argv, 2);
+  rb_define_method(cDatabase, "batch_query_array",        Database_batch_query_array, 2);
+  rb_define_method(cDatabase, "batch_query_splat",       Database_batch_query_splat, 2);
   rb_define_method(cDatabase, "batch_query_hash",       Database_batch_query, 2);
   rb_define_method(cDatabase, "busy_timeout=",          Database_busy_timeout_set, 1);
   rb_define_method(cDatabase, "changes",                Database_changes, 0);
@@ -1447,16 +1447,16 @@ void Init_ExtraliteDatabase(void) {
 
   rb_define_method(cDatabase, "on_progress",            Database_on_progress, -1);
   rb_define_method(cDatabase, "prepare",                Database_prepare_hash, -1);
-  rb_define_method(cDatabase, "prepare_argv",           Database_prepare_argv, -1);
-  rb_define_method(cDatabase, "prepare_ary",            Database_prepare_ary, -1);
+  rb_define_method(cDatabase, "prepare_splat",           Database_prepare_splat, -1);
+  rb_define_method(cDatabase, "prepare_array",            Database_prepare_array, -1);
   rb_define_method(cDatabase, "prepare_hash",           Database_prepare_hash, -1);
   rb_define_method(cDatabase, "query",                  Database_query, -1);
-  rb_define_method(cDatabase, "query_argv",             Database_query_argv, -1);
-  rb_define_method(cDatabase, "query_ary",              Database_query_ary, -1);
+  rb_define_method(cDatabase, "query_splat",             Database_query_splat, -1);
+  rb_define_method(cDatabase, "query_array",              Database_query_array, -1);
   rb_define_method(cDatabase, "query_hash",             Database_query, -1);
   rb_define_method(cDatabase, "query_single",           Database_query_single, -1);
-  rb_define_method(cDatabase, "query_single_ary",       Database_query_single_ary, -1);
-  rb_define_method(cDatabase, "query_single_argv",      Database_query_single_argv, -1);
+  rb_define_method(cDatabase, "query_single_array",       Database_query_single_array, -1);
+  rb_define_method(cDatabase, "query_single_splat",      Database_query_single_splat, -1);
   rb_define_method(cDatabase, "query_single_hash",      Database_query_single, -1);
   rb_define_method(cDatabase, "read_only?",             Database_read_only_p, 0);
   rb_define_method(cDatabase, "status",                 Database_status, -1);
