@@ -141,10 +141,10 @@ single values, if you're just reading one column.
 For that purpose, Extralite offers three different ways, or modes, of retrieving
 records:
 
-- `:hash`: read rows as hashes (this is the default mode).
-- `:array`: read rows as arrays.
-- `:splat`: similar to the `:array`, except that for queries with a single
-  column, the single column value is returned.
+- `:hash`: retrieve each row as a hash (this is the default mode).
+- `:array`: retrieve each row as an array.
+- `:splat`: retrieve each row as one or more splatted values, without wrapping
+  them in a container (see [below](#the-splat-query-mode)).
 
 Extralite provides separate methods for the different modes:
 
@@ -170,12 +170,49 @@ db.query_single_array('select 1') #=> [1]
 db.query_single_splat('select 1') #=> 1
 ```
 
-## Parameter binding
+### Iterating Over Query Results with a Block
 
-As shown in the above example, the `#execute` and `#query_xxx` methods accept
-parameters that can be bound to the query, which means that their values will be
-used for each corresponding place-holder (expressed using `?`) in the SQL
-statement:
+In addition to getting query results as an array of rows, you can also directly
+iterate over the query results by providing a block to the different
+`#query_xxx` methods:
+
+```ruby
+db.query('select * from foo') { |row| handle_row(row) }
+```
+
+### The Splat Query Mode
+
+The splat query mode allows you to retrieve column values for each row without
+wrapping them in a container. This is useful especially when performing queries
+that return a single row:
+
+```ruby
+# When using the array mode we need to take unwrap the values
+ids = db.query_array('select id from tasks where active = 1').map { |r| r.first }
+
+# In splat mode we don't need to do that
+ids = db.query_splat('select id from tasks where active = 1')
+```
+
+The splat mode is also useful when iterating over records with a block. The
+column values are provided as splatted arguments to the given block:
+
+```ruby
+db.query_splat('select a, b, c from foo') do |a, b, c|
+  do_this_with(a, b)
+  do_that_with(c)
+end
+```
+
+When iterating over records in this manner, the splat mode is slightly faster
+than the array mode, and also reduces pressure on the Ruby GC since you avoid
+allocating arrays or hashes to hold the column values.
+
+## Parameter Binding
+
+The `#execute` and `#query_xxx` methods accept parameters that can be bound to
+the query, which means that their values will be used for each corresponding
+place-holder (expressed using `?`) in the SQL statement:
 
 ```ruby
 db.query('select x from my_table where y = ? and z = ?', 'foo', 'bar')
@@ -224,14 +261,14 @@ values:
 - `String` (see below)
 - nil
 
-### Boolean values
+### Boolean Values
 
 SQLite does not have a boolean data type. Extralite will automatically translate
 bound parameter values of `true` or `false` to the integer values `1` and `0`,
 respectively. Note that boolean values stored in the database will be fetched as
 integers.
 
-### String values
+### String Values
 
 String parameter values are translated by Extralite to either `TEXT` or `BLOB`
 values according to the string encoding used. Strings with an `ASCII-8BIT` are
@@ -640,7 +677,7 @@ end
 
 ## Database Information
 
-### Getting the list of tables
+### Getting the List of Tables
 
 To get the list of tables in a database, use the `#tables` method:
 
@@ -657,7 +694,7 @@ db.tables('foo')
 #=> [...]
 ```
 
-### Getting the last insert row id
+### Getting the Last Insert Row Id
 
 ```ruby
 db.execute 'insert into foo values (?)', 42
@@ -665,7 +702,7 @@ db.last_insert_rowid
 #=> 1
 ```
 
-### Getting the columns names for a given query
+### Getting the Column Names for a Given Query
 
 ```ruby
 db.columns('select a, b, c from foo')
