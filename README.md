@@ -184,7 +184,7 @@ db.query('select * from foo') { |row| handle_row(row) }
 
 The splat query mode allows you to retrieve column values for each row without
 wrapping them in a container. This is useful especially when performing queries
-that return a single row:
+that return a single column:
 
 ```ruby
 # When using the array mode we need to take unwrap the values
