@@ -1015,6 +1015,37 @@ class DatabaseTest < Minitest::Test
       [4, 5, 6, 4, 5, 6]
     ], q.to_a
   end
+
+  def test_wal_checkpoint
+    fn = Tempfile.new('extralite_test_wal_checkpoint').path
+
+    db = Extralite::Database.new(fn, wal: true)
+
+    db.execute 'create table t (x, y, z)'
+    rows = (1..1000).map { [rand, rand, rand] }
+    db.batch_execute('insert into t values (?, ?, ?)', rows)
+
+    wal_fn = "#{fn}-wal"
+
+    assert File.exist?(wal_fn)
+    assert File.size(wal_fn) > 0
+
+    # invalid mode
+    assert_raises(ArgumentError) { db.wal_checkpoint(:foo) }
+
+    # invalid db name
+    assert_raises(Extralite::Error) { db.wal_checkpoint(:passive, 'foo') }
+
+    r = db.wal_checkpoint(:full)
+    assert File.exist?(wal_fn)
+    assert File.size(wal_fn) > 0
+    assert_equal [19, 19], r
+
+    r = db.wal_checkpoint(:truncate)
+    assert File.exist?(wal_fn)
+    assert File.size(wal_fn) == 0
+    assert_equal [0, 0], r
+  end
 end
 
 class ScenarioTest < Minitest::Test

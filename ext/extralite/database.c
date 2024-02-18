@@ -22,12 +22,16 @@ ID ID_to_s;
 ID ID_track;
 
 VALUE SYM_at_least_once;
+VALUE SYM_full;
 VALUE SYM_gvl_release_threshold;
 VALUE SYM_once;
 VALUE SYM_none;
 VALUE SYM_normal;
+VALUE SYM_passive;
 VALUE SYM_pragma;
 VALUE SYM_read_only;
+VALUE SYM_restart;
+VALUE SYM_truncate;
 VALUE SYM_wal;
 
 struct progress_handler global_progress_handler = {
@@ -1404,6 +1408,53 @@ VALUE Database_gvl_release_threshold_set(VALUE self, VALUE value) {
   return INT2NUM(db->gvl_release_threshold);
 }
 
+int checkpoint_mode_symbol_to_int(VALUE mode) {
+  if (mode == SYM_passive)  return SQLITE_CHECKPOINT_PASSIVE;
+  if (mode == SYM_full)     return SQLITE_CHECKPOINT_FULL;
+  if (mode == SYM_restart)  return SQLITE_CHECKPOINT_RESTART;
+  if (mode == SYM_truncate) return SQLITE_CHECKPOINT_TRUNCATE;
+
+  rb_raise(eArgumentError, "Invalid WAL checkpoint mode specified");
+}
+
+/* Runs a WAL checkpoint operation with the given mode. If a database name is
+ * given, the checkpoint operation is ran on the corresponding attached
+ * database, otherwise it is run on the main database. Returns an array
+ * containing the total number of frames in the WAL file, and the number of
+ * frames checkpointed. For more information see:
+ *   https://sqlite.org/c3ref/wal_checkpoint_v2.html
+ *
+ * @overload wal_checkpoint(mode)
+ *   @param mode [Symbol] checkpoint mode (`:passive`, `:full`, `:restart`, `:truncate`)
+ *   @return [Array<int>] total and checkpointed frame count
+ * @overload wal_checkpoint(mode, db_name)
+ *   @param mode [Symbol] checkpoint mode (`:passive`, `:full`, `:restart`, `:truncate`)
+ *   @param db_name [String] attached database name
+ *   @return [Array<int>] total and checkpointed frame count
+*/
+VALUE Database_wal_checkpoint(int argc, VALUE *argv, VALUE self) {
+  Database_t *db = self_to_open_database(self);
+  VALUE mode = Qnil;
+  VALUE db_name = Qnil;
+  int total_frames;
+  int checkpointed_frames;
+
+  rb_scan_args(argc, argv, "11", &mode, &db_name);
+
+  int mode_int = checkpoint_mode_symbol_to_int(mode);
+  int rc = sqlite3_wal_checkpoint_v2(
+    db->sqlite3_db,
+    NIL_P(db_name) ? NULL : StringValueCStr(db_name),
+    mode_int,
+    &total_frames,
+    &checkpointed_frames
+  );
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Failed to perform WAL checkpoint: %s", sqlite3_errstr(rc));
+  
+  return rb_ary_new3(2, INT2NUM(total_frames), INT2NUM(checkpointed_frames));
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -1447,21 +1498,22 @@ void Init_ExtraliteDatabase(void) {
 
   rb_define_method(cDatabase, "on_progress",            Database_on_progress, -1);
   rb_define_method(cDatabase, "prepare",                Database_prepare_hash, -1);
-  rb_define_method(cDatabase, "prepare_splat",           Database_prepare_splat, -1);
-  rb_define_method(cDatabase, "prepare_array",            Database_prepare_array, -1);
+  rb_define_method(cDatabase, "prepare_splat",          Database_prepare_splat, -1);
+  rb_define_method(cDatabase, "prepare_array",          Database_prepare_array, -1);
   rb_define_method(cDatabase, "prepare_hash",           Database_prepare_hash, -1);
   rb_define_method(cDatabase, "query",                  Database_query, -1);
-  rb_define_method(cDatabase, "query_splat",             Database_query_splat, -1);
-  rb_define_method(cDatabase, "query_array",              Database_query_array, -1);
+  rb_define_method(cDatabase, "query_splat",            Database_query_splat, -1);
+  rb_define_method(cDatabase, "query_array",            Database_query_array, -1);
   rb_define_method(cDatabase, "query_hash",             Database_query, -1);
   rb_define_method(cDatabase, "query_single",           Database_query_single, -1);
-  rb_define_method(cDatabase, "query_single_array",       Database_query_single_array, -1);
-  rb_define_method(cDatabase, "query_single_splat",      Database_query_single_splat, -1);
+  rb_define_method(cDatabase, "query_single_array",     Database_query_single_array, -1);
+  rb_define_method(cDatabase, "query_single_splat",     Database_query_single_splat, -1);
   rb_define_method(cDatabase, "query_single_hash",      Database_query_single, -1);
   rb_define_method(cDatabase, "read_only?",             Database_read_only_p, 0);
   rb_define_method(cDatabase, "status",                 Database_status, -1);
   rb_define_method(cDatabase, "total_changes",          Database_total_changes, 0);
   rb_define_method(cDatabase, "trace",                  Database_trace, 0);
+  rb_define_method(cDatabase, "wal_checkpoint",         Database_wal_checkpoint, -1);
 
   #ifdef EXTRALITE_ENABLE_CHANGESET
   rb_define_method(cDatabase, "track_changes",          Database_track_changes, -1);
@@ -1488,21 +1540,29 @@ void Init_ExtraliteDatabase(void) {
   ID_track        = rb_intern("track");
 
   SYM_at_least_once         = ID2SYM(rb_intern("at_least_once"));
+  SYM_full                  = ID2SYM(rb_intern("full"));
   SYM_gvl_release_threshold = ID2SYM(rb_intern("gvl_release_threshold"));
   SYM_once                  = ID2SYM(rb_intern("once"));
   SYM_none                  = ID2SYM(rb_intern("none"));
   SYM_normal                = ID2SYM(rb_intern("normal"));
+  SYM_passive               = ID2SYM(rb_intern("passive"));
   SYM_pragma                = ID2SYM(rb_intern("pragma"));
   SYM_read_only             = ID2SYM(rb_intern("read_only"));
+  SYM_restart               = ID2SYM(rb_intern("restart"));
+  SYM_truncate              = ID2SYM(rb_intern("truncate"));
   SYM_wal                   = ID2SYM(rb_intern("wal"));
 
   rb_gc_register_mark_object(SYM_at_least_once);
+  rb_gc_register_mark_object(SYM_full);
   rb_gc_register_mark_object(SYM_gvl_release_threshold);
   rb_gc_register_mark_object(SYM_once);
   rb_gc_register_mark_object(SYM_none);
   rb_gc_register_mark_object(SYM_normal);
+  rb_gc_register_mark_object(SYM_passive);
   rb_gc_register_mark_object(SYM_pragma);
   rb_gc_register_mark_object(SYM_read_only);
+  rb_gc_register_mark_object(SYM_restart);
+  rb_gc_register_mark_object(SYM_truncate);
   rb_gc_register_mark_object(SYM_wal);
 
   rb_gc_register_mark_object(global_progress_handler.proc);
