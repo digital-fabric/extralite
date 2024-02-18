@@ -466,7 +466,7 @@ instantiate an iterator explicitly:
 
 ```ruby
 # You need to pass the query to iterate over:
-iterator = Extralite::Iterator(query)
+iterator = Extralite::Iterator.new(query)
 iterator.each { |r| ... }
 ```
 
