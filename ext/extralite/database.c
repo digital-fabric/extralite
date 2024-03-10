@@ -924,6 +924,13 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
 /* Returns runtime status values for the given op as an array containing the
  * current value and the high water mark value. To reset the high water mark,
  * pass true as reset.
+ * 
+ * You can use the various `Extralite::SQLITE_STATUS_xxx` constants with this
+ * method:
+ * 
+ *     Extralite.runtime_status(Extralite::SQLITE_STATUS_MEMORY_USED)
+ * 
+ * For more information see the SQLite docs: https://sqlite.org/c3ref/c_status_malloc_count.html
  *
  * @overload runtime_status(op)
  *   @param op [Integer] op
