@@ -1,3 +1,10 @@
+# 2.8 2024-03-10
+
+- Improve documentation.
+- Implement `Database#wal_checkpoint`.
+- Rename query modes: `hash` (the default mode), `array`, `splat`, simplify querying APIs.
+  [#69](https://github.com/digital-fabric/extralite/pull/69)
+
 # 2.7.1 2024-02-11
 
 - Fix API docs.
@@ -6,11 +13,11 @@
 
 - Improve progress handler API, add mode, period, tick options, global progress
   handler. [#68](https://github.com/digital-fabric/extralite/pull/68)
-- Rework `Database#initialize` options
-- Add argv row mode (for passing column values as argv)
-- Streamline and improve query methods
+- Rework `Database#initialize` options.
+- Add argv row mode (for passing column values as argv).
+- Streamline and improve query methods.
   [#67](https://github.com/digital-fabric/extralite/pull/67)
-- Implement row transforms
+- Implement row transforms.
 
 # 2.6 2024-01-23
 
