@@ -948,7 +948,7 @@ class DatabaseTest < Minitest::Test
 
       db.execute('insert into foo values (43)')
       assert_equal [42, 43], db.query_splat('select x from foo')
-      
+
       db.savepoint(:b)
 
       db.execute('insert into foo values (44)')
@@ -1045,6 +1045,48 @@ class DatabaseTest < Minitest::Test
     assert File.exist?(wal_fn)
     assert File.size(wal_fn) == 0
     assert_equal [0, 0], r
+  end
+
+  def test_execute_with_comments
+    result = @db.execute(<<~SQL)
+      -- this is a comment
+    SQL
+    assert_nil result
+
+    result = @db.execute(<<~SQL)
+      DELETE FROM t;
+      INSERT INTO t (x, y, z) VALUES (1, 1, 1);
+      INSERT INTO t (x, y, z) VALUES (2, 2, 2);
+    SQL
+    assert_equal 1, result
+    assert_equal [1, 2], @db.query_splat('SELECT x FROM t ORDER BY x')
+
+    result = @db.execute(<<~SQL)
+      -- this is a comment at the beginning
+      DELETE FROM t;
+      INSERT INTO t (x, y, z) VALUES (3, 3, 3);
+      INSERT INTO t (x, y, z) VALUES (4, 4, 4);
+    SQL
+    assert_equal 1, result
+    assert_equal [3, 4], @db.query_splat('SELECT x FROM t ORDER BY x')
+
+    result = @db.execute(<<~SQL)
+      DELETE FROM t;
+      INSERT INTO t (x, y, z) VALUES (5, 5, 5);
+      -- this is a comment in the middle
+      INSERT INTO t (x, y, z) VALUES (6, 6, 6);
+    SQL
+    assert_equal 1, result
+    assert_equal [5, 6], @db.query_splat('SELECT x FROM t ORDER BY x')
+
+    result = @db.execute(<<~SQL)
+      DELETE FROM t;
+      INSERT INTO t (x, y, z) VALUES (7, 7, 7);
+      INSERT INTO t (x, y, z) VALUES (8, 8, 8);
+      -- this is a comment at the end
+    SQL
+    assert_nil result
+    assert_equal [7, 8], @db.query_splat('SELECT x FROM t ORDER BY x')
   end
 end
 
@@ -1438,7 +1480,7 @@ class ConcurrencyTest < Minitest::Test
 
   def test_progress_handler_invalid_arg
     db = Extralite::Database.new(':memory:')
-    
+
     assert_raises(TypeError) { db.on_progress(period: :foo) }
     assert_raises(TypeError) { db.on_progress(tick: :foo) }
     assert_raises(ArgumentError) { db.on_progress(mode: :foo) }
@@ -1635,7 +1677,7 @@ end
 class RactorTest < Minitest::Test
   def test_ractor_simple
     skip if SKIP_RACTOR_TESTS
-    
+
     fn = Tempfile.new('extralite_test_database_in_ractor').path
 
     r = Ractor.new do

@@ -294,6 +294,8 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
+  if (stmt == NULL) return Qnil;
+
   bind_all_parameters(stmt, argc - 1, argv + 1);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, Qnil, transform,
@@ -485,6 +487,10 @@ VALUE Database_query_single_array(int argc, VALUE *argv, VALUE self) {
  * specified using keyword arguments:
  *
  *     db.execute('update foo set x = :bar', bar: 42)
+ *
+ * @param sql [String] query SQL
+ * @param parameters [Array, Hash] parameters to run query with
+ * @return [Integer, nil] Total number of changes effected or `nil` if the query ends with a comment.
  */
 VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
   return Database_perform_query(argc, argv, self, safe_query_changes, QUERY_HASH);
