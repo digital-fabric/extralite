@@ -103,9 +103,9 @@ db2.pragma(journal_mode: :wal, synchronous: 1)
 db3 = Extralite::Database.new(fn)
 db3.pragma(journal_mode: :wal, synchronous: 1)
 
-db1.on_progress(1000) { |b| b ? sleep(0.0001) : snooze }
-db2.on_progress(1000) { |b| b ? sleep(0.0001) : snooze }
-db3.on_progress(1000) { |b| b ? sleep(0.0001) : snooze }
+db1.on_progress { |b| b ? sleep(0.0001) : snooze }
+db2.on_progress { |b| b ? sleep(0.0001) : snooze }
+db3.on_progress { |b| b ? sleep(0.0001) : snooze }
 
 producer = PubSub.new(db1)
 producer.setup
@@ -163,7 +163,7 @@ end
 
 db4 = Extralite::Database.new(fn)
 db4.pragma(journal_mode: :wal, synchronous: 1)
-db4.on_progress(1000) { |busy| busy ? sleep(0.05) : snooze }
+db4.on_progress { |busy| busy ? sleep(0.05) : snooze }
 
 last_t = Time.now
 last_publish_count = 0
@@ -175,7 +175,7 @@ while true
   d_publish = publish_count - last_publish_count
   d_receive = receive_count - last_receive_count
   pending = db4.query_single_splat('select count(*) from messages')
-  puts "#{Time.now} publish: #{d_publish/elapsed}/s receive: #{d_receive/elapsed}/s pending: #{pending}"
+  puts "#{Time.now} publish: #{(d_publish/elapsed).round}/s receive: #{(d_receive/elapsed).round}/s pending: #{pending} latency: #{pending / (d_receive/elapsed)}"
   last_t = now
   last_publish_count = publish_count
   last_receive_count = receive_count
