@@ -1,3 +1,9 @@
+## 2.8.1 2024-04-15
+
+- Update bundled sqlite to version 3.45.3.
+- Fix `Database#execute` for SQL ending with a comment.
+  [#72](https://github.com/digital-fabric/extralite/pull/72)
+
 # 2.8 2024-03-10
 
 - Improve documentation.
