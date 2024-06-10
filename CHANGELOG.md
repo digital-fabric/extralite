@@ -1,3 +1,7 @@
+## 2.8.2 2024-06-02
+
+- Update bundled SQLite to version 3.46.0
+
 ## 2.8.1 2024-04-15
 
 - Update bundled sqlite to version 3.45.3.

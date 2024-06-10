@@ -277,10 +277,14 @@ class DatabaseTest < Minitest::Test
 
   def test_extension_loading
     case RUBY_PLATFORM
-    when /linux/
-      @db.load_extension(File.join(__dir__, 'extensions/text.so'))
-    when /darwin/
-      @db.load_extension(File.join(__dir__, 'extensions/text.dylib'))
+    when /aarch64-linux/
+      @db.load_extension(File.join(__dir__, 'extensions/arm64/text.so'))
+    when /x86_64-linux/
+      @db.load_extension(File.join(__dir__, 'extensions/x86/text.so'))
+    when /arm64-darwin/
+      @db.load_extension(File.join(__dir__, 'extensions/arm64/text.dylib'))
+    when /x86_64-darwin/
+      @db.load_extension(File.join(__dir__, 'extensions/x86/text.dylib'))
     end
 
     r = @db.query_single_splat("select reverse('abcd')")
