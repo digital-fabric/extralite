@@ -1,6 +1,8 @@
+- Optimize getting column names when returning rows as hashes.
+
 ## 2.8.2 2024-06-02
 
-- Update bundled SQLite to version 3.46.0
+- Update bundled SQLite to version 3.46.0. [#74](https://github.com/digital-fabric/extralite/pull/74)
 
 ## 2.8.1 2024-04-15
 
