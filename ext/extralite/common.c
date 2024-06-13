@@ -135,7 +135,44 @@ inline void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj) {
     bind_parameter_value(stmt, 1, obj);
 }
 
-static inline VALUE get_column_names(sqlite3_stmt *stmt, int column_count) {
+#define MAX_EMBEDDED_COLUMN_NAMES 12
+
+struct column_names {
+  int count;
+  union {
+    VALUE array;
+    VALUE names[MAX_EMBEDDED_COLUMN_NAMES];
+  };
+};
+
+static inline void column_names_setup(struct column_names *names, int count) {
+  names->count = count;
+  names->array = (count > MAX_EMBEDDED_COLUMN_NAMES) ? rb_ary_new2(count) : Qnil;
+}
+
+static inline void column_names_set(struct column_names *names, int idx, VALUE value) {
+  if (names->count <= MAX_EMBEDDED_COLUMN_NAMES) 
+    names->names[idx] = value;
+  else
+    rb_ary_push(names->array, value);
+}
+
+static inline VALUE column_names_get(struct column_names *names, int idx) {
+  return (names->count <= MAX_EMBEDDED_COLUMN_NAMES) ?
+    names->names[idx] : RARRAY_AREF(names->array, idx);
+}
+
+static inline struct column_names get_column_names(sqlite3_stmt *stmt, int column_count) {
+  struct column_names names;
+  column_names_setup(&names, column_count);
+  for (int i = 0; i < column_count; i++) {
+    VALUE name = ID2SYM(rb_intern(sqlite3_column_name(stmt, i)));
+    column_names_set(&names, i, name);
+  }
+  return names;
+}
+
+static inline VALUE get_column_names_array(sqlite3_stmt *stmt, int column_count) {
   VALUE arr = rb_ary_new2(column_count);
   for (int i = 0; i < column_count; i++) {
     VALUE name = ID2SYM(rb_intern(sqlite3_column_name(stmt, i)));
@@ -144,11 +181,19 @@ static inline VALUE get_column_names(sqlite3_stmt *stmt, int column_count) {
   return arr;
 }
 
-static inline VALUE row_to_hash(sqlite3_stmt *stmt, int column_count, VALUE column_names) {
+static inline VALUE row_to_hash(sqlite3_stmt *stmt, int column_count, struct column_names *names) {
   VALUE row = rb_hash_new();
-  for (int i = 0; i < column_count; i++) {
-    VALUE value = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
-    rb_hash_aset(row, RARRAY_AREF(column_names, i), value);
+  if (names->count <= MAX_EMBEDDED_COLUMN_NAMES) {
+    for (int i = 0; i < column_count; i++) {
+      VALUE value = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
+      rb_hash_aset(row, names->names[i], value);
+    }
+  }
+  else {
+    for (int i = 0; i < column_count; i++) {
+      VALUE value = get_column_value(stmt, i, sqlite3_column_type(stmt, i));
+      rb_hash_aset(row, RARRAY_AREF(names->array, i), value);
+    }
   }
   return row;
 }
@@ -327,12 +372,12 @@ VALUE safe_query_hash(query_ctx *ctx) {
   VALUE array = ROW_MULTI_P(ctx->row_mode) ? rb_ary_new() : Qnil;
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
-  VALUE column_names = get_column_names(ctx->stmt, column_count);
+  struct column_names names = get_column_names(ctx->stmt, column_count);
   int row_count = 0;
   int do_transform = !NIL_P(ctx->transform_proc);
 
   while (stmt_iterate(ctx)) {
-    row = row_to_hash(ctx->stmt, column_count, column_names);
+    row = row_to_hash(ctx->stmt, column_count, &names);
     if (do_transform)
       row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
     row_count++;
@@ -350,7 +395,7 @@ VALUE safe_query_hash(query_ctx *ctx) {
       return ROW_MULTI_P(ctx->row_mode) ? array : ctx->self;
   }
 
-  RB_GC_GUARD(column_names);
+  RB_GC_GUARD(names.array);
   RB_GC_GUARD(row);
   RB_GC_GUARD(array);
   return ROW_MULTI_P(ctx->row_mode) ? array : Qnil;
@@ -445,21 +490,18 @@ VALUE safe_query_array(query_ctx *ctx) {
 }
 
 VALUE safe_query_single_row_hash(query_ctx *ctx) {
-  int column_count;
+  int column_count = sqlite3_column_count(ctx->stmt);
   VALUE row = Qnil;
-  VALUE column_names;
-
-  column_count = sqlite3_column_count(ctx->stmt);
-  column_names = get_column_names(ctx->stmt, column_count);
+  struct column_names names = get_column_names(ctx->stmt, column_count);
 
   if (stmt_iterate(ctx)) {
-    row = row_to_hash(ctx->stmt, column_count, column_names);
+    row = row_to_hash(ctx->stmt, column_count, &names);
     if (!NIL_P(ctx->transform_proc))
       row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
   }
 
   RB_GC_GUARD(row);
-  RB_GC_GUARD(column_names);
+  RB_GC_GUARD(names.array);
   return row;
 }
 
@@ -506,17 +548,17 @@ static inline VALUE batch_iterate_hash(query_ctx *ctx) {
   VALUE rows = rb_ary_new();
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
-  VALUE column_names = get_column_names(ctx->stmt, column_count);
+  struct column_names names = get_column_names(ctx->stmt, column_count);
   const int do_transform = !NIL_P(ctx->transform_proc);
 
   while (stmt_iterate(ctx)) {
-    row = row_to_hash(ctx->stmt, column_count, column_names);
+    row = row_to_hash(ctx->stmt, column_count, &names);
     if (do_transform)
       row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
     rb_ary_push(rows, row);
   }
 
-  RB_GC_GUARD(column_names);
+  RB_GC_GUARD(names.array);
   RB_GC_GUARD(row);
   RB_GC_GUARD(rows);
   return rows;
@@ -733,7 +775,7 @@ VALUE safe_batch_query_splat(query_ctx *ctx) {
 }
 
 VALUE safe_query_columns(query_ctx *ctx) {
-  return get_column_names(ctx->stmt, sqlite3_column_count(ctx->stmt));
+  return get_column_names_array(ctx->stmt, sqlite3_column_count(ctx->stmt));
 }
 
 VALUE safe_query_changes(query_ctx *ctx) {

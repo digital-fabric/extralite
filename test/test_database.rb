@@ -40,6 +40,19 @@ class DatabaseTest < Minitest::Test
     assert_equal [], r
   end
 
+  def test_query_hash_with_many_columns
+    # this tests correct processing cof column names when column count is more than
+    # MAX_EMBEDDED_COLUMN_NAMES
+    r = @db.query_hash("
+      select 1 as a, 2 as b, 3 as c, 4 as d, 5 as e, 6 as f, 7 as g, 8 as h, 9 as i, 10 as j,
+      11 as k, 12 as l, 13 as m, 14 as n, 15 as o, 16 as p, 17 as q, 18 as r, 19 as s, 20 as t
+    ")
+    assert_equal [{
+      a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9, j: 10,
+      k: 11, l: 12, m: 13, n: 14, o: 15, p: 16, q: 17, r: 18, s: 19, t: 20
+    }], r
+  end
+
   def test_query_array
     r = @db.query_array('select * from t')
     assert_equal [[1, 2, 3], [4, 5, 6]], r
