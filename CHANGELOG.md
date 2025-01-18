@@ -1,3 +1,7 @@
+## 2.9 2025-01-18
+
+- Update dependencies, test matrix.
+- Update bundled SQLite to version 3.48.0.
 - Optimize getting column names when returning rows as hashes.
 
 ## 2.8.2 2024-06-02
