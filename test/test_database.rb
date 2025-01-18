@@ -1388,6 +1388,12 @@ class ConcurrencyTest < Minitest::Test
   def test_progress_handler_simple
     db = Extralite::Database.new(':memory:')
 
+    # SQLite's behaviour post 3.46.0 has changed, such that the first time the
+    # query is ran, the progress handler is called more times than in later
+    # invocations, so here we run it once before measuring, in order to have
+    # reliable figures.
+    result = db.query_single('select 1 as a, 2 as b, 3 as c')
+
     buf = []
     db.on_progress(period: 1) { buf << :progress }
 
@@ -1405,6 +1411,12 @@ class ConcurrencyTest < Minitest::Test
 
   def test_progress_handler_normal_mode
     db = Extralite::Database.new(':memory:')
+
+    # SQLite's behaviour post 3.46.0 has changed, such that the first time the
+    # query is ran, the progress handler is called more times than in later
+    # invocations, so here we run it once before measuring, in order to have
+    # reliable figures.
+    db.query('select 1 as a')
 
     count = 0
     db.on_progress(period: 1) { count += 1 }
@@ -1425,6 +1437,12 @@ class ConcurrencyTest < Minitest::Test
 
   def test_progress_handler_at_least_once_mode
     db = Extralite::Database.new(':memory:')
+
+    # SQLite's behaviour post 3.46.0 has changed, such that the first time the
+    # query is ran, the progress handler is called more times than in later
+    # invocations, so here we run it once before measuring, in order to have
+    # reliable figures.
+    db.query('select 1 as a')
 
     count = 0
     db.on_progress(period: 1) { count += 1 }
