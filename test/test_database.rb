@@ -376,10 +376,26 @@ class DatabaseTest < Minitest::Test
       [1, '2', 3],
       ['4', 5, 6]
     ]
-
     changes = @db.batch_execute('insert into foo values (?, ?, ?)', records)
 
     assert_equal 2, changes
+    assert_equal [
+      { a: 1, b: '2', c: 3 },
+      { a: '4', b: 5, c: 6 }
+    ], @db.query('select * from foo')
+  end
+
+  def test_batch_execute_with_array_of_hashes
+    @db.query('create table foo (a, b, c)')
+    assert_equal [], @db.query('select * from foo')
+
+    records = [
+      { a: 1, b: '2', c: 3 },
+      { a: '4', b: 5, c: 6 }
+    ]
+    changes = @db.batch_execute('insert into foo values (:a, :b, :c)', records)
+
+    # assert_equal 2, changes
     assert_equal [
       { a: 1, b: '2', c: 3 },
       { a: '4', b: 5, c: 6 }
