@@ -24,7 +24,8 @@ jobs:
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{matrix.ruby}}
-        bundler-cache: true # 'bundle install' and cache
+        bundler-cache: true
+        apt-get: libsqlite3-dev
     - name: Compile C-extension
       run: bundle exec rake compile
     - name: Run tests
