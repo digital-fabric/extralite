@@ -1,3 +1,7 @@
+## 2.10 2025-02-17
+
+- Update bundled SQLite to version 3.49.0.
+
 ## 2.9 2025-01-18
 
 - Update dependencies, test matrix.
