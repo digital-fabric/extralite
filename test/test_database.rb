@@ -1245,6 +1245,18 @@ class ScenarioTest < Minitest::Test
     @db.query('select 4')
     assert_equal ['select 1', 'select 2', 'select 3'], sqls
   end
+
+  def test_database_trace_expanded_sql
+    sqls = []
+    @db.trace { |sql| sqls << sql }
+
+    @db.query('select ?, ?, ?', 1, '2', 3)
+    assert_equal ["select 1, '2', 3"], sqls
+
+    sqls = []
+    @db.query('select :x, :y, :z', x: 42, y: '43')
+    assert_equal ["select 42, '43', NULL"], sqls
+  end
 end
 
 class BackupTest < Minitest::Test

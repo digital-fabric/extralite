@@ -123,7 +123,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
 static inline void query_reset(Query_t *query) {
   if (!query->stmt)
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
-  Database_issue_query(query->db_struct, query->sql);
+  Database_issue_query(query->db_struct, query->stmt);
   sqlite3_reset(query->stmt);
   query->eof = 0;
 }
@@ -131,7 +131,7 @@ static inline void query_reset(Query_t *query) {
 static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
-  Database_issue_query(query->db_struct, query->sql);
+  Database_issue_query(query->db_struct, query->stmt);
   sqlite3_reset(query->stmt);
   query->eof = 0;
   if (argc > 0) {

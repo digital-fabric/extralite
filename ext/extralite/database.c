@@ -289,14 +289,16 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
 
   sql = rb_funcall(argv[0], ID_strip, 0);
   if (RSTRING_LEN(sql) == 0) return Qnil;
+  // sql = argv[0];
 
-  Database_issue_query(db, sql);
   prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
 
   if (stmt == NULL) return Qnil;
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
+  Database_issue_query(db, stmt);
+
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, Qnil, transform,
     query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
@@ -1102,8 +1104,12 @@ static inline enum progress_handler_mode symbol_to_progress_mode(VALUE mode) {
   rb_raise(eArgumentError, "Invalid progress handler mode");
 }
 
-inline void Database_issue_query(Database_t *db, VALUE sql) {
-  if (db->trace_proc != Qnil) rb_funcall(db->trace_proc, ID_call, 1, sql);
+inline void Database_issue_query(Database_t *db, sqlite3_stmt *stmt) {
+  if (db->trace_proc != Qnil) {
+    VALUE sql = rb_str_new_cstr(sqlite3_expanded_sql(stmt));
+    rb_funcall(db->trace_proc, ID_call, 1, sql);
+    RB_GC_GUARD(sql);
+  }
   switch (db->progress_handler.mode) {
     case PROGRESS_AT_LEAST_ONCE:
     case PROGRESS_ONCE:
