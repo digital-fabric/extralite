@@ -1,3 +1,8 @@
+## 2.11 2025-03-14
+
+- Remove support for Ruby versions older than 3.2.
+- Expand SQL given to trace proc [#80](https://github.com/digital-fabric/extralite/issues/80)
+
 ## 2.10 2025-02-17
 
 - Update bundled SQLite to version 3.49.0.
