@@ -1,3 +1,7 @@
+## 2.12 2025-03-25
+
+- Reimplement trace, provide trace proc with bound parameters [#80](https://github.com/digital-fabric/extralite/issues/80)
+
 ## 2.11 2025-03-14
 
 - Remove support for Ruby versions older than 3.2.
