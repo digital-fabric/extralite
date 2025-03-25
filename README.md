@@ -1216,10 +1216,18 @@ To trace all SQL statements executed on the database, pass a block to
 
 ```ruby
 # enable tracing
-db.trace { |sql| puts sql: sql }
+db.trace { |sql| p sql: sql }
 
 # disable tracing
 db.trace
+```
+
+Any bound parameters will also be passed to the trace block:
+
+```ruby
+db.trace { |sql, *args| p sql: sql, args: args }
+db.query('select ?, ?', 1, 2)
+# { sql: "select ?, ?", args: [1, 2] }
 ```
 
 ## Usage with Sequel
