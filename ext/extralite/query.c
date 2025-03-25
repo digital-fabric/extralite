@@ -29,6 +29,7 @@ static void Query_mark(void *ptr) {
   rb_gc_mark_movable(query->db);
   rb_gc_mark_movable(query->sql);
   rb_gc_mark_movable(query->transform_proc);
+  rb_gc_mark_movable(query->bound_params);
 }
 
 static void Query_compact(void *ptr) {
@@ -36,6 +37,7 @@ static void Query_compact(void *ptr) {
   query->db = rb_gc_location(query->db);
   query->sql = rb_gc_location(query->sql);
   query->transform_proc = rb_gc_location(query->transform_proc);
+  query->bound_params = rb_gc_location(query->bound_params);
 }
 
 static void Query_free(void *ptr) {
@@ -55,6 +57,7 @@ static VALUE Query_allocate(VALUE klass) {
   query->db = Qnil;
   query->sql = Qnil;
   query->transform_proc = Qnil;
+  query->bound_params = Qnil;
   query->sqlite3_db = NULL;
   query->stmt = NULL;
   return TypedData_Wrap_Struct(klass, &Query_type, query);
@@ -109,12 +112,14 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
   if (rb_block_given_p())
     RB_OBJ_WRITE(self, &query->transform_proc, rb_block_proc());
 
+  query->self = self;
   query->db = db;
   query->db_struct = self_to_database(db);
   query->sqlite3_db = Database_sqlite3_db(db);
   query->stmt = NULL;
   query->closed = 0;
   query->eof = 0;
+  query->should_reset = 0;
   query->query_mode = symbol_to_query_mode(mode);
 
   return Qnil;
@@ -123,20 +128,31 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
 static inline void query_reset(Query_t *query) {
   if (!query->stmt)
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
-  Database_pre_query_hook(query->db_struct, query->stmt);
-  sqlite3_reset(query->stmt);
+  else
+    sqlite3_reset(query->stmt);
+  
+  Database_pre_query_hook(query->db_struct, query->stmt, query->sql, query->bound_params == Qnil ? 0 : -1, &query->bound_params);
+
   query->eof = 0;
+  query->should_reset = 0;
 }
 
-static inline void query_reset_and_bind(Query_t *query, int argc, VALUE * argv) {
+static inline void query_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
-  Database_pre_query_hook(query->db_struct, query->stmt);
-  sqlite3_reset(query->stmt);
-  query->eof = 0;
+  else
+    // we call sqlite3_reset because that's what the SQLite API expects before
+    // changing the binding. See note at bottom of
+    // https://www.sqlite.org/c3ref/bind_blob.html
+    sqlite3_reset(query->stmt);
+  
+  sqlite3_clear_bindings(query->stmt);
   if (argc > 0) {
-    sqlite3_clear_bindings(query->stmt);
     bind_all_parameters(query->stmt, argc, argv);
+    RB_OBJ_WRITE(query->self, &query->bound_params, rb_ary_new_from_values(argc, argv));
+  }
+  else {
+    RB_OBJ_WRITE(query->self, &query->bound_params, Qnil);
   }
 }
 
@@ -186,7 +202,8 @@ VALUE Query_bind(int argc, VALUE *argv, VALUE self) {
   Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
-  query_reset_and_bind(query, argc, argv);
+  query_bind(query, argc, argv);
+  query->should_reset = 1;
   return self;
 }
 
@@ -207,7 +224,7 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, safe_query_impl
   Query_t *query = self_to_query(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
-  if (!query->stmt) query_reset(query);
+  if (!query->stmt || query->should_reset) query_reset(query);
   if (query->eof) return rb_block_given_p() ? self : Qnil;
 
   query_ctx ctx = QUERY_CTX(
@@ -313,7 +330,8 @@ VALUE Query_each(VALUE self) {
  */
 VALUE Query_execute(int argc, VALUE *argv, VALUE self) {
   Query_t *query = self_to_query(self);
-  query_reset_and_bind(query, argc, argv);
+  query_bind(query, argc, argv);
+  query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_changes);
 }
 

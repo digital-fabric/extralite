@@ -619,6 +619,19 @@ static inline void batch_iterate(query_ctx *ctx, enum batch_mode mode, VALUE *ro
   }
 }
 
+static inline void invoke_pre_query_hook(query_ctx *ctx, VALUE params) {
+  int argc = 1;
+  switch (TYPE(params)) {
+    case T_ARRAY:
+      argc = -1;
+      break;
+    case T_NIL:
+      argc = 0;
+  }
+
+  Database_pre_query_hook(ctx->db, ctx->stmt, ctx->sql, argc, &params);
+}
+
 static inline VALUE batch_run_array(query_ctx *ctx, enum batch_mode batch_mode) {
   int count = RARRAY_LEN(ctx->params);
   int block_given = rb_block_given_p();
@@ -629,9 +642,9 @@ static inline VALUE batch_run_array(query_ctx *ctx, enum batch_mode batch_mode) 
   for (int i = 0; i < count; i++) {
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
-    Database_pre_query_hook(ctx->db, ctx->stmt);
     VALUE params = RARRAY_AREF(ctx->params, i);
     bind_all_parameters_from_object(ctx->stmt, params);
+    invoke_pre_query_hook(ctx, params);
 
     batch_iterate(ctx, batch_mode, &rows);
     changes += sqlite3_changes(ctx->sqlite3_db);
@@ -667,8 +680,8 @@ static VALUE batch_run_each_iter(RB_BLOCK_CALL_FUNC_ARGLIST(yield_value, vctx)) 
 
   sqlite3_reset(each_ctx->ctx->stmt);
   sqlite3_clear_bindings(each_ctx->ctx->stmt);
-  Database_pre_query_hook(each_ctx->ctx->db, each_ctx->ctx->stmt);
   bind_all_parameters_from_object(each_ctx->ctx->stmt, yield_value);
+  invoke_pre_query_hook(each_ctx->ctx, yield_value);
 
   batch_iterate(each_ctx->ctx, each_ctx->batch_mode, &rows);
   each_ctx->changes += sqlite3_changes(each_ctx->ctx->sqlite3_db);
@@ -713,8 +726,8 @@ static inline VALUE batch_run_proc(query_ctx *ctx, enum batch_mode batch_mode) {
 
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
-    Database_pre_query_hook(ctx->db, ctx->stmt);
     bind_all_parameters_from_object(ctx->stmt, params);
+    invoke_pre_query_hook(ctx, params);
 
     batch_iterate(ctx, batch_mode, &rows);
     changes += sqlite3_changes(ctx->sqlite3_db);

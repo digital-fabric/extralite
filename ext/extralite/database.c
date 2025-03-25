@@ -298,7 +298,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   if (stmt == NULL) return Qnil;
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
-  Database_pre_query_hook(db, stmt);
+  Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
 
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, Qnil, transform,
@@ -1105,12 +1105,41 @@ static inline enum progress_handler_mode symbol_to_progress_mode(VALUE mode) {
   rb_raise(eArgumentError, "Invalid progress handler mode");
 }
 
-inline void Database_pre_query_hook(Database_t *db, sqlite3_stmt *stmt) {
-  if (db->trace_proc != Qnil) {
-    VALUE sql = rb_str_new_cstr(sqlite3_expanded_sql(stmt));
+#define MAX_TRACE_ARGS 16
+
+static inline void Database_trace_invoke(Database_t *db, VALUE sql, int argc, VALUE *argv) {
+  if (argc == 0)
     INVOKE_PROC(db->trace_proc, 1, &sql);
-    RB_GC_GUARD(sql);
+  else if (argc == -1) {
+    VALUE args = argv[0];
+    if (TYPE(args) == T_ARRAY) {
+      int args_len = RARRAY_LEN(args);
+      VALUE params = rb_ary_new_capa(args_len + 1);
+      rb_ary_push(params, sql);
+      for (int i = 0; i < args_len; i++)
+        rb_ary_push(params, RARRAY_AREF(args, i));
+      rb_proc_call_kw(db->trace_proc, params, RB_NO_KEYWORDS);
+      RB_GC_GUARD(params);
+    }
+    else
+      INVOKE_PROC(db->trace_proc, 1, &sql);
   }
+  else if (argc > MAX_TRACE_ARGS) {
+    rb_raise(cError, "Too many arguments provided to trace proc");
+  }
+  else {
+    VALUE trace_argv[MAX_TRACE_ARGS];
+    trace_argv[0] = sql;
+    for (int i = 0; i < argc; i++)
+      trace_argv[i + 1] = argv[i];
+    INVOKE_PROC(db->trace_proc, argc + 1, trace_argv);
+  }
+}
+
+inline void Database_pre_query_hook(Database_t *db, sqlite3_stmt *stmt, VALUE sql, int argc, VALUE *argv) {
+  if (db->trace_proc != Qnil)
+    Database_trace_invoke(db, sql, argc, argv);
+
   switch (db->progress_handler.mode) {
     case PROGRESS_AT_LEAST_ONCE:
     case PROGRESS_ONCE:

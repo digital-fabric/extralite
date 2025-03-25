@@ -1221,6 +1221,8 @@ class ScenarioTest < Minitest::Test
     t2&.kill
   end
 
+  # Note: more comprehensive testing of the trace functionality is done in
+  # test_trace.rb
   def test_database_trace
     sqls = []
     @db.trace { |sql| sqls << sql }
@@ -1244,18 +1246,6 @@ class ScenarioTest < Minitest::Test
 
     @db.query('select 4')
     assert_equal ['select 1', 'select 2', 'select 3'], sqls
-  end
-
-  def test_database_trace_expanded_sql
-    sqls = []
-    @db.trace { |sql| sqls << sql }
-
-    @db.query('select ?, ?, ?', 1, '2', 3)
-    assert_equal ["select 1, '2', 3"], sqls
-
-    sqls = []
-    @db.query('select :x, :y, :z', x: 42, y: '43')
-    assert_equal ["select 42, '43', NULL"], sqls
   end
 end
 

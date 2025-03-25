@@ -78,14 +78,17 @@ enum query_mode {
 };
 
 typedef struct {
+  VALUE               self;
   VALUE               db;
   VALUE               sql;
   VALUE               transform_proc;
+  VALUE               bound_params;
   Database_t          *db_struct;
   sqlite3             *sqlite3_db;
   sqlite3_stmt        *stmt;
   int                 eof;
   int                 closed;
+  int                 should_reset;
   enum query_mode     query_mode;
 } Query_t;
 
@@ -182,7 +185,7 @@ void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);
 int stmt_iterate(query_ctx *ctx);
 VALUE cleanup_stmt(query_ctx *ctx);
 
-void Database_pre_query_hook(Database_t *db, sqlite3_stmt *stmt);
+void Database_pre_query_hook(Database_t *db, sqlite3_stmt *stmt, VALUE sql, int argc, VALUE *argv);
 sqlite3 *Database_sqlite3_db(VALUE self);
 enum gvl_mode Database_prepare_gvl_mode(Database_t *db);
 Database_t *self_to_database(VALUE self);
