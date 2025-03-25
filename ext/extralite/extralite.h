@@ -22,6 +22,8 @@
 
 #define SAFE(f) (VALUE (*)(VALUE))(f)
 
+#define INVOKE_PROC(proc, argc, argv) rb_proc_call_with_block(proc, argc, argv, Qnil)
+
 extern VALUE cDatabase;
 extern VALUE cQuery;
 extern VALUE cIterator;
@@ -180,7 +182,7 @@ void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);
 int stmt_iterate(query_ctx *ctx);
 VALUE cleanup_stmt(query_ctx *ctx);
 
-void Database_issue_query(Database_t *db, sqlite3_stmt *stmt);
+void Database_pre_query_hook(Database_t *db, sqlite3_stmt *stmt);
 sqlite3 *Database_sqlite3_db(VALUE self);
 enum gvl_mode Database_prepare_gvl_mode(Database_t *db);
 Database_t *self_to_database(VALUE self);

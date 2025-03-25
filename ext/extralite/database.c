@@ -150,14 +150,15 @@ int Database_progress_handler(void *ptr) {
 
   db->progress_handler.tick_count -= db->progress_handler.period;
   db->progress_handler.call_count += 1;
-  rb_funcall(db->progress_handler.proc, ID_call, 0);
+  INVOKE_PROC(db->progress_handler.proc, 0, NULL);
 done:
   return 0;
 }
 
 int Database_busy_handler(void *ptr, int v) {
   Database_t *db = (Database_t *)ptr;
-  rb_funcall(db->progress_handler.proc, ID_call, 1, Qtrue);
+  VALUE arg = Qtrue;
+  INVOKE_PROC(db->progress_handler.proc, 1, &arg);
   return 1;
 }
 
@@ -297,7 +298,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   if (stmt == NULL) return Qnil;
 
   bind_all_parameters(stmt, argc - 1, argv + 1);
-  Database_issue_query(db, stmt);
+  Database_pre_query_hook(db, stmt);
 
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, Qnil, transform,
@@ -1104,16 +1105,16 @@ static inline enum progress_handler_mode symbol_to_progress_mode(VALUE mode) {
   rb_raise(eArgumentError, "Invalid progress handler mode");
 }
 
-inline void Database_issue_query(Database_t *db, sqlite3_stmt *stmt) {
+inline void Database_pre_query_hook(Database_t *db, sqlite3_stmt *stmt) {
   if (db->trace_proc != Qnil) {
     VALUE sql = rb_str_new_cstr(sqlite3_expanded_sql(stmt));
-    rb_funcall(db->trace_proc, ID_call, 1, sql);
+    INVOKE_PROC(db->trace_proc, 1, &sql);
     RB_GC_GUARD(sql);
   }
   switch (db->progress_handler.mode) {
     case PROGRESS_AT_LEAST_ONCE:
     case PROGRESS_ONCE:
-      rb_funcall(db->progress_handler.proc, ID_call, 0);
+      INVOKE_PROC(db->progress_handler.proc, 0, NULL);
     default:
       ; // do nothing
 

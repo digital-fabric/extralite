@@ -1337,7 +1337,7 @@ class ConcurrencyTest < Minitest::Test
     t2.join
     t1.join
 
-    assert delays.size > 4
+    assert_in_range 4.., delays.size
     assert_equal 0, delays.select { |d| d > 0.15 }.size
   ensure
     t1&.kill

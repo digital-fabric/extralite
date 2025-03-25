@@ -379,7 +379,7 @@ VALUE safe_query_hash(query_ctx *ctx) {
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, &names);
     if (do_transform)
-      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
+      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
     row_count++;
     switch (ctx->row_mode) {
       case ROW_YIELD:
@@ -416,7 +416,7 @@ VALUE safe_query_hash(query_ctx *ctx) {
 #define ARGV_GET_ROW(ctx, column_count, argv_values, row, do_transform, return_rows) \
   row_to_splat_values(ctx->stmt, column_count, argv_values); \
   if (do_transform) \
-    row = rb_funcall2(ctx->transform_proc, ID_call, column_count, argv_values); \
+    row = INVOKE_PROC(ctx->transform_proc, column_count, argv_values); \
   else if (return_rows) \
     row = column_count == 1 ? argv_values[0] : rb_ary_new_from_values(column_count, argv_values);
 
@@ -468,7 +468,7 @@ VALUE safe_query_array(query_ctx *ctx) {
   while (stmt_iterate(ctx)) {
     row = row_to_array(ctx->stmt, column_count);
     if (do_transform)
-      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
+      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
     row_count++;
     switch (ctx->row_mode) {
       case ROW_YIELD:
@@ -497,7 +497,7 @@ VALUE safe_query_single_row_hash(query_ctx *ctx) {
   if (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, &names);
     if (!NIL_P(ctx->transform_proc))
-      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
+      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
   }
 
   RB_GC_GUARD(row);
@@ -530,7 +530,7 @@ VALUE safe_query_single_row_array(query_ctx *ctx) {
   if (stmt_iterate(ctx)) {
     row = row_to_array(ctx->stmt, column_count);
     if (do_transform)
-      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
+      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
   }
 
   RB_GC_GUARD(row);
@@ -554,7 +554,7 @@ static inline VALUE batch_iterate_hash(query_ctx *ctx) {
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, &names);
     if (do_transform)
-      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
+      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
     rb_ary_push(rows, row);
   }
 
@@ -573,7 +573,7 @@ static inline VALUE batch_iterate_array(query_ctx *ctx) {
   while (stmt_iterate(ctx)) {
     row = row_to_array(ctx->stmt, column_count);
     if (do_transform)
-      row = rb_funcall(ctx->transform_proc, ID_call, 1, row);
+      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
     rb_ary_push(rows, row);
   }
 
@@ -629,8 +629,9 @@ static inline VALUE batch_run_array(query_ctx *ctx, enum batch_mode batch_mode) 
   for (int i = 0; i < count; i++) {
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
-    Database_issue_query(ctx->db, ctx->stmt);
-    bind_all_parameters_from_object(ctx->stmt, RARRAY_AREF(ctx->params, i));
+    Database_pre_query_hook(ctx->db, ctx->stmt);
+    VALUE params = RARRAY_AREF(ctx->params, i);
+    bind_all_parameters_from_object(ctx->stmt, params);
 
     batch_iterate(ctx, batch_mode, &rows);
     changes += sqlite3_changes(ctx->sqlite3_db);
@@ -666,7 +667,7 @@ static VALUE batch_run_each_iter(RB_BLOCK_CALL_FUNC_ARGLIST(yield_value, vctx)) 
 
   sqlite3_reset(each_ctx->ctx->stmt);
   sqlite3_clear_bindings(each_ctx->ctx->stmt);
-  Database_issue_query(each_ctx->ctx->db, each_ctx->ctx->stmt);
+  Database_pre_query_hook(each_ctx->ctx->db, each_ctx->ctx->stmt);
   bind_all_parameters_from_object(each_ctx->ctx->stmt, yield_value);
 
   batch_iterate(each_ctx->ctx, each_ctx->batch_mode, &rows);
@@ -707,12 +708,12 @@ static inline VALUE batch_run_proc(query_ctx *ctx, enum batch_mode batch_mode) {
   int changes = 0;
 
   while (1) {
-    params = rb_funcall(ctx->params, ID_call, 0);
+    params = INVOKE_PROC(ctx->params, 0, NULL);
     if (NIL_P(params)) break;
 
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
-    Database_issue_query(ctx->db, ctx->stmt);
+    Database_pre_query_hook(ctx->db, ctx->stmt);
     bind_all_parameters_from_object(ctx->stmt, params);
 
     batch_iterate(ctx, batch_mode, &rows);
