@@ -69,6 +69,14 @@ static inline Query_t *self_to_query(VALUE obj) {
   return query;
 }
 
+// verifies that the query is not closed
+static inline Query_t *self_to_query_verify(VALUE obj) {
+  Query_t *query = self_to_query(obj);
+  if (query->closed) rb_raise(cError, "Query is closed");
+  return query;
+}
+
+
 static inline enum query_mode symbol_to_query_mode(VALUE sym) {
   if (sym == SYM_hash)          return QUERY_HASH;
   if (sym == SYM_splat)         return QUERY_SPLAT;
@@ -130,7 +138,7 @@ static inline void query_reset(Query_t *query) {
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
   else
     sqlite3_reset(query->stmt);
-  
+
   Database_pre_query_hook(query->db_struct, query->stmt, query->sql, query->bound_params == Qnil ? 0 : -1, &query->bound_params);
 
   query->eof = 0;
@@ -170,8 +178,7 @@ static inline void query_bind(Query_t *query, int argc, VALUE * argv) {
  * @return [Extralite::Query] self
  */
 VALUE Query_reset(VALUE self) {
-  Query_t *query = self_to_query(self);
-  if (query->closed) rb_raise(cError, "Query is closed");
+  Query_t *query = self_to_query_verify(self);
 
   query_reset(query);
   return self;
@@ -199,8 +206,7 @@ VALUE Query_reset(VALUE self) {
  * @return [Extralite::Query] self
  */
 VALUE Query_bind(int argc, VALUE *argv, VALUE self) {
-  Query_t *query = self_to_query(self);
-  if (query->closed) rb_raise(cError, "Query is closed");
+  Query_t *query = self_to_query_verify(self);
 
   query_bind(query, argc, argv);
   query->should_reset = 1;
@@ -212,8 +218,7 @@ VALUE Query_bind(int argc, VALUE *argv, VALUE self) {
  * @return [boolean] true if iteration has reached the end of the result set
  */
 VALUE Query_eof_p(VALUE self) {
-  Query_t *query = self_to_query(self);
-  if (query->closed) rb_raise(cError, "Query is closed");
+  Query_t *query = self_to_query_verify(self);
 
   return query->eof ? Qtrue : Qfalse;
 }
@@ -221,8 +226,7 @@ VALUE Query_eof_p(VALUE self) {
 #define MAX_ROWS(max_rows) (max_rows == SINGLE_ROW ? 1 : max_rows)
 
 static inline VALUE Query_perform_next(VALUE self, int max_rows, safe_query_impl call) {
-  Query_t *query = self_to_query(self);
-  if (query->closed) rb_raise(cError, "Query is closed");
+  Query_t *query = self_to_query_verify(self);
 
   if (!query->stmt || query->should_reset) query_reset(query);
   if (query->eof) return rb_block_given_p() ? self : Qnil;
@@ -275,7 +279,7 @@ inline safe_query_impl query_impl(enum query_mode query_mode) {
  *   @return [Array<any>, Extralite::Query] next rows or self if block is given
  */
 VALUE Query_next(int argc, VALUE *argv, VALUE self) {
-  Query_t *query = self_to_query(self);
+  Query_t *query = self_to_query_verify(self);
   rb_check_arity(argc, 0, 1);
   return Query_perform_next(self, MAX_ROWS_FROM_ARGV(argc, argv), query_impl(query->query_mode));
 }
@@ -286,7 +290,7 @@ VALUE Query_next(int argc, VALUE *argv, VALUE self) {
  * @return [Array<any>] all rows
  */
 VALUE Query_to_a(VALUE self) {
-  Query_t *query = self_to_query(self);
+  Query_t *query = self_to_query_verify(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, query_impl(query->query_mode));
 }
@@ -300,7 +304,7 @@ VALUE Query_to_a(VALUE self) {
 VALUE Query_each(VALUE self) {
   if (!rb_block_given_p()) return rb_funcall(cIterator, ID_new, 1, self);
 
-  Query_t *query = self_to_query(self);
+  Query_t *query = self_to_query_verify(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, query_impl(query->query_mode));
 }
@@ -329,7 +333,7 @@ VALUE Query_each(VALUE self) {
  *     query.execute(':bar' => 42)
  */
 VALUE Query_execute(int argc, VALUE *argv, VALUE self) {
-  Query_t *query = self_to_query(self);
+  Query_t *query = self_to_query_verify(self);
   query_bind(query, argc, argv);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_changes);
@@ -395,7 +399,7 @@ VALUE Query_execute_chevrons(VALUE self, VALUE params) {
  * @return [Integer] number of changes effected
  */
 VALUE Query_batch_execute(VALUE self, VALUE parameters) {
-  Query_t *query = self_to_query(self);
+  Query_t *query = self_to_query_verify(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
@@ -444,7 +448,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
  * @return [Array<Array>, Integer] Returned rows or total number of changes effected
  */
 VALUE Query_batch_query(VALUE self, VALUE parameters) {
-  Query_t *query = self_to_query(self);
+  Query_t *query = self_to_query_verify(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
@@ -490,7 +494,7 @@ VALUE Query_sql(VALUE self) {
  * @return [Array<Symbol>] column names
  */
 VALUE Query_columns(VALUE self) {
-  Query_t *query = self_to_query(self);
+  Query_t *query = self_to_query_verify(self);
   query_reset(query);
   return Query_perform_next(self, ALL_ROWS, safe_query_columns);
 }
@@ -553,8 +557,7 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
 
   rb_scan_args(argc, argv, "11", &op, &reset);
 
-  Query_t *query = self_to_query(self);
-  if (query->closed) rb_raise(cError, "Query is closed");
+  Query_t *query = self_to_query_verify(self);
 
   if (!query->stmt)
     prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
@@ -578,7 +581,7 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
  * @return [Extralite::Query] query
  */
 VALUE Query_transform(VALUE self) {
-  Query_t *query = self_to_query(self);
+  Query_t *query = self_to_query_verify(self);
 
   RB_OBJ_WRITE(self, &query->transform_proc, rb_block_given_p() ? rb_block_proc() : Qnil);
   return self;
