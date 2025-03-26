@@ -20,7 +20,7 @@ $db2 = Extralite::Database.new(DB_PATH, gvl_release_threshold: 0)
 $db3 = Extralite::Database.new(DB_PATH)
 
 $snooze_count = 0
-$db3.on_progress(25) { $snooze_count += 1; snooze }
+$db3.on_progress(tick: 50, period: 100, mode: :at_least_once) { $snooze_count += 1; snooze }
 
 def prepare_database(count)
   $db1.execute('create table if not exists foo ( a integer primary key, b text )')
