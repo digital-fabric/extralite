@@ -1,3 +1,8 @@
+## 2.13 2025-08-03
+
+- Update bundled SQLite to version 30.50.4
+- Update README performance numbers
+
 ## 2.12 2025-03-25
 
 - Reimplement trace, provide trace proc with bound parameters [#80](https://github.com/digital-fabric/extralite/issues/80)

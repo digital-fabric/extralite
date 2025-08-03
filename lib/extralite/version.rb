@@ -1,4 +1,4 @@
 module Extralite
   # Extralite version
-  VERSION = '2.12'
+  VERSION = '2.13'
 end
