@@ -1160,19 +1160,18 @@ struct progress_handler parse_progress_handler_opts(VALUE opts) {
     .tick   = DEFAULT_PROGRESS_HANDLER_TICK
   };
 
-  if (!NIL_P(opts)) {
-    if (!kw_ids[0]) {
-      CONST_ID(kw_ids[0], "period");
-      CONST_ID(kw_ids[1], "tick");
-      CONST_ID(kw_ids[2], "mode");
-    }
-
-    rb_get_kwargs(opts, kw_ids, 0, 3, kw_args);
-    if (kw_args[0] != Qundef) { prog.period = NUM2INT(kw_args[0]); }
-    if (kw_args[1] != Qundef) { prog.tick   = NUM2INT(kw_args[1]); }
-    if (kw_args[2] != Qundef) { prog.mode   = symbol_to_progress_mode(kw_args[2]); }
-    if (prog.tick > prog.period) prog.tick = prog.period;
+  if (!kw_ids[0]) {
+    kw_ids[0] = rb_intern_const("period");
+    kw_ids[1] = rb_intern_const("tick");
+    kw_ids[2] = rb_intern_const("mode");
   }
+
+  rb_get_kwargs(opts, kw_ids, 0, 3, kw_args);
+  if (kw_args[0] != Qundef) { prog.period = NUM2INT(kw_args[0]); }
+  if (kw_args[1] != Qundef) { prog.tick   = NUM2INT(kw_args[1]); }
+  if (kw_args[2] != Qundef) { prog.mode   = symbol_to_progress_mode(kw_args[2]); }
+  if (prog.tick > prog.period) prog.tick = prog.period;
+
   if (NIL_P(prog.proc) || (prog.period <= 0)) prog.mode = PROGRESS_NONE;
   if (prog.mode == PROGRESS_NONE) prog.proc = Qnil;
 
