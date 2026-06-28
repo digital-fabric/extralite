@@ -151,7 +151,7 @@ static inline void column_names_setup(struct column_names *names, int count) {
 }
 
 static inline void column_names_set(struct column_names *names, int idx, VALUE value) {
-  if (names->count <= MAX_EMBEDDED_COLUMN_NAMES) 
+  if (names->count <= MAX_EMBEDDED_COLUMN_NAMES)
     names->names[idx] = value;
   else
     rb_ary_push(names->array, value);
@@ -331,7 +331,7 @@ void *stmt_iterate_step(void *ptr) {
 inline enum gvl_mode stepwise_gvl_mode(query_ctx *ctx) {
   // a negative or zero threshold means the GVL is always held during iteration.
   if (ctx->gvl_release_threshold <= 0) return GVL_HOLD;
-  
+
   if (!sqlite3_stmt_busy(ctx->stmt)) return GVL_RELEASE;
 
   // if positive, the GVL is normally held, and release every <threshold> steps.
@@ -374,12 +374,12 @@ VALUE safe_query_hash(query_ctx *ctx) {
   int column_count = sqlite3_column_count(ctx->stmt);
   struct column_names names = get_column_names(ctx->stmt, column_count);
   int row_count = 0;
-  int do_transform = !NIL_P(ctx->transform_proc);
+  int do_transform = !NIL_P(ctx->transform);
 
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, &names);
     if (do_transform)
-      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
+      row = INVOKE_PROC(ctx->transform, 1, &row);
     row_count++;
     switch (ctx->row_mode) {
       case ROW_YIELD:
@@ -416,7 +416,7 @@ VALUE safe_query_hash(query_ctx *ctx) {
 #define ARGV_GET_ROW(ctx, column_count, argv_values, row, do_transform, return_rows) \
   row_to_splat_values(ctx->stmt, column_count, argv_values); \
   if (do_transform) \
-    row = INVOKE_PROC(ctx->transform_proc, column_count, argv_values); \
+    row = INVOKE_PROC(ctx->transform, column_count, argv_values); \
   else if (return_rows) \
     row = column_count == 1 ? argv_values[0] : rb_ary_new_from_values(column_count, argv_values);
 
@@ -428,7 +428,7 @@ VALUE safe_query_splat(query_ctx *ctx) {
   if (column_count > MAX_ARGV_COLUMNS)
     rb_raise(cError, "Conversion is supported only up to %d columns", MAX_ARGV_COLUMNS);
 
-  int do_transform = !NIL_P(ctx->transform_proc);
+  int do_transform = !NIL_P(ctx->transform);
   int return_rows = (ctx->row_mode != ROW_YIELD);
 
   int row_count = 0;
@@ -463,12 +463,12 @@ VALUE safe_query_array(query_ctx *ctx) {
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
   int row_count = 0;
-  int do_transform = !NIL_P(ctx->transform_proc);
+  int do_transform = !NIL_P(ctx->transform);
 
   while (stmt_iterate(ctx)) {
     row = row_to_array(ctx->stmt, column_count);
     if (do_transform)
-      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
+      row = INVOKE_PROC(ctx->transform, 1, &row);
     row_count++;
     switch (ctx->row_mode) {
       case ROW_YIELD:
@@ -496,8 +496,8 @@ VALUE safe_query_single_row_hash(query_ctx *ctx) {
 
   if (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, &names);
-    if (!NIL_P(ctx->transform_proc))
-      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
+    if (!NIL_P(ctx->transform))
+      row = INVOKE_PROC(ctx->transform, 1, &row);
   }
 
   RB_GC_GUARD(row);
@@ -511,7 +511,7 @@ VALUE safe_query_single_row_splat(query_ctx *ctx) {
   int column_count = sqlite3_column_count(ctx->stmt);
   if (column_count > MAX_ARGV_COLUMNS)
     rb_raise(cError, "Conversion is supported only up to %d columns", MAX_ARGV_COLUMNS);
-  int do_transform = !NIL_P(ctx->transform_proc);
+  int do_transform = !NIL_P(ctx->transform);
 
   if (stmt_iterate(ctx)) {
     ARGV_GET_ROW(ctx, column_count, argv_values, row, do_transform, 1);
@@ -525,12 +525,12 @@ VALUE safe_query_single_row_splat(query_ctx *ctx) {
 VALUE safe_query_single_row_array(query_ctx *ctx) {
   int column_count = sqlite3_column_count(ctx->stmt);
   VALUE row = Qnil;
-  int do_transform = !NIL_P(ctx->transform_proc);
+  int do_transform = !NIL_P(ctx->transform);
 
   if (stmt_iterate(ctx)) {
     row = row_to_array(ctx->stmt, column_count);
     if (do_transform)
-      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
+      row = INVOKE_PROC(ctx->transform, 1, &row);
   }
 
   RB_GC_GUARD(row);
@@ -549,12 +549,12 @@ static inline VALUE batch_iterate_hash(query_ctx *ctx) {
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
   struct column_names names = get_column_names(ctx->stmt, column_count);
-  const int do_transform = !NIL_P(ctx->transform_proc);
+  const int do_transform = !NIL_P(ctx->transform);
 
   while (stmt_iterate(ctx)) {
     row = row_to_hash(ctx->stmt, column_count, &names);
     if (do_transform)
-      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
+      row = INVOKE_PROC(ctx->transform, 1, &row);
     rb_ary_push(rows, row);
   }
 
@@ -568,12 +568,12 @@ static inline VALUE batch_iterate_array(query_ctx *ctx) {
   VALUE rows = rb_ary_new();
   VALUE row = Qnil;
   int column_count = sqlite3_column_count(ctx->stmt);
-  int do_transform = !NIL_P(ctx->transform_proc);
+  int do_transform = !NIL_P(ctx->transform);
 
   while (stmt_iterate(ctx)) {
     row = row_to_array(ctx->stmt, column_count);
     if (do_transform)
-      row = INVOKE_PROC(ctx->transform_proc, 1, &row);
+      row = INVOKE_PROC(ctx->transform, 1, &row);
     rb_ary_push(rows, row);
   }
 
@@ -589,7 +589,7 @@ static inline VALUE batch_iterate_splat(query_ctx *ctx) {
   int column_count = sqlite3_column_count(ctx->stmt);
   if (column_count > MAX_ARGV_COLUMNS)
     rb_raise(cError, "Conversion is supported only up to %d columns", MAX_ARGV_COLUMNS);
-  int do_transform = !NIL_P(ctx->transform_proc);
+  int do_transform = !NIL_P(ctx->transform);
 
   while (stmt_iterate(ctx)) {
     ARGV_GET_ROW(ctx, column_count, argv_values, row, do_transform, 1);
@@ -753,13 +753,13 @@ static inline VALUE batch_run_proc(query_ctx *ctx, enum batch_mode batch_mode) {
 static inline VALUE batch_run(query_ctx *ctx, enum batch_mode batch_mode) {
   if (TYPE(ctx->params) == T_ARRAY)
     return batch_run_array(ctx, batch_mode);
-  
+
   if (rb_respond_to(ctx->params, ID_each))
     return batch_run_each(ctx, batch_mode);
-  
+
   if (rb_respond_to(ctx->params, ID_call))
     return batch_run_proc(ctx, batch_mode);
-  
+
   rb_raise(cParameterError, "Invalid parameter source supplied to #batch_execute");
 }
 
@@ -777,7 +777,7 @@ VALUE safe_batch_query(query_ctx *ctx) {
       return batch_run(ctx, BATCH_QUERY_ARRAY);
     default:
       rb_raise(cError, "Invalid query mode (safe_batch_query)");
-  }  
+  }
 }
 
 VALUE safe_batch_query_array(query_ctx *ctx) {

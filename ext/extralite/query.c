@@ -28,7 +28,7 @@ static void Query_mark(void *ptr) {
   Query_t *query = ptr;
   rb_gc_mark_movable(query->db);
   rb_gc_mark_movable(query->sql);
-  rb_gc_mark_movable(query->transform_proc);
+  rb_gc_mark_movable(query->transform);
   rb_gc_mark_movable(query->bound_params);
 }
 
@@ -36,7 +36,7 @@ static void Query_compact(void *ptr) {
   Query_t *query = ptr;
   query->db = rb_gc_location(query->db);
   query->sql = rb_gc_location(query->sql);
-  query->transform_proc = rb_gc_location(query->transform_proc);
+  query->transform = rb_gc_location(query->transform);
   query->bound_params = rb_gc_location(query->bound_params);
 }
 
@@ -56,7 +56,7 @@ static VALUE Query_allocate(VALUE klass) {
   Query_t *query = ALLOC(Query_t);
   query->db = Qnil;
   query->sql = Qnil;
-  query->transform_proc = Qnil;
+  query->transform = Qnil;
   query->bound_params = Qnil;
   query->sqlite3_db = NULL;
   query->stmt = NULL;
@@ -118,7 +118,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
   RB_OBJ_WRITE(self, &query->db, db);
   RB_OBJ_WRITE(self, &query->sql, sql);
   if (rb_block_given_p())
-    RB_OBJ_WRITE(self, &query->transform_proc, rb_block_proc());
+    RB_OBJ_WRITE(self, &query->transform, rb_block_proc());
 
   query->self = self;
   query->db = db;
@@ -153,7 +153,7 @@ static inline void query_bind(Query_t *query, int argc, VALUE * argv) {
     // changing the binding. See note at bottom of
     // https://www.sqlite.org/c3ref/bind_blob.html
     sqlite3_reset(query->stmt);
-  
+
   sqlite3_clear_bindings(query->stmt);
   if (argc > 0) {
     bind_all_parameters(query->stmt, argc, argv);
@@ -237,7 +237,7 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, safe_query_impl
     query->db_struct,
     query->stmt,
     Qnil,
-    query->transform_proc,
+    query->transform,
     query->query_mode,
     ROW_YIELD_OR_MODE(max_rows == SINGLE_ROW ? ROW_SINGLE : ROW_MULTI),
     MAX_ROWS(max_rows)
@@ -378,7 +378,7 @@ VALUE Query_execute_chevrons(VALUE self, VALUE params) {
  * parameters for running the query. If a callable is given, it is called
  * repeatedly and each of its return values is used as the parameters, until nil
  * is returned.
- * 
+ *
  * Returns the number of changes effected. This method is designed for inserting
  * multiple records.
  *
@@ -388,7 +388,7 @@ VALUE Query_execute_chevrons(VALUE self, VALUE params) {
  *       [4, 5, 6]
  *     ]
  *     query.batch_execute(records)
- * 
+ *
  *     source = [
  *       [1, 2, 3],
  *       [4, 5, 6]
@@ -432,7 +432,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
  * invocation of the query, and the total number of changes is returned.
  * Otherwise, an array containing the resulting rows for each invocation is
  * returned.
- * 
+ *
  * Rows are returned according to the query mode and transform.
  *
  *     q = db.prepare('insert into foo values (?, ?) returning bar, baz')
@@ -460,7 +460,7 @@ VALUE Query_batch_query(VALUE self, VALUE parameters) {
     query->db_struct,
     query->stmt,
     parameters,
-    query->transform_proc,
+    query->transform,
     query->query_mode,
     ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
@@ -514,7 +514,7 @@ VALUE Query_clone(VALUE self) {
     query->sql,
     query_mode_to_symbol(query->query_mode)
   };
-  return rb_funcall_with_block(cQuery, ID_new, 3, args, query->transform_proc);
+  return rb_funcall_with_block(cQuery, ID_new, 3, args, query->transform);
 }
 
 /* Closes the query. Attempting to run a closed query will raise an error.
@@ -583,7 +583,7 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
 VALUE Query_transform(VALUE self) {
   Query_t *query = self_to_query_verify(self);
 
-  RB_OBJ_WRITE(self, &query->transform_proc, rb_block_given_p() ? rb_block_proc() : Qnil);
+  RB_OBJ_WRITE(self, &query->transform, rb_block_given_p() ? rb_block_proc() : Qnil);
   return self;
 }
 
@@ -616,7 +616,7 @@ VALUE Query_mode_get(VALUE self) {
 
 /* call-seq:
  *   query.mode = mode
- * 
+ *
  * Sets the query mode. This can be one of `:hash`, `:splat`, `:array`.
  *
  * @param mode [Symbol] query mode

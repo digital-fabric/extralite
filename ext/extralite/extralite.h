@@ -81,7 +81,7 @@ typedef struct {
   VALUE               self;
   VALUE               db;
   VALUE               sql;
-  VALUE               transform_proc;
+  VALUE               transform;
   VALUE               bound_params;
   Database_t          *db_struct;
   sqlite3             *sqlite3_db;
@@ -113,7 +113,7 @@ typedef struct {
   VALUE               self;
   VALUE               sql;
   VALUE               params;
-  VALUE               transform_proc;
+  VALUE               transform;
 
   Database_t          *db;
   sqlite3             *sqlite3_db;
@@ -137,11 +137,11 @@ enum gvl_mode {
 #define SINGLE_ROW -2
 #define ROW_YIELD_OR_MODE(default) (rb_block_given_p() ? ROW_YIELD : default)
 #define ROW_MULTI_P(mode) (mode == ROW_MULTI)
-#define QUERY_CTX(self, sql, db, stmt, params, transform_proc, query_mode, row_mode, max_rows) { \
+#define QUERY_CTX(self, sql, db, stmt, params, transform, query_mode, row_mode, max_rows) { \
   self, \
   sql, \
   params, \
-  transform_proc, \
+  transform, \
   db, \
   db->sqlite3_db, \
   stmt, \
