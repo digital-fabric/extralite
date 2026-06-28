@@ -1,3 +1,8 @@
+## 2.15 2026-06-28
+
+- Update bundled SQLite to 3.53.3
+- Update dependencies
+
 ## 2.14 2026-01-25
 
 - Update bundled SQLite to 3.51.2

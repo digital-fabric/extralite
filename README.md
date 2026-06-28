@@ -32,7 +32,7 @@ databases.
 Extralite comes in two flavors: the `extralite` gem which uses the
 system-installed sqlite3 library, and the `extralite-bundle` gem which bundles
 the latest version of SQLite
-([3.51.2](https://sqlite.org/releaselog/3_51_2.html)), offering access to the
+([3.53.3](https://sqlite.org/releaselog/3_53_3.html)), offering access to the
 latest features and enhancements.
 
 ## Features
@@ -663,10 +663,10 @@ rollback specific changes without abandoning the entire transaction:
 ```ruby
 db.transaction do
   db.execute 'insert into foo values (1)'
-  
+
   db.savepoint :my_savepoint
   db.execute 'insert into foo values (2)'
-  
+
   # the following cancels the last insert
   db.rollback_to :my_savepoint
   db.execute 'insert into foo values (3)'
@@ -788,10 +788,10 @@ for each database:
 
 ```ruby
 # release the GVL on preparing the query, and every 10 records
-db.gvl_release_threshold = 10 
+db.gvl_release_threshold = 10
 
 # release the GVL only when preparing the query
-db.gvl_release_threshold = 0 
+db.gvl_release_threshold = 0
 
 # never release the GVL (for single-threaded apps only)
 db.gvl_release_threshold = -1
