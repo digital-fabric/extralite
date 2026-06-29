@@ -236,7 +236,7 @@ module Extralite
     # @return [Any] the given block's return value
     def transaction(mode = :immediate)
       abort = false
-      execute "begin #{mode} transaction"    
+      execute "begin #{mode} transaction"
       yield self
     rescue => e
       abort = true
@@ -310,5 +310,64 @@ module Extralite
 
   class Query
     alias_method :execute_multi, :batch_execute
+  end
+
+  class Transform
+    alias_method :orig_initialize, :initialize
+
+    def initialize(spec = nil, &block)
+      return orig_initialize(spec) if spec
+      raise "No spec given" if !block
+
+      orig_initialize(dsl_to_spec(block))
+    end
+
+    private
+
+    class DSLContext
+      attr_reader :hash
+
+      def initialize(hash = {})
+        @hash = hash
+      end
+
+      def auto      = mutate(type: nil)
+      def integer   = mutate(type: :integer)
+      def float     = mutate(type: :float)
+      def text      = mutate(type: :text)
+      def bool      = mutate(type: :bool)
+      def json      = mutate(type: :json)
+      def identity  = mutate(identity: true)
+
+    private
+      def mutate(opts)
+        DSLContext.new(@hash.merge(opts))
+      end
+    end
+
+    def dsl_to_spec(block)
+      intermediate = DSLContext.new.instance_eval(&block)
+      dsl_intermediate_to_spec(intermediate)
+    end
+
+    def dsl_intermediate_to_spec(intermediate)
+      columns = intermediate.each_with_object({}) do |(k, v), h|
+        h[k] = dsl_translate_intermediate_value(v)
+      end
+      { type: :relation, columns: }
+    end
+
+    def dsl_translate_intermediate_value(v)
+      case v
+      when DSLContext
+        v.hash
+      when Hash
+        dsl_intermediate_to_spec(v)
+      when Array
+        [dsl_intermediate_to_spec(v[0])]
+      else
+        raise Extralite::Error, 'Invalid transform spec'
+      end
+    end
   end
 end

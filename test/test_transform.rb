@@ -645,3 +645,98 @@ class TransformPreparedQueryTest < Minitest::Test
     assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
   end
 end
+
+class TransformDSLTest < Minitest::Test
+  def test_transform_dsl_many_to_many
+    t = Extralite::Transform.new do
+      {
+        id:       integer.identity,
+        title:    text,
+        content:  text,
+        tags:     [{
+          id:     integer.identity,
+          name:   text
+        }]
+      }
+    end
+
+    spec = {
+      columns: {
+        id: { type: :integer, identity: true },
+        title: { type: :text, },
+        content: { type: :text },
+        tags: [{
+          type: :relation,
+          columns: {
+            id: { type: :integer, identity: true },
+            name: { type: :text }
+          }
+        }]
+      }
+    }
+
+    assert_equal spec, t.to_h
+  end
+
+  def test_transform_dsl_many_to_many_auto_types
+    t = Extralite::Transform.new do
+      {
+        id:       integer.identity,
+        title:    auto,
+        content:  auto,
+        tags:     [{
+          id:     identity,
+          name:   text
+        }]
+      }
+    end
+
+    spec = {
+      columns: {
+        id: { type: :integer, identity: true },
+        title: {},
+        content: {},
+        tags: [{
+          type: :relation,
+          columns: {
+            id: { identity: true },
+            name: { type: :text }
+          }
+        }]
+      }
+    }
+
+    assert_equal spec, t.to_h
+  end
+
+  def test_transform_dsl_one_to_one
+    t = Extralite::Transform.new do
+      {
+        id:       integer.identity,
+        title:    auto,
+        content:  auto,
+        author:   {
+          id:     integer.identity,
+          name:   text
+        }
+      }
+    end
+
+    spec = {
+      columns: {
+        id: { type: :integer, identity: true },
+        title: {},
+        content: {},
+        author: {
+          type: :relation,
+          columns: {
+            id: { type: :integer, identity: true },
+            name: { type: :text }
+          }
+        }
+      }
+    }
+
+    assert_equal spec, t.to_h
+  end
+end

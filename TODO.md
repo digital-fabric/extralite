@@ -4,15 +4,17 @@
 
   ```ruby
   Extralite::Transform.new do
-    {
+    columns(
       id:       integer.identity,
       title:    text,
       content:  text,
       tags:     [{
-        id:     integer.identity,
-        name:   text
+        columns(
+          id:     integer.identity,
+          name:   text
+        )
       }]
-    }
+    )
   end
   ```
 
