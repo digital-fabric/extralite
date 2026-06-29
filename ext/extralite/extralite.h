@@ -92,6 +92,7 @@ typedef struct {
   int                 eof;
   int                 closed;
   int                 should_reset;
+  int                 transform_object;
   enum query_mode     query_mode;
 } Query_t;
 
@@ -218,6 +219,7 @@ VALUE safe_query_single_row_transform(query_ctx *ctx);
 VALUE Query_each(VALUE self);
 VALUE Query_next(int argc, VALUE *argv, VALUE self);
 VALUE Query_to_a(VALUE self);
+VALUE Query_transform_set(VALUE self, VALUE transform);
 
 void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
 void prepare_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);

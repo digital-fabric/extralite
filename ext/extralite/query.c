@@ -54,12 +54,11 @@ static const rb_data_type_t Query_type = {
 
 static VALUE Query_allocate(VALUE klass) {
   Query_t *query = ALLOC(Query_t);
+  memset(query, 0, sizeof(Query_t));
   query->db = Qnil;
   query->sql = Qnil;
   query->transform = Qnil;
   query->bound_params = Qnil;
-  query->sqlite3_db = NULL;
-  query->stmt = NULL;
   return TypedData_Wrap_Struct(klass, &Query_type, query);
 }
 
@@ -230,6 +229,11 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, safe_query_impl
 
   if (!query->stmt || query->should_reset) query_reset(query);
   if (query->eof) return rb_block_given_p() ? self : Qnil;
+
+  if (query->transform_object) {
+    max_rows = ALL_ROWS;
+    call = safe_query_transform;
+  }
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -566,27 +570,6 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
   return INT2NUM(value);
 }
 
-/* Sets the transform block to the given block. If a transform block is set,
- * calls to #to_a, #next, #each and #batch_query will transform values fetched
- * from the database using the transform block before passing them to the
- * application code. To remove the transform block, call `#transform`
- * without a block. The transform for each row is done by passing the row hash
- * to the block.
- *
- *     # fetch column c as an ORM object
- *     q = db.prepare('select * from foo order by a').transform do |h|
- *       MyModel.new(h)
- *     end
- *
- * @return [Extralite::Query] query
- */
-VALUE Query_transform(VALUE self) {
-  Query_t *query = self_to_query_verify(self);
-
-  RB_OBJ_WRITE(self, &query->transform, rb_block_given_p() ? rb_block_proc() : Qnil);
-  return self;
-}
-
 /* Returns a short string representation of the query instance, including the
  * SQL string.
  *
@@ -628,6 +611,43 @@ VALUE Query_mode_set(VALUE self, VALUE mode) {
   return mode;
 }
 
+VALUE Query_transform_get(VALUE self) {
+  Query_t *query = self_to_query_verify(self);
+  return query->transform;
+  // RB_OBJ_WRITE(self, &query->transform, rb_block_given_p() ? rb_block_proc() : Qnil);
+  // return self;
+}
+
+/*
+ * Sets the transform block to the given proc or transform object. If a
+ * transform is set, calls to #to_a, #next, #each and #batch_query will
+ * transform values fetched from the database using the transform before passing
+ * them to the application code. To remove the transform, call `#transform=`
+ * with a nil value.
+ *
+ *     # fetch column c as an ORM object
+ *     q = db.prepare('select * from foo').transform = ->(h) {
+ *       MyModel.new(h)
+ *     }
+ *
+ *     # use a custom transform
+ *     q = db.prepare('select id, name from foo').transform = Extralite::Transform.new(
+ *       columns: {
+ *         id: { type: integer, identity: true },
+ *         name: { type: :text }
+ *       }
+ *     )
+ *
+ * @param transform [Extralite::Transform, Proc, nil] transform or nil
+ * @return [Extralite::Query] query
+ */
+VALUE Query_transform_set(VALUE self, VALUE transform) {
+  Query_t *query = self_to_query(self);
+  query->transform = transform;
+  query->transform_object = rb_obj_is_instance_of(transform, cTransform);
+  return self;
+}
+
 void Init_ExtraliteQuery(void) {
   VALUE mExtralite = rb_define_module("Extralite");
 
@@ -657,7 +677,8 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "sql",            Query_sql, 0);
   rb_define_method(cQuery, "status",         Query_status, -1);
   rb_define_method(cQuery, "to_a",           Query_to_a, 0);
-  rb_define_method(cQuery, "transform",      Query_transform, 0);
+  rb_define_method(cQuery, "transform",      Query_transform_get, 0);
+  rb_define_method(cQuery, "transform=",     Query_transform_set, 1);
 
   ID_inspect  = rb_intern("inspect");
   ID_slice    = rb_intern("slice");

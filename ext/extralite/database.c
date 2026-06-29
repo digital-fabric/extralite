@@ -736,8 +736,17 @@ VALUE Database_load_extension(VALUE self, VALUE path) {
 static inline VALUE Database_prepare(int argc, VALUE *argv, VALUE self, VALUE mode) {
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
 
+  VALUE transform = Qnil;
+  if (argc > 1 && rb_obj_is_instance_of(argv[0], cTransform)) {
+    transform = argv[0];
+    argv++;
+    argc--;
+  }
+
   VALUE args[] = { self, argv[0], mode};
   VALUE query = rb_funcall_passing_block(cQuery, ID_new, 3, args);
+  if (!NIL_P(transform))
+    Query_transform_set(query, transform);
   if (argc > 1) rb_funcallv(query, ID_bind, argc - 1, argv + 1);
   RB_GC_GUARD(query);
   return query;
@@ -747,11 +756,14 @@ static inline VALUE Database_prepare(int argc, VALUE *argv, VALUE self, VALUE mo
  *   db.prepare(sql) -> query
  *   db.prepare(sql, *params) -> query
  *   db.prepare(sql, *params) { ... } -> query
+ *   db.prepare(transform, sql) -> query
+ *   db.prepare(transform, sql, *params) -> query
  *
  * Creates a prepared query with the given SQL query in hash mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
  *
+ * @param transform [Extralite::Transform] transform
  * @param sql [String] SQL statement
  * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query

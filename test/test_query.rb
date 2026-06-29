@@ -27,7 +27,7 @@ class QueryTest < Minitest::Test
   def test_mode
     query = @db.prepare('select 1')
     assert_equal :hash, query.mode
-    
+
     query.mode = :splat
     assert_equal :splat, query.mode
 
@@ -554,7 +554,7 @@ class QueryTest < Minitest::Test
   def test_query_execute_with_mixed_params
     @db.execute 'delete from t'
     q = @db.prepare('insert into t values (?, ?, ?)')
-    
+
     q.execute(1, [2], 3)
     q.execute([4, 5], 6)
     q.execute([7], 8, [9])
@@ -1014,7 +1014,7 @@ class QueryTransformTest < Minitest::Test
 
     @q1 = @db.prepare_splat('select c from t where a = ?')
     @q2 = @db.prepare_splat('select c from t order by a')
-    
+
     @q3 = @db.prepare('select * from t where a = ?')
     @q4 = @db.prepare('select * from t order by a')
 
@@ -1038,8 +1038,7 @@ class QueryTransformTest < Minitest::Test
   end
 
   def test_transform_hash
-    q = @q5.transform { |h| MyModel.new(h) }
-    assert_equal @q5, q
+    @q5.transform = ->(h) { MyModel.new(h) }
 
     o = @q5.bind(1).next
     assert_kind_of MyModel, o
@@ -1054,7 +1053,7 @@ class QueryTransformTest < Minitest::Test
       [{ a: 4, b: 5 }]
     ], @q5.batch_query([[1], [4]]).map { |a| a.map(&:values) }
 
-    @q6.transform { |h| MyModel.new(h) }
+    @q6.transform = ->(h) { MyModel.new(h) }
     assert_equal [
       { a: 1, b: 2 },
       { a: 4, b: 5 }
@@ -1070,8 +1069,7 @@ class QueryTransformTest < Minitest::Test
 
   def test_transform_array
     @q5.mode = :array
-    q = @q5.transform { |h| MyModel.new(h) }
-    assert_equal @q5, q
+    @q5.transform = ->(h) { MyModel.new(h) }
 
     o = @q5.bind(1).next
     assert_kind_of MyModel, o
@@ -1087,7 +1085,7 @@ class QueryTransformTest < Minitest::Test
     ], @q5.batch_query([[1], [4]]).map { |a| a.map(&:values) }
 
     @q6.mode = :array
-    @q6.transform { |h| MyModel.new(h) }
+    @q6.transform = ->(h) { MyModel.new(h) }
     assert_equal [
       [1, 2],
       [4, 5]
@@ -1102,8 +1100,7 @@ class QueryTransformTest < Minitest::Test
   end
 
   def test_transform_splat_single_column
-    q = @q1.transform { |c| JSON.parse(c, symbolize_names: true) }
-    assert_equal @q1, q
+    @q1.transform = ->(c) { JSON.parse(c, symbolize_names: true) }
 
     assert_equal({ foo: 42, bar: 43 }, @q1.bind(1).next)
     assert_equal({ foo: 45, bar: 46 }, @q1.bind(4).next)
@@ -1113,7 +1110,7 @@ class QueryTransformTest < Minitest::Test
       [{ foo: 45, bar: 46 }]
     ], @q1.batch_query([[1], [4]])
 
-    @q2.transform { |c| JSON.parse(c, symbolize_names: true) }
+    @q2.transform = ->(c) { JSON.parse(c, symbolize_names: true) }
     assert_equal [
       { foo: 42, bar: 43 },
       { foo: 45, bar: 46 }
@@ -1129,8 +1126,7 @@ class QueryTransformTest < Minitest::Test
 
   def test_transform_splat_multi_column
     @q3.mode = :splat
-    q = @q3.transform { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
-    assert_equal @q3, q
+    @q3.transform = ->(a, b, c) { { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
 
     assert_equal({ a: 1, b: 2, c: { foo: 42, bar: 43 }}, @q3.bind(1).next)
     assert_equal({ a: 4, b: 5, c: { foo: 45, bar: 46 }}, @q3.bind(4).next)
@@ -1141,7 +1137,7 @@ class QueryTransformTest < Minitest::Test
     ], @q3.batch_query([[1], [4]])
 
     @q4.mode = :splat
-    @q4.transform { |a, b, c| { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
+    @q4.transform = ->(a, b, c) { { a: a, b: b, c: JSON.parse(c, symbolize_names: true) } }
     assert_equal [
       { a: 1, b: 2, c: { foo: 42, bar: 43 }},
       { a: 4, b: 5, c: { foo: 45, bar: 46 }}

@@ -39,7 +39,7 @@ class TransformOneToOneTest < Minitest::Test
       order by posts.id
     SQL
 
-    @transform = {
+    @spec = {
       columns: {
         id:       { identity: true },
         title:    {},
@@ -56,12 +56,12 @@ class TransformOneToOneTest < Minitest::Test
   end
 
   def test_transform_one_to_one_to_h
-    t = Extralite::Transform.new(@transform)
-    assert_equal @transform, t.to_h
+    t = Extralite::Transform.new(@spec)
+    assert_equal @spec, t.to_h
   end
 
   def test_transform_one_to_one_query
-    t = Extralite::Transform.new(@transform)
+    t = Extralite::Transform.new(@spec)
     result = @db.query(t, @sql)
     assert_kind_of Array, result
     assert_equal 4, result.size
@@ -86,7 +86,7 @@ class TransformOneToOneTest < Minitest::Test
   end
 
   def test_transform_one_to_one_query_with_block
-    t = Extralite::Transform.new(@transform)
+    t = Extralite::Transform.new(@spec)
     result = []
     ret = @db.query(t, @sql) { result << it }
     assert_equal @db, ret
@@ -147,7 +147,7 @@ class TransformOneToManyTest < Minitest::Test
       order by posts.id, comments.id
     SQL
 
-    @transform = {
+    @spec = {
       columns: {
         id:       { identity: true},
         title:    {},
@@ -164,12 +164,12 @@ class TransformOneToManyTest < Minitest::Test
   end
 
   def test_transform_one_to_many_to_h
-    t = Extralite::Transform.new(@transform)
-    assert_equal @transform, t.to_h
+    t = Extralite::Transform.new(@spec)
+    assert_equal @spec, t.to_h
   end
 
   def test_transform_one_to_many_query
-    t = Extralite::Transform.new(@transform)
+    t = Extralite::Transform.new(@spec)
     result = @db.query(t, @sql)
     assert_kind_of Array, result
     assert_equal 2, result.size
@@ -191,7 +191,7 @@ class TransformOneToManyTest < Minitest::Test
   end
 
   def test_transform_one_to_many_query_with_block
-    t = Extralite::Transform.new(@transform)
+    t = Extralite::Transform.new(@spec)
     result = []
     ret = @db.query(t, @sql) { result << it }
     assert_equal @db,  ret
@@ -256,7 +256,7 @@ class TransformManyToManyTest < Minitest::Test
       order by posts.id, tags.id
     SQL
 
-    @transform = {
+    @spec = {
       columns: {
         id: { identity: true },
         title: {},
@@ -273,12 +273,12 @@ class TransformManyToManyTest < Minitest::Test
   end
 
   def test_transform_many_to_many_to_h
-    t = Extralite::Transform.new(@transform)
-    assert_equal @transform, t.to_h
+    t = Extralite::Transform.new(@spec)
+    assert_equal @spec, t.to_h
   end
 
   def test_transform_many_to_many_query
-    t = Extralite::Transform.new(@transform)
+    t = Extralite::Transform.new(@spec)
     result = @db.query(t, @sql)
     assert_kind_of Array, result
     assert_equal 2, result.size
@@ -300,7 +300,7 @@ class TransformManyToManyTest < Minitest::Test
   end
 
   def test_transform_many_to_many_query_with_block
-    t = Extralite::Transform.new(@transform)
+    t = Extralite::Transform.new(@spec)
     result = []
     ret = @db.query(t, @sql) { result << it }
     assert_equal @db,  ret
@@ -324,7 +324,7 @@ class TransformManyToManyTest < Minitest::Test
   end
 
   def test_transform_many_to_many_query_single
-    t = Extralite::Transform.new(@transform)
+    t = Extralite::Transform.new(@spec)
     result = @db.query_single(t, @sql)
 
     assert_equal 'T1', result[:title]
@@ -544,6 +544,88 @@ class TransformTypesTest < Minitest::Test
 
     t = Extralite::Transform.new(spec)
     result = @db.query(t, sql)
+    assert_kind_of Array, result
+    assert_equal 2, result.size
+
+    assert_equal 'T1', result[0][:title]
+    assert_equal 'C1', result[0][:content]
+    assert_equal [
+      { id: 1, name: 'tag1' },
+      { id: 2, name: 'tag2' }
+    ], result[0][:tags]
+
+    assert_equal 'T2', result[1][:title]
+    assert_equal 'C2', result[1][:content]
+    assert_equal [
+      { id: 2, name: 'tag2' },
+      { id: 3, name: 'tag3' },
+    ], result[1][:tags]
+    assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
+  end
+end
+
+class TransformPreparedQueryTest < Minitest::Test
+  def setup
+    @db = Extralite::Database.new(':memory:')
+    @db.pragma('foreign_keys' => 1)
+    @db.execute <<~SQL
+      create table posts (
+        id integer primary key,
+        title text,
+        content text
+      );
+      create table tags (
+        id integer primary key,
+        name text
+      );
+      create table posts_tags (
+        post_id integer references posts(id) on delete cascade,
+        tag_id integer references tags(id) on delete cascade
+      );
+
+      insert into posts (title, content) values ('T1', 'C1');
+      insert into posts (title, content) values ('T2', 'C2');
+      insert into tags (name) values ('tag1');
+      insert into tags (name) values ('tag2');
+      insert into tags (name) values ('tag3');
+
+      insert into posts_tags(post_id, tag_id) values (1, 1);
+      insert into posts_tags(post_id, tag_id) values (1, 2);
+      insert into posts_tags(post_id, tag_id) values (2, 2);
+      insert into posts_tags(post_id, tag_id) values (2, 3);
+    SQL
+
+    @sql = <<~SQL
+      select
+        posts.id, posts.title, posts.content,
+        tags.id, tags.name
+      from posts
+      left outer join posts_tags on posts_tags.post_id = posts.id
+      left outer join tags on posts_tags.tag_id = tags.id
+      order by posts.id, tags.id
+    SQL
+
+    @spec = {
+      columns: {
+        id: { identity: true },
+        title: {},
+        content: {},
+        tags: [{
+          type: :relation,
+          columns: {
+            id: { identity: true },
+            name: {}
+          }
+        }]
+      }
+    }
+  end
+
+  def test_transform_prepared_query
+    t = Extralite::Transform.new(@spec)
+    q = @db.prepare(t, @sql)
+
+    result = q.to_a
     assert_kind_of Array, result
     assert_equal 2, result.size
 
