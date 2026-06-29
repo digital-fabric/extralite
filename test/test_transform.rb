@@ -192,4 +192,28 @@ class TransformOneToManyTest < Minitest::Test
       { id: 5, content: 'comment 5' }
     ], result[1][:comments]
   end
+
+  def test_transform_one_to_many_query_with_block
+    t = Extralite::Transform.new(@transform)
+    result = []
+    ret = @db.query(t, @sql) { result << it }
+    assert_equal @db,  ret
+    assert_kind_of Array, result
+    assert_equal 2, result.size
+
+    assert_equal 'T1', result[0][:title]
+    assert_equal 'C1', result[0][:content]
+    assert_equal [
+      { id: 1, content: 'comment 1' },
+      { id: 2, content: 'comment 2' }
+    ], result[0][:comments]
+
+    assert_equal 'T2', result[1][:title]
+    assert_equal 'C2', result[1][:content]
+    assert_equal [
+      { id: 3, content: 'comment 3' },
+      { id: 4, content: 'comment 4' },
+      { id: 5, content: 'comment 5' }
+    ], result[1][:comments]
+  end
 end

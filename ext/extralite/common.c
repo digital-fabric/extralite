@@ -463,7 +463,7 @@ VALUE run_transform_container(
 }
 
 VALUE safe_query_transform(query_ctx *ctx) {
-  VALUE array = ROW_MULTI_P(ctx->row_mode) ? rb_ary_new() : Qnil;
+  VALUE array = rb_ary_new();
   VALUE identity_storage = rb_hash_new();
   VALUE row = Qnil;
   // int column_count = sqlite3_column_count(ctx->stmt);
@@ -474,24 +474,24 @@ VALUE safe_query_transform(query_ctx *ctx) {
     row_count++;
     row = run_transform_container(identity_storage, transform_root, ctx->stmt);
     if (!NIL_P(row)) {
-      switch (ctx->row_mode) {
-        case ROW_YIELD:
-        rb_yield(row);
-        break;
-        case ROW_MULTI:
-        rb_ary_push(array, row);
-        break;
-        case ROW_SINGLE:
-        return row;
-      }
+      rb_ary_push(array, row);
       if (ctx->max_rows != ALL_ROWS && row_count >= ctx->max_rows)
         goto done;
     }
   }
 
 done:
-  return ROW_MULTI_P(ctx->row_mode) ? array : ctx->self;
+  switch (ctx->row_mode) {
+    case ROW_YIELD:
+      rb_ary_each(array);
+      return ctx->self;
+    case ROW_MULTI:
+      return array;
+    case ROW_SINGLE:
+      return rb_ary_entry(array, 0);
+  }
 
+  return Qnil;
   RB_GC_GUARD(identity_storage);
   RB_GC_GUARD(row);
   RB_GC_GUARD(array);
