@@ -15,7 +15,7 @@ static size_t Transform_size(const void *ptr) {
 }
 
 static inline void transform_node_mark(struct transform_node *node) {
-  if (node->flags & TRANSFORM_NAME)
+  if (node->flags & TRANSFORM_F_NAME)
     rb_gc_mark_movable(node->name);
 
   struct transform_node *cur = node->subnodes_head;
@@ -33,7 +33,7 @@ static void Transform_mark(void *ptr) {
 }
 
 static inline void transform_node_compact(struct transform_node *node) {
-  if (node->flags & TRANSFORM_NAME)
+  if (node->flags & TRANSFORM_F_NAME)
     node->name = rb_gc_location(node->name);
 
   struct transform_node *cur = node->subnodes_head;
@@ -99,7 +99,7 @@ struct transform_node *compile_transform_column(VALUE col, int *col_counter) {
   switch (TYPE(col)) {
     case T_SYMBOL: {
       struct transform_node *node = allocate_transform_node();
-      node->flags |= TRANSFORM_NAME;
+      node->flags |= TRANSFORM_F_NAME;
       node->idx = *col_counter;
       node->name = col;
       (*col_counter)++;
@@ -115,10 +115,10 @@ struct transform_node *compile_transform_column(VALUE col, int *col_counter) {
 
 struct transform_node *compile_transform_container(VALUE spec, int *col_counter) {
   struct transform_node *node = allocate_transform_node();
-  node->flags = TRANSFORM_CONTAINER;
+  node->flags = TRANSFORM_F_CONTAINER;
 
   if (TYPE(spec) == T_ARRAY) {
-    node->flags |= TRANSFORM_ARRAY;
+    node->flags |= TRANSFORM_F_ARRAY;
     spec = rb_ary_entry(spec, 0);
   }
 
@@ -127,7 +127,7 @@ struct transform_node *compile_transform_container(VALUE spec, int *col_counter)
 
   val = rb_hash_aref(spec, SYM_name);
   if (!NIL_P(val)) {
-    node->flags |= TRANSFORM_NAME;
+    node->flags |= TRANSFORM_F_NAME;
     node->name = val;
   }
 
@@ -143,7 +143,7 @@ struct transform_node *compile_transform_container(VALUE spec, int *col_counter)
     if (col_idx == identity_idx) {
       node->identity_node = col_node;
       node->identity_idx = col_idx;
-      col_node->flags |= TRANSFORM_IDENTITY;
+      col_node->flags |= TRANSFORM_F_IDENTITY;
     }
 
     if (node->subnodes_tail) {
@@ -166,11 +166,11 @@ VALUE Transform_initialize(VALUE self, VALUE spec) {
 }
 
 VALUE transform_node_to_obj(struct transform_node *node) {
-  if (node->flags & TRANSFORM_CONTAINER) {
+  if (node->flags & TRANSFORM_F_CONTAINER) {
     VALUE hash = rb_hash_new();
     VALUE cols = rb_ary_new();
 
-    if (node->flags & TRANSFORM_NAME)
+    if (node->flags & TRANSFORM_F_NAME)
       rb_hash_aset(hash, SYM_name, node->name);
 
     rb_hash_aset(hash, SYM_columns, cols);
@@ -188,7 +188,7 @@ VALUE transform_node_to_obj(struct transform_node *node) {
       cur = next;
     }
 
-    if (node->flags & TRANSFORM_ARRAY) {
+    if (node->flags & TRANSFORM_F_ARRAY) {
       VALUE array = rb_ary_new();
       rb_ary_push(array, hash);
       return array;

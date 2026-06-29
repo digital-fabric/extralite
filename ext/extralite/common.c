@@ -367,7 +367,7 @@ VALUE cleanup_stmt(query_ctx *ctx) {
 }
 
 static inline void add_transform_container_obj(VALUE row, struct transform_node *col, VALUE obj) {
-  if (col->flags & TRANSFORM_ARRAY) {
+  if (col->flags & TRANSFORM_F_ARRAY) {
     VALUE array = rb_hash_aref(row, col->name);
     if (NIL_P(array)) {
       array = rb_ary_new();
@@ -402,13 +402,13 @@ VALUE run_transform_with_identity(
   if (!NIL_P(row)) {
     struct transform_node *col = node->subnodes_head;
     while (col) {
-      if (col->flags & TRANSFORM_CONTAINER) {
+      if (col->flags & TRANSFORM_F_CONTAINER) {
         VALUE obj = run_transform(identity_storage, col, stmt);
         if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
       }
       col = col->next;
     }
-    return (node->flags & TRANSFORM_NAME) ? row : Qnil;
+    return (node->flags & TRANSFORM_F_NAME) ? row : Qnil;
   }
   else {
     // not found in identity map
@@ -419,7 +419,7 @@ VALUE run_transform_with_identity(
         rb_hash_aset(row, col->name, identity_value);
         rb_hash_aset(identity_map, identity_value, row);
       }
-      else if (col->flags & TRANSFORM_CONTAINER) {
+      else if (col->flags & TRANSFORM_F_CONTAINER) {
         VALUE obj = run_transform(identity_storage, col, stmt);
         if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
       }
@@ -445,7 +445,7 @@ VALUE run_transform_no_identity(
   VALUE row = rb_hash_new();
   struct transform_node *col = node->subnodes_head;
   while (col) {
-    if (col->flags & TRANSFORM_CONTAINER) {
+    if (col->flags & TRANSFORM_F_CONTAINER) {
       VALUE obj = run_transform(identity_storage, col, stmt);
       if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
     }
@@ -466,7 +466,7 @@ static inline VALUE run_transform(
   VALUE identity_storage, struct transform_node *node, sqlite3_stmt *stmt
 ) {
   // fprintf(stdout, "transform_container: %p flags: %02x identity_idx: %d\n", node, node->flags, node->identity_idx);
-  // if (node->flags & TRANSFORM_NAME) INSPECT("  name", node->name);
+  // if (node->flags & TRANSFORM_F_NAME) INSPECT("  name", node->name);
   if (node->identity_node) {
     return run_transform_with_identity(identity_storage, node, stmt);
   }
