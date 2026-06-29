@@ -62,8 +62,6 @@ class TransformOneToOneTest < Minitest::Test
   def test_transform_one_to_one_query
     t = Extralite::Transform.new(@transform)
     result = @db.query(t, @sql)
-    puts '*' * 40
-    pp result
     assert_kind_of Array, result
     assert_equal 4, result.size
 
@@ -171,9 +169,6 @@ class TransformOneToManyTest < Minitest::Test
   def test_transform_one_to_many_query
     t = Extralite::Transform.new(@transform)
     result = @db.query(t, @sql)
-    puts '*' * 40
-    pp result
-    puts
     assert_kind_of Array, result
     assert_equal 2, result.size
 

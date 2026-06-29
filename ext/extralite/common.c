@@ -380,71 +380,47 @@ static inline void add_transform_container_obj(VALUE row, struct transform_node 
     rb_hash_aset(row, col->name, obj);
 }
 
-VALUE run_transform_container(
-  VALUE identity_storage, struct transform_node *node,
-  sqlite3_stmt *stmt
+static VALUE run_transform(VALUE identity_storage, struct transform_node *node, sqlite3_stmt *stmt);
+
+VALUE run_transform_with_identity(
+  VALUE identity_storage, struct transform_node *node, sqlite3_stmt *stmt
 ) {
-  // fprintf(stdout, "transform_container: %p flags: %02x identity_idx: %d\n", node, node->flags, node->identity_idx);
-  // if (node->flags & TRANSFORM_NAME) INSPECT("  name", node->name);
   VALUE row = Qnil;
   VALUE identity_map = Qnil;
-  if (node->identity_node) {
-    // identity mode
-    VALUE identity_value = get_column_value(
-      stmt, node->identity_idx, sqlite3_column_type(stmt, node->identity_idx)
-    );
-    VALUE identity_map_key = ULONG2NUM((uint64_t)node);
-    identity_map = rb_hash_aref(identity_storage, identity_map_key);
 
-    if (NIL_P(identity_map)) {
-      identity_map = rb_hash_new();
-      rb_hash_aset(identity_storage, identity_map_key, identity_map);
-    }
-    row = rb_hash_aref(identity_map, identity_value);
-    if (!NIL_P(row)) {
-      struct transform_node *col = node->subnodes_head;
-      while (col) {
-        if (col->flags & TRANSFORM_CONTAINER) {
-          VALUE obj = run_transform_container(identity_storage, col, stmt);
-          if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
-        }
-        col = col->next;
-      }
-      return (node->flags & TRANSFORM_NAME) ? row : Qnil;
-    }
-    else {
-      // not found in identity map
-      row = rb_hash_new();
-      struct transform_node *col = node->subnodes_head;
-      while (col) {
-        if (col == node->identity_node) {
-          rb_hash_aset(row, col->name, identity_value);
-          rb_hash_aset(identity_map, identity_value, row);
-        }
-        else if (col->flags & TRANSFORM_CONTAINER) {
-          VALUE obj = run_transform_container(identity_storage, col, stmt);
-          if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
-        }
-        else {
-          VALUE value = get_column_value(
-            stmt, col->idx, sqlite3_column_type(stmt, col->idx)
-          );
-          rb_hash_aset(row, col->name, value);
-          RB_GC_GUARD(value);
-        }
-        col = col->next;
-      }
-      return row;
-    }
+  VALUE identity_value = get_column_value(
+    stmt, node->identity_idx, sqlite3_column_type(stmt, node->identity_idx)
+  );
+  VALUE identity_map_key = ULONG2NUM((uint64_t)node);
+  identity_map = rb_hash_aref(identity_storage, identity_map_key);
 
+  if (NIL_P(identity_map)) {
+    identity_map = rb_hash_new();
+    rb_hash_aset(identity_storage, identity_map_key, identity_map);
   }
-  else {
-    // no identity
-    row = rb_hash_new();
+  row = rb_hash_aref(identity_map, identity_value);
+  if (!NIL_P(row)) {
     struct transform_node *col = node->subnodes_head;
     while (col) {
       if (col->flags & TRANSFORM_CONTAINER) {
-        VALUE obj = run_transform_container(identity_storage, col, stmt);
+        VALUE obj = run_transform(identity_storage, col, stmt);
+        if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
+      }
+      col = col->next;
+    }
+    return (node->flags & TRANSFORM_NAME) ? row : Qnil;
+  }
+  else {
+    // not found in identity map
+    row = rb_hash_new();
+    struct transform_node *col = node->subnodes_head;
+    while (col) {
+      if (col == node->identity_node) {
+        rb_hash_aset(row, col->name, identity_value);
+        rb_hash_aset(identity_map, identity_value, row);
+      }
+      else if (col->flags & TRANSFORM_CONTAINER) {
+        VALUE obj = run_transform(identity_storage, col, stmt);
         if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
       }
       else {
@@ -458,8 +434,45 @@ VALUE run_transform_container(
     }
     return row;
   }
-  RB_GC_GUARD(row);
+
   RB_GC_GUARD(identity_map);
+  RB_GC_GUARD(row);
+}
+
+VALUE run_transform_no_identity(
+  VALUE identity_storage, struct transform_node *node, sqlite3_stmt *stmt
+) {
+  VALUE row = rb_hash_new();
+  struct transform_node *col = node->subnodes_head;
+  while (col) {
+    if (col->flags & TRANSFORM_CONTAINER) {
+      VALUE obj = run_transform(identity_storage, col, stmt);
+      if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
+    }
+    else {
+      VALUE value = get_column_value(
+        stmt, col->idx, sqlite3_column_type(stmt, col->idx)
+      );
+      rb_hash_aset(row, col->name, value);
+      RB_GC_GUARD(value);
+    }
+    col = col->next;
+  }
+  return row;
+  RB_GC_GUARD(row);
+}
+
+static inline VALUE run_transform(
+  VALUE identity_storage, struct transform_node *node, sqlite3_stmt *stmt
+) {
+  // fprintf(stdout, "transform_container: %p flags: %02x identity_idx: %d\n", node, node->flags, node->identity_idx);
+  // if (node->flags & TRANSFORM_NAME) INSPECT("  name", node->name);
+  if (node->identity_node) {
+    return run_transform_with_identity(identity_storage, node, stmt);
+  }
+  else {
+    return run_transform_no_identity(identity_storage, node, stmt);
+  }
 }
 
 VALUE safe_query_transform(query_ctx *ctx) {
@@ -472,7 +485,7 @@ VALUE safe_query_transform(query_ctx *ctx) {
   int row_count = 0;
   while (stmt_iterate(ctx)) {
     row_count++;
-    row = run_transform_container(identity_storage, transform_root, ctx->stmt);
+    row = run_transform(identity_storage, transform_root, ctx->stmt);
     if (!NIL_P(row)) {
       rb_ary_push(array, row);
       if (ctx->max_rows != ALL_ROWS && row_count >= ctx->max_rows)
