@@ -276,12 +276,8 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   VALUE sql = Qnil;
   VALUE transform = Qnil;
   // transform mode is set and the first parameter is not a string, so we expect
-  // a transform.
+  // a transform.,
   int got_transform = (TYPE(argv[0]) != T_STRING);
-
-  if (got_transform && rb_obj_is_instance_of(argv[0], cTransform)) {
-    call = safe_query_transform;
-  }
 
   // extract query from args
   rb_check_arity(argc, got_transform ? 2 : 1, UNLIMITED_ARGUMENTS);
@@ -343,7 +339,11 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
  *   @return [Array<Hash>, Integer] rows or total changes
  */
 VALUE Database_query(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_hash, QUERY_HASH);
+  int got_transform = (argc > 1) && (TYPE(argv[0]) != T_STRING);
+  if (got_transform && rb_obj_is_instance_of(argv[0], cTransform))
+    return Database_perform_query(argc, argv, self, safe_query_transform, QUERY_HASH);
+  else
+    return Database_perform_query(argc, argv, self, safe_query_hash, QUERY_HASH);
 }
 
 /* Runs a query and transforms rows through the given transform poc. Each row is
@@ -422,7 +422,11 @@ VALUE Database_query_array(int argc, VALUE *argv, VALUE self) {
  *   @return [Array, any] row
  */
 VALUE Database_query_single(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_single_row_hash, QUERY_HASH);
+  int got_transform = (argc > 1) && (TYPE(argv[0]) != T_STRING);
+  if (got_transform && rb_obj_is_instance_of(argv[0], cTransform))
+    return Database_perform_query(argc, argv, self, safe_query_single_row_transform, QUERY_HASH);
+  else
+    return Database_perform_query(argc, argv, self, safe_query_single_row_hash, QUERY_HASH);
 }
 
 /* Runs a query returning a single row as an array or a single value.

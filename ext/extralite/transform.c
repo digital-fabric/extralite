@@ -73,6 +73,7 @@ static const rb_data_type_t Transform_type = {
 
 static VALUE Transform_allocate(VALUE klass) {
   Transform_t *t = ALLOC(Transform_t);
+  t->root = NULL;
   return TypedData_Wrap_Struct(klass, &Transform_type, t);
 }
 
@@ -131,6 +132,9 @@ struct transform_node *compile_transform_container(VALUE spec, int *col_counter)
   }
 
   val = rb_hash_aref(spec, SYM_columns);
+  if (NIL_P(val))
+    rb_raise(cError, "Invalid transform spec");
+
   int len = RARRAY_LEN(val);
   for (int i = 0; i < len; i++) {
     VALUE col = rb_ary_entry(val, i);

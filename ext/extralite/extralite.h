@@ -197,6 +197,7 @@ VALUE safe_query_transform(query_ctx *ctx);
 VALUE safe_query_single_row_hash(query_ctx *ctx);
 VALUE safe_query_single_row_splat(query_ctx *ctx);
 VALUE safe_query_single_row_array(query_ctx *ctx);
+VALUE safe_query_single_row_transform(query_ctx *ctx);
 
 VALUE Query_each(VALUE self);
 VALUE Query_next(int argc, VALUE *argv, VALUE self);

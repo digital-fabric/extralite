@@ -510,6 +510,36 @@ done:
   RB_GC_GUARD(array);
 }
 
+VALUE safe_query_single_row_transform(query_ctx *ctx) {
+  VALUE array = rb_ary_new();
+  VALUE identity_storage = rb_hash_new();
+  VALUE row = Qnil;
+  // int column_count = sqlite3_column_count(ctx->stmt);
+  struct transform_node *transform_root = get_transform_root(ctx->transform);
+
+  int row_count = 0;
+  while (stmt_iterate(ctx)) {
+    row_count++;
+    row = run_transform(identity_storage, transform_root, ctx->stmt);
+    if (!NIL_P(row)) { rb_ary_push(array, row); }
+  }
+
+  row = rb_ary_entry(array, 0);
+  switch (ctx->row_mode) {
+    case ROW_YIELD:
+      rb_yield(row);
+      return ctx->self;
+    case ROW_MULTI:
+    case ROW_SINGLE:
+      return row;
+  }
+
+  return Qnil;
+  RB_GC_GUARD(identity_storage);
+  RB_GC_GUARD(row);
+  RB_GC_GUARD(array);
+}
+
 VALUE safe_query_splat(query_ctx *ctx);
 
 VALUE safe_query_hash(query_ctx *ctx) {

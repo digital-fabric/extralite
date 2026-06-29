@@ -319,4 +319,35 @@ class TransformManyToManyTest < Minitest::Test
     ], result[1][:tags]
     assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
   end
+
+  def test_transform_many_to_many_query_single
+    t = Extralite::Transform.new(@transform)
+    result = @db.query_single(t, @sql)
+
+    assert_equal 'T1', result[:title]
+    assert_equal 'C1', result[:content]
+    assert_equal [
+      { id: 1, name: 'tag1' },
+      { id: 2, name: 'tag2' }
+    ], result[:tags]
+  end
+end
+
+class TransformErrorTest < Minitest::Test
+  def test_transform_bad_spec
+    spec = {
+      identity_idx: 0,
+      columnss: [
+        :id,
+        :title,
+        :content,
+        {
+          name: :author,
+          identity_idx: 3,
+          columns: [:id, :name]
+        }
+      ]
+    }
+    assert_raises(Extralite::Error) { Extralite::Transform.new(spec) }
+  end
 end
