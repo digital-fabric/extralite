@@ -40,17 +40,18 @@ class TransformOneToOneTest < Minitest::Test
     SQL
 
     @transform = {
-      identity_idx: 0,
-      columns: [
-        :id,
-        :title,
-        :content,
-        {
-          name: :author,
-          identity_idx: 3,
-          columns: [:id, :name]
+      columns: {
+        id:       { identity: true },
+        title:    {},
+        content:  {},
+        author:   {
+          type:     :relation,
+          columns:  {
+            id:   { identity: true },
+            name: {}
+          }
         }
-      ]
+      }
     }
   end
 
@@ -147,17 +148,18 @@ class TransformOneToManyTest < Minitest::Test
     SQL
 
     @transform = {
-      identity_idx: 0,
-      columns: [
-        :id,
-        :title,
-        :content,
-        [{
-          name: :comments,
-          identity_idx: 3,
-          columns: [:id, :content]
+      columns: {
+        id:       { identity: true},
+        title:    {},
+        content:  {},
+        comments: [{
+          type: :relation,
+          columns: {
+            id:       { identity: true },
+            content:  {}
+          }
         }]
-      ]
+      }
     }
   end
 
@@ -255,17 +257,18 @@ class TransformManyToManyTest < Minitest::Test
     SQL
 
     @transform = {
-      identity_idx: 0,
-      columns: [
-        :id,
-        :title,
-        :content,
-        [{
-          name: :tags,
-          identity_idx: 3,
-          columns: [:id, :name]
+      columns: {
+        id: { identity: true },
+        title: {},
+        content: {},
+        tags: [{
+          type: :relation,
+          columns: {
+            id: { identity: true },
+            name: {}
+          }
         }]
-      ]
+      }
     }
   end
 
@@ -336,7 +339,6 @@ end
 class TransformErrorTest < Minitest::Test
   def test_transform_bad_spec
     spec = {
-      identity_idx: 0,
       columnss: [
         :id,
         :title,
@@ -349,5 +351,61 @@ class TransformErrorTest < Minitest::Test
       ]
     }
     assert_raises(Extralite::Error) { Extralite::Transform.new(spec) }
+  end
+end
+
+class TransformTypesTest < Minitest::Test
+  def setup
+    @db = Extralite::Database.new(':memory:')
+    @db.pragma('foreign_keys' => 1)
+  end
+
+  def test_transform_types_to_h
+    spec = {
+      columns: {
+        id:       { type: :integer, identity: true },
+        title:    { type: :text },
+        content:  { type: :text },
+        tags:     [{
+          type: :relation,
+          columns: {
+            id:   { type: :integer, identity: true },
+            name: { type: :text }
+          }
+        }]
+      }
+      #   { name: :x, type: :integer },
+      #   { name: :y, type: :integer }
+      # ]
+    }
+
+
+    # spec = {
+    #   identity_idx: 0,
+    #   columns: {
+
+    #   }
+    #     { name: :x, type: :integer },
+    #     { name: :y, type: :integer }
+    #   ]
+    # }
+    t = Extralite::Transform.new(spec)
+    assert_equal spec, t.to_h
+  end
+
+  def test_transform_types
+    skip
+    t = Extralite::Transform.new(
+      columns: {
+        x: { type: :integer },
+        y: { type: :integer }
+      }
+    )
+    result = @db.query(t, <<~SQL)
+      select 'foo', '42'
+    SQL
+    assert_equal [
+      {x: 0, y: 42}
+    ], result
   end
 end

@@ -402,7 +402,7 @@ VALUE run_transform_with_identity(
   if (!NIL_P(row)) {
     struct transform_node *col = node->subnodes_head;
     while (col) {
-      if (col->flags & TRANSFORM_F_CONTAINER) {
+      if (col->type == TRANSFORM_T_RELATION) {
         VALUE obj = run_transform(identity_storage, col, stmt);
         if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
       }
@@ -419,7 +419,7 @@ VALUE run_transform_with_identity(
         rb_hash_aset(row, col->name, identity_value);
         rb_hash_aset(identity_map, identity_value, row);
       }
-      else if (col->flags & TRANSFORM_F_CONTAINER) {
+      else if (col->type == TRANSFORM_T_RELATION) {
         VALUE obj = run_transform(identity_storage, col, stmt);
         if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
       }
@@ -445,7 +445,7 @@ VALUE run_transform_no_identity(
   VALUE row = rb_hash_new();
   struct transform_node *col = node->subnodes_head;
   while (col) {
-    if (col->flags & TRANSFORM_F_CONTAINER) {
+    if (col->type == TRANSFORM_T_RELATION) {
       VALUE obj = run_transform(identity_storage, col, stmt);
       if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
     }

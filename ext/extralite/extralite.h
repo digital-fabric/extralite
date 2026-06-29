@@ -104,25 +104,29 @@ typedef struct {
 } Changeset_t;
 #endif
 
-#define TRANSFORM_F_CONTAINER (1 << 0) // node is a container
-#define TRANSFORM_F_ARRAY     (1 << 1) // node is an array container
-#define TRANSFORM_F_IDENTITY  (1 << 2) // node is an identity column
-#define TRANSFORM_F_NAME      (1 << 3) // node has a name VALUE
+// #define TRANSFORM_F_CONTAINER (1 << 0) // node is a container
+#define TRANSFORM_F_ARRAY     (1 << 0) // node is an array container
+#define TRANSFORM_F_IDENTITY  (1 << 1) // node is an identity column
+#define TRANSFORM_F_NAME      (1 << 2) // node has a name VALUE
 
-enum transform_type {
+enum transform_node_type {
   TRANSFORM_T_AUTO,
-  TRANSFORM_T_INT,
+  TRANSFORM_T_INTEGER,
   TRANSFORM_T_FLOAT,
   TRANSFORM_T_TEXT,
   TRANSFORM_T_BOOL,
   TRANSFORM_T_JSON,
-  TRANSFORM_T_PROC
+  TRANSFORM_T_PROC,
+  TRANSFORM_T_RELATION
 };
 
 struct transform_node {
+  enum transform_node_type type;
   unsigned short flags;
   unsigned short idx; // column index
+
   VALUE name;
+  VALUE conversion_proc;
 
   unsigned short identity_idx; // identity column index
   struct transform_node *identity_node;
