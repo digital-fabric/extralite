@@ -238,7 +238,7 @@ VALUE Database_read_only_p(VALUE self) {
 }
 
 /* Closes the database.
- * 
+ *
  * @return [Extralite::Database] database
  */
 VALUE Database_close(VALUE self) {
@@ -278,7 +278,11 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   // transform mode is set and the first parameter is not a string, so we expect
   // a transform.
   int got_transform = (TYPE(argv[0]) != T_STRING);
-  
+
+  if (got_transform && rb_obj_is_instance_of(argv[0], cTransform)) {
+    call = safe_query_transform;
+  }
+
   // extract query from args
   rb_check_arity(argc, got_transform ? 2 : 1, UNLIMITED_ARGUMENTS);
 
@@ -329,7 +333,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
  * specified using keyword arguments:
  *
  *     db.query('select * from foo where x = :bar', bar: 42)
- * 
+ *
  * @overload query(sql, ...)
  *   @param sql [String] SQL statement
  *   @return [Array<Hash>, Integer] rows or total changes
@@ -382,7 +386,7 @@ VALUE Database_query_splat(int argc, VALUE *argv, VALUE self) {
  *     db.query_array('select * from foo where x = :bar', bar: 42)
  *     db.query_array('select * from foo where x = :bar', 'bar' => 42)
  *     db.query_array('select * from foo where x = :bar', ':bar' => 42)
- * 
+ *
  * @overload query_array(sql, ...)
  *   @param sql [String] SQL statement
  *   @return [Array<Array>, Integer] rows or total changes
@@ -434,7 +438,7 @@ VALUE Database_query_single(int argc, VALUE *argv, VALUE self) {
  * specified using keyword arguments:
  *
  *     db.query_single_splat('select * from foo where x = :bar', bar: 42)
- * 
+ *
  * @overload query_single_splat(sql, ...) -> row
  *   @param sql [String] SQL statement
  *   @return [Array, any] row
@@ -460,7 +464,7 @@ VALUE Database_query_single_splat(int argc, VALUE *argv, VALUE self) {
  * specified using keyword arguments:
  *
  *     db.query_single_array('select * from foo where x = :bar', bar: 42)
- * 
+ *
  * @overload query_single_array(sql, ...) -> row
  *   @param sql [String] SQL statement
  *   @return [Array, any] row
@@ -647,7 +651,7 @@ VALUE Database_batch_query_splat(VALUE self, VALUE sql, VALUE parameters) {
 }
 
 /* Returns the column names for the given query, without running it.
- * 
+ *
  * @return [Array<String>] column names
  */
 VALUE Database_columns(VALUE self, VALUE sql) {
@@ -655,7 +659,7 @@ VALUE Database_columns(VALUE self, VALUE sql) {
 }
 
 /* Returns the rowid of the last inserted row.
- * 
+ *
  * @return [Integer] last rowid
  */
 VALUE Database_last_insert_rowid(VALUE self) {
@@ -665,7 +669,7 @@ VALUE Database_last_insert_rowid(VALUE self) {
 }
 
 /* Returns the number of changes made to the database by the last operation.
- * 
+ *
  * @return [Integer] number of changes
  */
 VALUE Database_changes(VALUE self) {
@@ -676,7 +680,7 @@ VALUE Database_changes(VALUE self) {
 
 /* Returns the database filename. If db_name is given, returns the filename for
  * the respective attached database.
- * 
+ *
  * @overload filename()
  *   @return [String] database filename
  * @overload filename(db_name)
@@ -695,7 +699,7 @@ VALUE Database_filename(int argc, VALUE *argv, VALUE self) {
 }
 
 /* Returns true if a transaction is currently in progress.
- * 
+ *
  * @return [bool] is transaction in progress
  */
 VALUE Database_transaction_active_p(VALUE self) {
@@ -706,7 +710,7 @@ VALUE Database_transaction_active_p(VALUE self) {
 
 #ifdef HAVE_SQLITE3_LOAD_EXTENSION
 /* Loads an extension with the given path.
- * 
+ *
  * @param path [String] extension file path
  * @return [Extralite::Database] database
  */
@@ -743,7 +747,7 @@ static inline VALUE Database_prepare(int argc, VALUE *argv, VALUE self, VALUE mo
  * Creates a prepared query with the given SQL query in hash mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
- * 
+ *
  * @param sql [String] SQL statement
  * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query
@@ -760,7 +764,7 @@ VALUE Database_prepare_hash(int argc, VALUE *argv, VALUE self) {
  * Creates a prepared query with the given SQL query in argv mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
- * 
+ *
  * @param sql [String] SQL statement
  * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query
@@ -777,7 +781,7 @@ VALUE Database_prepare_splat(int argc, VALUE *argv, VALUE self) {
  * Creates a prepared query with the given SQL query in array mode. If query
  * parameters are given, they are bound to the query. If a block is given, it is
  * used as a transform proc.
- * 
+ *
  * @param sql [String] SQL statement
  * @param *params [Array<any>] parameters to bind
  * @return [Extralite::Query] prepared query
@@ -793,7 +797,7 @@ VALUE Database_prepare_array(int argc, VALUE *argv, VALUE self) {
  * It is not safe to call `#interrupt` on a database that is about to be closed.
  * For more information, consult the [sqlite3 API
  * docs](https://sqlite.org/c3ref/interrupt.html).
- * 
+ *
  * @return [Extralite::Database] database
  */
 VALUE Database_interrupt(VALUE self) {
@@ -874,11 +878,11 @@ VALUE backup_cleanup(VALUE ptr) {
  * method with two arguments: the remaining page count, and the total page
  * count, which can be used to display the progress to the user or to collect
  * statistics.
- * 
+ *
  *     db_src.backup(db_dest) do |remaining, total|
  *       puts "Backing up #{remaining}/#{total}"
  *     end
- * 
+ *
  * @param dest [String, Extralite::Database] backup destination
  * @param src_db_name [String] source database name (default: "main")
  * @param dst_db_name [String] Destination database name (default: "main")
@@ -933,12 +937,12 @@ VALUE Database_backup(int argc, VALUE *argv, VALUE self) {
 /* Returns runtime status values for the given op as an array containing the
  * current value and the high water mark value. To reset the high water mark,
  * pass true as reset.
- * 
+ *
  * You can use the various `Extralite::SQLITE_STATUS_xxx` constants with this
  * method:
- * 
+ *
  *     Extralite.runtime_status(Extralite::SQLITE_STATUS_MEMORY_USED)
- * 
+ *
  * For more information see the SQLite docs: https://sqlite.org/c3ref/c_status_malloc_count.html
  *
  * @overload runtime_status(op)
@@ -964,7 +968,7 @@ VALUE Extralite_runtime_status(int argc, VALUE* argv, VALUE self) {
 /* Returns database status values for the given op as an array containing the
  * current value and the high water mark value. To reset the high water mark,
  * pass true as reset.
- * 
+ *
  * @overload status(op)
  *   @param op [Integer] op
  *   @return [Array<Integer>] array containing the value and high water mark
@@ -989,7 +993,7 @@ VALUE Database_status(int argc, VALUE *argv, VALUE self) {
 
 /* Returns the current limit for the given category. If a new value is given,
  * sets the limit to the new value and returns the previous value.
- * 
+ *
  * @overload limit(category)
  *   @param category [Integer] category
  *   @return [Integer] limit value
@@ -1018,7 +1022,7 @@ VALUE Database_limit(int argc, VALUE *argv, VALUE self) {
  * cause the program to wait for the database to become available. If the
  * database is still locked when the timeout period has elapsed, the query will
  * fail with a `Extralite::BusyError` exception.
- * 
+ *
  * Setting the busy timeout allows other threads to run while waiting for the
  * database to become available. See also `#on_progress`.
  *
@@ -1036,7 +1040,7 @@ VALUE Database_busy_timeout_set(VALUE self, VALUE sec) {
 }
 
 /* Returns the total number of changes made to the database since opening it.
- * 
+ *
  * @return [Integer] total changes
  */
 VALUE Database_total_changes(VALUE self) {
@@ -1048,7 +1052,7 @@ VALUE Database_total_changes(VALUE self) {
 
 /* Installs or removes a block that will be invoked for every SQL statement
  * executed. To stop tracing, call `#trace` without a block.
- * 
+ *
  * @return [Extralite::Database] database
  */
 VALUE Database_trace(VALUE self) {
@@ -1066,13 +1070,13 @@ VALUE Database_trace(VALUE self) {
  * then be used to store the changes to a file, apply them to another database,
  * or undo the changes. The given table names specify which tables should be
  * tracked for changes. Passing a value of nil causes all tables to be tracked.
- * 
+ *
  *     changeset = db.track_changes(:foo, :bar) do
  *       perform_a_bunch_of_queries
  *     end
- * 
+ *
  *     File.open('my.changes', 'w+') { |f| f << changeset.to_blob }
- * 
+ *
  * @param *tables [Array<String, Symbol>] table(s) to track
  * @return [Extralite::Changeset] changeset
 */
@@ -1195,10 +1199,10 @@ struct progress_handler parse_progress_handler_opts(VALUE opts) {
  * work correctly also when running simple queries that don't include many
  * VM instructions. If the `tick` value is greater than the period value it is
  * automatically capped to the period value.
- * 
+ *
  * The `mode` parameter controls the progress handler mode, which is one of the
  * following:
- * 
+ *
  * - `:normal` (default): the progress handler proc is invoked on query
  *   progress.
  * - `:once`: the progress handler proc is invoked only once, when preparing the
@@ -1286,12 +1290,12 @@ VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
 
 /* call-seq:
  *   Extralite.on_progress(**opts) { ... }
- * 
+ *
  * Installs or removes a global progress handler that will be executed
  * periodically while a query is running. This method can be used to support
  * switching between fibers and threads or implementing timeouts for running
  * queries.
- * 
+ *
  * This method sets the progress handler settings and behaviour for all
  * subsequently created `Database` instances. Calling this method will have no
  * effect on already existing `Database` instances
@@ -1309,10 +1313,10 @@ VALUE Database_on_progress(int argc, VALUE *argv, VALUE self) {
  * work correctly also when running simple queries that don't include many
  * VM instructions. If the `tick` value is greater than the period value it is
  * automatically capped to the period value.
- * 
+ *
  * The `mode` parameter controls the progress handler mode, which is one of the
  * following:
- * 
+ *
  * - `:normal` (default): the progress handler proc is invoked on query
  *   progress.
  * - `:once`: the progress handler proc is invoked only once, when preparing the
@@ -1353,7 +1357,7 @@ VALUE Extralite_on_progress(int argc, VALUE *argv, VALUE self) {
 }
 
 /* Returns the last error code for the database.
- * 
+ *
  * @return [Integer] last error code
  */
 VALUE Database_errcode(VALUE self) {
@@ -1363,7 +1367,7 @@ VALUE Database_errcode(VALUE self) {
 }
 
 /* Returns the last error message for the database.
- * 
+ *
  * @return [String] last error message
  */
 VALUE Database_errmsg(VALUE self) {
@@ -1375,7 +1379,7 @@ VALUE Database_errmsg(VALUE self) {
 #ifdef HAVE_SQLITE3_ERROR_OFFSET
 /* Returns the offset for the last error. This is useful for indicating where in
  * the SQL string an error was encountered.
- * 
+ *
  * @return [Integer] offset in the last submitted SQL string
  */
 VALUE Database_error_offset(VALUE self) {
@@ -1414,7 +1418,7 @@ VALUE Database_gvl_release_threshold_get(VALUE self) {
 
 /* Sets the database's GVL release threshold. The release policy changes
  * according to the given value:
- * 
+ *
  * - Less than 0: the GVL is never released while running queries. This is the
  *   policy used when a progress handler is set. For more information see
  *   `#on_progress`.
@@ -1499,7 +1503,7 @@ VALUE Database_wal_checkpoint(int argc, VALUE *argv, VALUE self) {
   );
   if (rc != SQLITE_OK)
     rb_raise(cError, "Failed to perform WAL checkpoint: %s", sqlite3_errstr(rc));
-  
+
   return rb_ary_new3(2, INT2NUM(total_frames), INT2NUM(checkpointed_frames));
 }
 
@@ -1566,7 +1570,7 @@ void Init_ExtraliteDatabase(void) {
   #ifdef EXTRALITE_ENABLE_CHANGESET
   rb_define_method(cDatabase, "track_changes",          Database_track_changes, -1);
   #endif
-  
+
   rb_define_method(cDatabase, "transaction_active?",    Database_transaction_active_p, 0);
 
   cBlob           = rb_define_class_under(mExtralite, "Blob", rb_cString);

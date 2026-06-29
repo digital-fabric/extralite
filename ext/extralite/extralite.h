@@ -29,6 +29,7 @@ extern VALUE cQuery;
 extern VALUE cIterator;
 extern VALUE cChangeset;
 extern VALUE cBlob;
+extern VALUE cTransform;
 
 extern VALUE cError;
 extern VALUE cSQLError;
@@ -103,6 +104,28 @@ typedef struct {
 } Changeset_t;
 #endif
 
+#define TRANSFORM_CONTAINER (1 << 0) // node is a container
+#define TRANSFORM_ARRAY     (1 << 1) // node is an array container
+#define TRANSFORM_IDENTITY  (1 << 2) // node is an identity column
+#define TRANSFORM_NAME      (1 << 3) // node has a name VALUE
+
+struct transform_node {
+  unsigned short flags;
+  unsigned short idx; // column index
+  VALUE name;
+
+  unsigned short identity_idx; // identity column index
+  struct transform_node *identity_node;
+
+  struct transform_node *subnodes_head;
+  struct transform_node *subnodes_tail;
+  struct transform_node *next;
+};
+
+typedef struct {
+  struct transform_node *root;
+} Transform_t;
+
 enum row_mode {
   ROW_YIELD,
   ROW_MULTI,
@@ -170,6 +193,7 @@ VALUE safe_query_array(query_ctx *ctx);
 VALUE safe_query_changes(query_ctx *ctx);
 VALUE safe_query_columns(query_ctx *ctx);
 VALUE safe_query_hash(query_ctx *ctx);
+VALUE safe_query_transform(query_ctx *ctx);
 VALUE safe_query_single_row_hash(query_ctx *ctx);
 VALUE safe_query_single_row_splat(query_ctx *ctx);
 VALUE safe_query_single_row_array(query_ctx *ctx);
@@ -191,5 +215,7 @@ enum gvl_mode Database_prepare_gvl_mode(Database_t *db);
 Database_t *self_to_database(VALUE self);
 
 void *gvl_call(enum gvl_mode mode, void *(*fn)(void *), void *data);
+
+struct transform_node *get_transform_root(VALUE obj);
 
 #endif /* EXTRALITE_H */
