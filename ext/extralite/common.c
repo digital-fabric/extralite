@@ -382,15 +382,57 @@ static inline void add_transform_container_obj(VALUE row, struct transform_node 
 
 static VALUE run_transform(VALUE identity_storage, struct transform_node *node, sqlite3_stmt *stmt);
 
+static inline VALUE json_parse(VALUE json) {
+  if (NIL_P(mJSON)) {
+    rb_require("json");
+    mJSON = rb_const_get(rb_cObject, rb_intern_const("JSON"));
+  }
+  return rb_funcall(mJSON, rb_intern_const("parse"), 1, json);
+}
+
+static inline VALUE get_transform_column_value(struct transform_node *col, sqlite3_stmt *stmt) {
+  int native_type = sqlite3_column_type(stmt, col->idx);
+  switch (col->type) {
+    case TRANSFORM_T_AUTO:
+      if (native_type == SQLITE_NULL) return Qnil;
+      return get_column_value(stmt, col->idx, native_type);
+    case TRANSFORM_T_INTEGER:
+      if (native_type == SQLITE_NULL) return Qnil;
+      return get_column_value(stmt, col->idx, SQLITE_INTEGER);
+    case TRANSFORM_T_FLOAT:
+      if (native_type == SQLITE_NULL) return Qnil;
+      return get_column_value(stmt, col->idx, SQLITE_FLOAT);
+    case TRANSFORM_T_TEXT:
+      if (native_type == SQLITE_NULL) return Qnil;
+      return get_column_value(stmt, col->idx, SQLITE_TEXT);
+    case TRANSFORM_T_BOOL:
+      if (native_type == SQLITE_NULL) return Qnil;
+      int64_t v = sqlite3_column_int64(stmt, col->idx);
+      return v ? Qtrue : Qfalse;
+    case TRANSFORM_T_JSON:
+      if (native_type == SQLITE_NULL) return Qnil;
+      VALUE json = get_column_value(stmt, col->idx, SQLITE_TEXT);
+      return json_parse(json);
+      RB_GC_GUARD(json);
+    case TRANSFORM_T_PROC:
+      VALUE val = get_column_value(stmt, col->idx, native_type);
+      return rb_funcall(col->conversion_proc, ID_call, 1, val);
+      RB_GC_GUARD(val);
+    default:
+      rb_raise(cError, "Invalid column value");
+  }
+}
+
 VALUE run_transform_with_identity(
   VALUE identity_storage, struct transform_node *node, sqlite3_stmt *stmt
 ) {
   VALUE row = Qnil;
   VALUE identity_map = Qnil;
 
-  VALUE identity_value = get_column_value(
-    stmt, node->identity_idx, sqlite3_column_type(stmt, node->identity_idx)
-  );
+  VALUE identity_value = get_transform_column_value(node->identity_node, stmt);
+  //   get_column_value(
+  //   stmt, node->identity_idx, sqlite3_column_type(stmt, node->identity_idx)
+  // );
   VALUE identity_map_key = ULONG2NUM((uint64_t)node);
   identity_map = rb_hash_aref(identity_storage, identity_map_key);
 
@@ -424,9 +466,7 @@ VALUE run_transform_with_identity(
         if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
       }
       else {
-        VALUE value = get_column_value(
-          stmt, col->idx, sqlite3_column_type(stmt, col->idx)
-        );
+        VALUE value = get_transform_column_value(col, stmt);
         rb_hash_aset(row, col->name, value);
         RB_GC_GUARD(value);
       }
@@ -450,9 +490,7 @@ VALUE run_transform_no_identity(
       if (!NIL_P(obj)) add_transform_container_obj(row, col, obj);
     }
     else {
-      VALUE value = get_column_value(
-        stmt, col->idx, sqlite3_column_type(stmt, col->idx)
-      );
+      VALUE value = get_transform_column_value(col, stmt);
       rb_hash_aset(row, col->name, value);
       RB_GC_GUARD(value);
     }

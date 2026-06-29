@@ -5,6 +5,7 @@
 #include "extralite.h"
 
 VALUE cTransform;
+VALUE mJSON;
 
 VALUE SYM_bool;
 VALUE SYM_columns;
@@ -346,4 +347,6 @@ void Init_ExtraliteTransform(void) {
   rb_gc_register_mark_object(SYM_relation);
   rb_gc_register_mark_object(SYM_text);
   rb_gc_register_mark_object(SYM_type);
+
+  mJSON = Qnil;
 }

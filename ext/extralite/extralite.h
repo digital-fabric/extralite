@@ -31,6 +31,8 @@ extern VALUE cChangeset;
 extern VALUE cBlob;
 extern VALUE cTransform;
 
+extern VALUE mJSON;
+
 extern VALUE cError;
 extern VALUE cSQLError;
 extern VALUE cBusyError;

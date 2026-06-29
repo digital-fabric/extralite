@@ -393,8 +393,7 @@ class TransformTypesTest < Minitest::Test
     assert_equal spec, t.to_h
   end
 
-  def test_transform_types
-    skip
+  def test_transform_types_coercion
     t = Extralite::Transform.new(
       columns: {
         x: { type: :integer },
@@ -405,7 +404,162 @@ class TransformTypesTest < Minitest::Test
       select 'foo', '42'
     SQL
     assert_equal [
-      {x: 0, y: 42}
+      { x: 0, y: 42 }
     ], result
+
+    t = Extralite::Transform.new(
+      columns: {
+        x: { type: :text },
+        y: { type: :integer }
+      }
+    )
+    result = @db.query(t, <<~SQL)
+      select 42, '42'
+    SQL
+    assert_equal [
+      { x: '42', y: 42 }
+    ], result
+
+    t = Extralite::Transform.new(
+      columns: {
+        x: { type: :text },
+        y: { type: :float }
+      }
+    )
+    result = @db.query(t, <<~SQL)
+      select 42, 42
+    SQL
+    assert_equal [
+      { x: '42', y: 42.0 }
+    ], result
+
+    t = Extralite::Transform.new(
+      columns: {
+        x: { type: :bool },
+        y: { type: :bool },
+        z: { type: -> (x) { x.to_i * 2 } }
+      }
+    )
+    result = @db.query(t, <<~SQL)
+      select 42, 'foo', 42
+    SQL
+    assert_equal [
+      { x: true, y: false, z: 84 }
+    ], result
+
+    # NULL handling
+    t = Extralite::Transform.new(
+      columns: {
+        a: { type: nil },
+        b: { type: :integer },
+        c: { type: :float },
+        d: { type: :text },
+        e: { type: :bool },
+        f: { type: :json },
+        g: { type: ->(x) { x ? x.to_i * 2 : :null } }
+      }
+    )
+    result = @db.query(t, <<~SQL)
+      select null, null, null, null, null, null, null
+    SQL
+    assert_equal [
+      { a: nil, b: nil, c: nil, d: nil, e: nil, f: nil, g: :null }
+    ], result
+
+    # JSON parsing
+    require 'json'
+    t = Extralite::Transform.new(
+      columns: {
+        a: {},
+        b: { type: :json }
+      }
+    )
+    result = @db.query(t, <<~SQL)
+      select 42, '[1, 2, 3]'
+    SQL
+    assert_equal [
+      { a: 42, b: [1, 2, 3] }
+    ], result
+
+    result = @db.query(t, <<~SQL)
+      select 42, '{ "a": [1, 2, 3], "blah": "hi"}'
+    SQL
+    assert_equal [
+      { a: 42, b: { 'a' => [1, 2, 3], 'blah' => 'hi' } }
+    ], result
+  end
+
+  def test_transform_types_with_relations
+    @db.execute <<~SQL
+      create table posts (
+        id integer primary key,
+        title text,
+        content text
+      );
+      create table tags (
+        id integer primary key,
+        name text
+      );
+      create table posts_tags (
+        post_id integer references posts(id) on delete cascade,
+        tag_id integer references tags(id) on delete cascade
+      );
+
+      insert into posts (title, content) values ('T1', 'C1');
+      insert into posts (title, content) values ('T2', 'C2');
+      insert into tags (name) values ('tag1');
+      insert into tags (name) values ('tag2');
+      insert into tags (name) values ('tag3');
+
+      insert into posts_tags(post_id, tag_id) values (1, 1);
+      insert into posts_tags(post_id, tag_id) values (1, 2);
+      insert into posts_tags(post_id, tag_id) values (2, 2);
+      insert into posts_tags(post_id, tag_id) values (2, 3);
+    SQL
+
+    sql = <<~SQL
+      select
+        posts.id, posts.title, posts.content,
+        tags.id, tags.name
+      from posts
+      left outer join posts_tags on posts_tags.post_id = posts.id
+      left outer join tags on posts_tags.tag_id = tags.id
+      order by posts.id, tags.id
+    SQL
+
+    spec = {
+      columns: {
+        id: { type: :integer, identity: true },
+        title: { type: :text },
+        content: { type: :text },
+        tags: [{
+          type: :relation,
+          columns: {
+            id: { type: :integer, identity: true },
+            name: { type: :text }
+          }
+        }]
+      }
+    }
+
+    t = Extralite::Transform.new(spec)
+    result = @db.query(t, sql)
+    assert_kind_of Array, result
+    assert_equal 2, result.size
+
+    assert_equal 'T1', result[0][:title]
+    assert_equal 'C1', result[0][:content]
+    assert_equal [
+      { id: 1, name: 'tag1' },
+      { id: 2, name: 'tag2' }
+    ], result[0][:tags]
+
+    assert_equal 'T2', result[1][:title]
+    assert_equal 'C2', result[1][:content]
+    assert_equal [
+      { id: 2, name: 'tag2' },
+      { id: 3, name: 'tag3' },
+    ], result[1][:tags]
+    assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
   end
 end
