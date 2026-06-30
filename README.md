@@ -39,10 +39,12 @@ latest features and enhancements.
 
 - Best-in-class [performance](#performance) (up to 4.5X the performance of the
   [sqlite3](https://github.com/sparklemotion/sqlite3-ruby) gem).
-- Support for [concurrency](#concurrency) out of the box for multi-threaded
-  and multi-fibered apps.
+- Support for [concurrency](#concurrency) out of the box for multi-threaded and
+  multi-fibered apps.
 - A variety of ways to [retrieve data](#query-modes) - hashes, arrays, single
-  columns, single rows, [transforms](#value-transforms).
+  columns, single rows.
+- Support for retrieving records as structured objects using
+  [transforms](#transforms).
 - Support for [external iteration](#iterating-over-records-in-a-prepared-query),
   allowing iterating through single records or batches of records.
 - [Prepared queries](#prepared-queries).
@@ -53,7 +55,7 @@ latest features and enhancements.
   [backups](#creating-backups), retrieve [status
   information](#retrieving-status-information), work with
   [changesets](#working-with-changesets), interrogate [database
-  limits](#working-with-database-limits),  [trace](#tracing-sql-statements)
+  limits](#working-with-database-limits), [trace](#tracing-sql-statements)
   queries.
 - [Sequel](#usage-with-sequel) adapter.
 
@@ -63,7 +65,7 @@ latest features and enhancements.
 - [Getting Started](#getting-started)
 - [Query Modes](#query-modes)
 - [Parameter binding](#parameter-binding)
-- [Value Transforms](#value-transforms)
+- [Transforms](#transforms)
 - [Data Types](#data-types)
 - [Prepared Queries](#prepared-queries)
 - [Batch Execution of Queries](#batch-execution-of-queries)
@@ -286,18 +288,20 @@ db.execute(sql, Extralite::Blob.new('Hello, 世界!'))
 db.execute(sql, 'Hello, 世界!'.force_encoding(Encoding::ASCII_8BIT))
 ```
 
-## Value Transforms
+## Transforms
 
 Extralite allows you to transform rows to any value your application may need by
-providing a transform proc that takes the raw row values and returns the
-transformed data. The transform proc is passed each resulting row either as a
-hash or as a list of values.
+providing a transform proc or transform object that takes the raw row values and
+returns the transformed data.
 
 Transforms are useful when you need to transform rows into ORM model instances,
 or when you need to do some other transformation on the values retrieved from
-the database.
+the database. With transforms, you can create nested, structured Ruby objects
+that represents different entities. This is especially useful for representing
+one-to-one, one-to-many or many-to-many relationships when doing joins.
 
-To transform results, pass a transform proc as the first parameter to one of the
+A transform proc is expressed as a lambda taking one or more values. To
+transform results, pass a transform proc as the first parameter to one of the
 `#query_xxx` methods:
 
 ```ruby
@@ -315,8 +319,50 @@ db.query_splat(transform, 'select a, b, c from foo')
 #=> transformed rows
 ```
 
-Value transforms can also be done with [prepared
-queries](#value-transforms-in-prepared-queries).
+### Structured Transforms
+
+To transform rows into entities, you can use the Extralite::Transform class,
+which lets you express data as one or more nested entities. This is particularly
+useful when doing JOIN queries. For example, a query may express a many-to-many
+relationship between posts and tags:
+
+```sql
+select
+  posts.id, posts.content,
+  tags.id, tags.name
+from posts
+left outer join posts_tags
+  on posts_tags.post_id = posts.id
+left outer join tags
+  on posts_tags.tag_id = tags.id
+```
+
+The result rows will contain information about both post and tag entities, and
+each entity (be it a post or a tag) may be repeated in multiple rows. With a
+transform you can tell Extralite to eliminate the duplicate entities by using an
+identity map, and to include a list of tags for each post:
+
+```ruby
+transform = Extralite::Transform do
+  {
+    id:       integer.identity,
+    content:  text,
+    tags:     [{
+      id:     integer.identity,
+      name:   text
+    }]
+  }
+end
+```
+
+To use the transform, pass it along with the SQL string to `Database#query`:
+
+```ruby
+db.qurey(transform, sql) #=> [...]
+```
+
+Transforms can also be used with [prepared
+queries](#transforms-in-prepared-queries).
 
 ## Prepared Queries
 
@@ -470,12 +516,13 @@ iterator = Extralite::Iterator.new(query)
 iterator.each { |r| ... }
 ```
 
-### Value Transforms in Prepared Queries
+### Transforms in Prepared Queries
 
 Prepared queries can automatically transform their result sets by setting a
-transform block. The transform block receives values according to the query mode
-(hash, array or splat). To set a transform you can pass a block to one of the
-`Database#prepare_xxx` methods, or use `Query#transform`:
+transform proc or object. If a transform proc is provided, the proc will be
+invoked according to the query mode (hash, array or splat). To set a transform
+proc you can pass a block to one of the `Database#prepare_xxx` methods, or use
+`Query#transform=`:
 
 ```ruby
 q = db.prepare('select * from items where id = ?') { |h| Item.new(h) }
@@ -483,7 +530,7 @@ q.bind(42).next #=> Item instance
 
 # An equivalent
 q = db.prepare('select * from items where id = ?')
-q.transform { |h| Item.new(h) }
+q.transform = ->(h) { Item.new(h) }
 ```
 
 The same can be done for queries in `splat` or `array` mode:
@@ -492,6 +539,26 @@ The same can be done for queries in `splat` or `array` mode:
 db.prepare_splat('select * from foo') { |a, b, c| a + b + c }
 
 db.prepare_array('select * from foo') { |a| a.map(&:to_s).join }
+```
+
+You can also use structured transforms with prepared queries:
+
+```ruby
+q = db.prepare <<~SQL
+  select posts.id, posts.content, author.id, author.name
+  from posts left join authors
+    on posts.author_id = authors.id
+SQL
+q.transform = Extralite::Transform.new do
+  {
+    id:       integer.identity,
+    content:  text,
+    author: {
+      id:     integer.identity,
+      name:   text
+    }
+  }
+end
 ```
 
 ## Batch Execution of Queries

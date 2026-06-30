@@ -21,7 +21,6 @@
  *     from posts
  *     left outer join posts_tags on posts_tags.post_id = posts.id
  *     left outer join tags on posts_tags.tag_id = tags.id
- *     order by posts.id, tags.id
  *
  * Normally, the resulting data will be represented as an array of hashes, of
  * the form:

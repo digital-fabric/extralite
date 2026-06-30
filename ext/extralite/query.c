@@ -611,11 +611,14 @@ VALUE Query_mode_set(VALUE self, VALUE mode) {
   return mode;
 }
 
+/*
+ * Returns the transform set for the query.
+ *
+ * @return [Proc, Extralite::Transform, nil] transform
+ */
 VALUE Query_transform_get(VALUE self) {
   Query_t *query = self_to_query_verify(self);
   return query->transform;
-  // RB_OBJ_WRITE(self, &query->transform, rb_block_given_p() ? rb_block_proc() : Qnil);
-  // return self;
 }
 
 /*
@@ -626,12 +629,14 @@ VALUE Query_transform_get(VALUE self) {
  * with a nil value.
  *
  *     # fetch column c as an ORM object
- *     q = db.prepare('select * from foo').transform = ->(h) {
+ *     q = db.prepare('select * from foo')
+ *     q.transform = ->(h) {
  *       MyModel.new(h)
  *     }
  *
  *     # use a custom transform
- *     q = db.prepare('select id, name from foo').transform = Extralite::Transform.new(
+ *     q = db.prepare('select id, name from foo')
+ *     q.transform = Extralite::Transform.new(
  *       columns: {
  *         id: { type: integer, identity: true },
  *         name: { type: :text }
