@@ -31,10 +31,9 @@ def run_normal(count)
   raise unless results.size == count
 end
 
-@transform_spec = {
-  columns: [:a, :b]
+@transform = Extralite::Transform.new {
+  { a: integer, b: text }
 }
-@transform = Extralite::Transform.new(@transform_spec)
 
 def run_transform(count)
   results = $extralite_db.query(@transform, 'select * from foo')

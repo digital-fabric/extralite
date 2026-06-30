@@ -5,7 +5,7 @@ require 'bundler/inline'
 gemfile do
   source 'https://rubygems.org'
   gem 'extralite', path: '..'
-  gem 'sqlite3', '2.6.0'
+  gem 'sqlite3', '2.9.5'
   gem 'benchmark-ips'
 end
 
@@ -18,7 +18,7 @@ puts "DB_PATH = #{DB_PATH.inspect}"
 def prepare_database(count)
   $sqlite3_db = SQLite3::Database.new(DB_PATH, results_as_hash: true)
   $extralite_db = Extralite::Database.new(DB_PATH, gvl_release_threshold: -1)
-    
+
   $extralite_db.query('create table if not exists foo ( a integer primary key, b text )')
   $extralite_db.query('delete from foo')
   $extralite_db.query('begin')
