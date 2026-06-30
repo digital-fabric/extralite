@@ -2,6 +2,13 @@
 #include <stdlib.h>
 #include "extralite.h"
 
+/*
+ * Document-class: Extralite::Database
+ *
+ * This class represents an SQLite database connection, and provides various
+ * methods for interacting with the database.
+ */
+
 VALUE cDatabase;
 VALUE cBlob;
 VALUE cError;
@@ -16,6 +23,7 @@ ID ID_call;
 ID ID_each;
 ID ID_keys;
 ID ID_new;
+ID ID_parse;
 ID ID_pragma;
 ID ID_strip;
 ID ID_to_s;
@@ -1595,30 +1603,31 @@ void Init_ExtraliteDatabase(void) {
   cBusyError      = rb_define_class_under(mExtralite, "BusyError", cError);
   cInterruptError = rb_define_class_under(mExtralite, "InterruptError", cError);
   cParameterError = rb_define_class_under(mExtralite, "ParameterError", cError);
-  eArgumentError  = rb_const_get(rb_cObject, rb_intern("ArgumentError"));
+  eArgumentError  = rb_const_get(rb_cObject, rb_intern_const("ArgumentError"));
 
-  ID_bind         = rb_intern("bind");
-  ID_call         = rb_intern("call");
-  ID_each         = rb_intern("each");
-  ID_keys         = rb_intern("keys");
-  ID_new          = rb_intern("new");
-  ID_pragma       = rb_intern("pragma");
-  ID_strip        = rb_intern("strip");
-  ID_to_s         = rb_intern("to_s");
-  ID_track        = rb_intern("track");
+  ID_bind         = rb_intern_const("bind");
+  ID_call         = rb_intern_const("call");
+  ID_each         = rb_intern_const("each");
+  ID_keys         = rb_intern_const("keys");
+  ID_new          = rb_intern_const("new");
+  ID_parse        = rb_intern_const("parse");
+  ID_pragma       = rb_intern_const("pragma");
+  ID_strip        = rb_intern_const("strip");
+  ID_to_s         = rb_intern_const("to_s");
+  ID_track        = rb_intern_const("track");
 
-  SYM_at_least_once         = ID2SYM(rb_intern("at_least_once"));
-  SYM_full                  = ID2SYM(rb_intern("full"));
-  SYM_gvl_release_threshold = ID2SYM(rb_intern("gvl_release_threshold"));
-  SYM_once                  = ID2SYM(rb_intern("once"));
-  SYM_none                  = ID2SYM(rb_intern("none"));
-  SYM_normal                = ID2SYM(rb_intern("normal"));
-  SYM_passive               = ID2SYM(rb_intern("passive"));
-  SYM_pragma                = ID2SYM(rb_intern("pragma"));
-  SYM_read_only             = ID2SYM(rb_intern("read_only"));
-  SYM_restart               = ID2SYM(rb_intern("restart"));
-  SYM_truncate              = ID2SYM(rb_intern("truncate"));
-  SYM_wal                   = ID2SYM(rb_intern("wal"));
+  SYM_at_least_once         = ID2SYM(rb_intern_const("at_least_once"));
+  SYM_full                  = ID2SYM(rb_intern_const("full"));
+  SYM_gvl_release_threshold = ID2SYM(rb_intern_const("gvl_release_threshold"));
+  SYM_once                  = ID2SYM(rb_intern_const("once"));
+  SYM_none                  = ID2SYM(rb_intern_const("none"));
+  SYM_normal                = ID2SYM(rb_intern_const("normal"));
+  SYM_passive               = ID2SYM(rb_intern_const("passive"));
+  SYM_pragma                = ID2SYM(rb_intern_const("pragma"));
+  SYM_read_only             = ID2SYM(rb_intern_const("read_only"));
+  SYM_restart               = ID2SYM(rb_intern_const("restart"));
+  SYM_truncate              = ID2SYM(rb_intern_const("truncate"));
+  SYM_wal                   = ID2SYM(rb_intern_const("wal"));
 
   rb_gc_register_mark_object(SYM_at_least_once);
   rb_gc_register_mark_object(SYM_full);

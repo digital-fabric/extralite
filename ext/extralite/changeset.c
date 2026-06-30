@@ -117,7 +117,7 @@ VALUE cleanup_track(struct track_ctx *ctx) {
 /* Tracks changes in the given block and collects them into the changeset.
  * Changes are tracked only for the given tables. If nil is supplied as the
  * given tables, changes are tracked for all tables.
- * 
+ *
  *     # track changes for the foo and bar tables
  *     changeset.track(db, [:foo, :bar]) do
  *       run_some_queries
@@ -207,7 +207,7 @@ VALUE changeset_iter_info(sqlite3_changeset_iter *iter) {
   VALUE new_values = Qnil;
   VALUE converted = Qnil;
   VALUE row = rb_ary_new2(4);
-  
+
   const char *tbl_name;
   int column_count;
   int op_int;
@@ -298,7 +298,7 @@ inline void verify_changeset(Changeset_t *changeset) {
  * Each change entry is an array containing the operation (:insert / :update /
  * :delete), the table name, an array containing the old values, and an array
  * containing the new values.
- * 
+ *
  *     changeset.each do |(op, table, old_values, new_values)|
  *       ...
  *     end
@@ -322,7 +322,7 @@ VALUE Changeset_each(VALUE self) {
  * is an array containing the operation (:insert / :update / :delete), the table
  * name, an array containing the old values, and an array containing the new
  * values.
- * 
+ *
  * @return [Array<Array>] changes in the changeset
  */
 VALUE Changeset_to_a(VALUE self) {
@@ -344,7 +344,7 @@ static int xConflict(void *pCtx, int eConflict, sqlite3_changeset_iter *pIter){
 }
 
 /* Applies the changeset to the given database.
- * 
+ *
  * @param db [Extralite::Database] database to apply changes to
  * @return [Extralite::Changeset] changeset
  */
@@ -374,7 +374,7 @@ VALUE Changeset_apply(VALUE self, VALUE db) {
  *
  *     # undo changes
  *     changeset.invert.apply(db)
- * 
+ *
  * @return [Extralite::Changeset] inverted changeset
  */
 VALUE Changeset_invert(VALUE self) {
@@ -399,7 +399,7 @@ VALUE Changeset_invert(VALUE self) {
  * changeset BLOB can be stored to file for later retrieval.
  *
  *     File.open('my.changes', 'w+') { |f| f << changeset.to_blob }
- * 
+ *
  * @return [String] changeset BLOB
  */
 VALUE Changeset_to_blob(VALUE self) {
@@ -417,7 +417,7 @@ VALUE Changeset_to_blob(VALUE self) {
  *     changeset = Extralite::Changeset.new
  *     changeset.load(IO.read('my.changes'))
  *     changeset.apply(db)
- * 
+ *
  * @param blob [String] changeset BLOB
  * @return [Extralite::Changeset] changeset
  */
@@ -452,9 +452,9 @@ void Init_ExtraliteChangeset(void) {
   rb_define_method(cChangeset, "to_blob", Changeset_to_blob, 0);
   rb_define_method(cChangeset, "track", Changeset_track, 2);
 
-  SYM_delete = ID2SYM(rb_intern("delete"));
-  SYM_insert = ID2SYM(rb_intern("insert"));
-  SYM_update = ID2SYM(rb_intern("update"));
+  SYM_delete = ID2SYM(rb_intern_const("delete"));
+  SYM_insert = ID2SYM(rb_intern_const("insert"));
+  SYM_update = ID2SYM(rb_intern_const("update"));
 
   rb_gc_register_mark_object(SYM_delete);
   rb_gc_register_mark_object(SYM_insert);

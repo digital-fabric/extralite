@@ -315,6 +315,44 @@ module Extralite
   class Transform
     alias_method :orig_initialize, :initialize
 
+    # call-seq:
+    #   Extralite::Transform.new(literal_spec) -> transform
+    #   Extralite::Transform.new { dsl_spec } -> transform
+    #
+    # Initializes a new transform with with the given spec. The spec may be
+    # expressed as a hash containing the columns and any nested entities, or as a
+    # block with the transform DSL.
+    #
+    #     # literal transform spec
+    #     transform = Extralite::Transform.new(
+    #       columns: {
+    #         id: { type: :integer, identity: true },
+    #         content: { type: :text },
+    #         author: {
+    #           type: :relation,
+    #           columns: {
+    #             id: { type: :integer, identity: true },
+    #             name: { type: :text },
+    #           }
+    #         }
+    #       }
+    #     )
+    #
+    #     # DSL spec
+    #     transform = Extralite::Transform.new do
+    #       {
+    #         id:       integer.identity,
+    #         content:  text,
+    #         author: {
+    #           id:     integer.identity,
+    #           name:   text
+    #         }
+    #       }
+    #     end
+    #
+    # @param spec [Hash, nil] literal spec
+    # @param block [Proc, nil] DSL spec
+    # @return [void]
     def initialize(spec = nil, &block)
       return orig_initialize(spec) if spec
       raise "No spec given" if !block

@@ -387,7 +387,7 @@ static inline VALUE json_parse(VALUE json) {
     rb_require("json");
     mJSON = rb_const_get(rb_cObject, rb_intern_const("JSON"));
   }
-  return rb_funcall(mJSON, rb_intern_const("parse"), 1, json);
+  return rb_funcall(mJSON, ID_parse, 1, json);
 }
 
 static inline VALUE get_transform_column_value(struct transform_node *col, sqlite3_stmt *stmt) {

@@ -680,12 +680,12 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "transform",      Query_transform_get, 0);
   rb_define_method(cQuery, "transform=",     Query_transform_set, 1);
 
-  ID_inspect  = rb_intern("inspect");
-  ID_slice    = rb_intern("slice");
+  ID_inspect  = rb_intern_const("inspect");
+  ID_slice    = rb_intern_const("slice");
 
-  SYM_hash          = ID2SYM(rb_intern("hash"));
-  SYM_splat          = ID2SYM(rb_intern("splat"));
-  SYM_array           = ID2SYM(rb_intern("array"));
+  SYM_hash    = ID2SYM(rb_intern_const("hash"));
+  SYM_splat   = ID2SYM(rb_intern_const("splat"));
+  SYM_array   = ID2SYM(rb_intern_const("array"));
 
   rb_gc_register_mark_object(SYM_hash);
   rb_gc_register_mark_object(SYM_splat);

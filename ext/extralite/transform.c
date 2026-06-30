@@ -4,6 +4,97 @@
 #include "ruby.h"
 #include "extralite.h"
 
+/*
+ * Document-class: Extralite::Transform
+ *
+ * This class represents a specification for retrieving structured data as the
+ * result of a query. When querying data from multiple tables using joins,
+ * transforms allow you to retrieve the results in a structured way,
+ * representing the different entities as nested hashes.
+ *
+ * For example, a posts table and a tags table may be joined to represent a
+ * many-to-many relationship:
+ *
+ *     select
+ *       posts.id, posts.content,
+ *       tags.id, tags.name
+ *     from posts
+ *     left outer join posts_tags on posts_tags.post_id = posts.id
+ *     left outer join tags on posts_tags.tag_id = tags.id
+ *     order by posts.id, tags.id
+ *
+ * Normally, the resulting data will be represented as an array of hashes, of
+ * the form:
+ *
+ *     [
+ *       { posts_id: 1, posts_content: "foo", tags_id: 1, tags_name: "blah" },
+ *       { posts_id: 2, posts_content: "bar", tags_id: 1, tags_name: "blah" },
+ *       { posts_id: 2, posts_content: "bar", tags_id: 2, tags_name: "bleh" },
+ *       { posts_id: 3, posts_content: "baz", tags_id: 2, tags_name: "blah" },
+ *       ...
+ *     ]
+ *
+ * Those results, while containing all the information that we requested, also
+ * contain a lot of duplication: the same post entity may appear in multiple
+ * rows, and the same tag entity may be repeated for different posts.
+ *
+ * With a properly configured transform, we can convert those flat rows with
+ * duplicate data into hashes representing the different entities (posts and
+ * tags), such that each post entity will also include the corresponding tags.
+ * Furthermore, we can eliminate duplication by using identity maps to create
+ * each entity only once, and reuse it if it repeats (such as in the case of
+ * tags):
+ *
+ *     [
+ *       { id: 1, content: "foo", tags: [{id: 1, name: "blah"}] },
+ *       { id: 2, content: "bar", tags: [{id: 1, name: "blah"}, {id: 2, name: "bleh"}] },
+ *       { id: 3, content: "baz", tags: [{id: 2, name: "bleh"}] }
+ *     ]
+ *
+ * The transform is expressed using the transform DSL:
+ *
+ *     transform = Extralite::Transform.new do
+ *       {
+ *         id:      integer.identity,
+ *         content: text,
+ *         tags:    [{
+ *           id:    integer.identity,
+ *           name:  text
+ *         }]
+ *       }
+ *     end
+ *
+ * To use the transform we can feed it into Database#query:
+ *
+ *     db.query(transform, sql) #=> [...]
+ *
+ * A transform may also be used with a prepared query:
+ *
+ *     q = db.prepare(transform, sql)
+ *     q.to_a #=> [...]
+ *
+ * Transforms can also be used for type coercion. If the type is 'auto' or not
+ * specified, the returned value will reflect the native type of the value in
+ * the database. The following types are supported:
+ *
+ * - auto: native database type
+ * - integer: 64-bit integer
+ * - float: floating point number
+ * - text: text/string value
+ * - bool: a boolean (after coercion to integer)
+ * - json: parsed JSON representation
+ * - proc: a custom proc for converting a value
+ *
+ * To use the proc type, specify the proc as the type, e.g.:
+ *
+ *     Extralite::Transform.new do
+ *       {
+ *         stamp: ->(s) { Time.at(s) },
+ *         value: float
+ *       }
+ *     end
+ */
+
 VALUE cTransform;
 VALUE mJSON;
 
@@ -78,9 +169,9 @@ static void Transform_free(void *ptr) {
 }
 
 static const rb_data_type_t Transform_type = {
-    "Database",
+    "Transform",
     {Transform_mark, Transform_free, Transform_size, Transform_compact},
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY// | RUBY_TYPED_WB_PROTECTED
+    0, 0, RUBY_TYPED_FREE_IMMEDIATELY
 };
 
 static VALUE Transform_allocate(VALUE klass) {
@@ -140,7 +231,8 @@ struct transform_node *compile_transform_column(VALUE col, int *col_counter) {
   //       }
   //     }
   //
-  // So we check for it here, it's also checked in compile_transform_relation
+  // (Note the literal array surrounding the tags entry.) So we check for it
+  // here, it's also checked in compile_transform_relation.
   if (TYPE(col) == T_ARRAY) goto relation_node;
   if (TYPE(col) != T_HASH)
     rb_raise(cError, "Each column must be a hash");
@@ -206,39 +298,12 @@ struct transform_node *compile_transform_relation(VALUE spec, int *col_counter) 
     spec = rb_ary_entry(spec, 0);
   }
 
-  // val = rb_hash_aref(spec, SYM_name);
-  // if (!NIL_P(val)) {
-  //   node->flags |= TRANSFORM_F_NAME;
-  //   node->name = val;
-  // }
-
   VALUE val = rb_hash_aref(spec, SYM_columns);
   if (TYPE(val) != T_HASH)
     rb_raise(cError, "columns member must be a hash");
 
   struct column_iterator_ctx ctx = { spec, col_counter, node };
   rb_hash_foreach(val, column_iterator, (VALUE)&ctx);
-
-  // int len = RARRAY_LEN(val);
-  // for (int i = 0; i < len; i++) {
-  //   VALUE col = rb_ary_entry(val, i);
-  //   int col_idx = *col_counter;
-  //   struct transform_node *col_node = compile_transform_column(col, col_counter);
-  //   if (col_idx == identity_idx) {
-  //     node->identity_node = col_node;
-  //     node->identity_idx = col_idx;
-  //     col_node->flags |= TRANSFORM_F_IDENTITY;
-  //   }
-
-  //   if (node->subnodes_tail) {
-  //     node->subnodes_tail->next = col_node;
-  //     node->subnodes_tail = col_node;
-  //   }
-  //   else {
-  //     node->subnodes_head = node->subnodes_tail = col_node;
-  //   }
-  // }
-
   return node;
 }
 
@@ -312,6 +377,10 @@ VALUE transform_node_to_obj(struct transform_node *node) {
   RB_GC_GUARD(hash);
 }
 
+/* Returns the transform spec in literal form.
+ *
+ * @return [Hash] literal transform spec
+ */
 VALUE Transform_to_h(VALUE self) {
   Transform_t *t = self_to_transform(self);
   return transform_node_to_obj(t->root);
@@ -326,16 +395,16 @@ void Init_ExtraliteTransform(void) {
   rb_define_method(cTransform, "initialize",  Transform_initialize, 1);
   rb_define_method(cTransform, "to_h",        Transform_to_h, 0);
 
-  SYM_bool      = ID2SYM(rb_intern("bool"));
-  SYM_columns   = ID2SYM(rb_intern("columns"));
-  SYM_float     = ID2SYM(rb_intern("float"));
-  SYM_identity  = ID2SYM(rb_intern("identity"));
-  SYM_integer   = ID2SYM(rb_intern("integer"));
-  SYM_json      = ID2SYM(rb_intern("json"));
-  SYM_name      = ID2SYM(rb_intern("name"));
-  SYM_relation  = ID2SYM(rb_intern("relation"));
-  SYM_text      = ID2SYM(rb_intern("text"));
-  SYM_type      = ID2SYM(rb_intern("type"));
+  SYM_bool      = ID2SYM(rb_intern_const("bool"));
+  SYM_columns   = ID2SYM(rb_intern_const("columns"));
+  SYM_float     = ID2SYM(rb_intern_const("float"));
+  SYM_identity  = ID2SYM(rb_intern_const("identity"));
+  SYM_integer   = ID2SYM(rb_intern_const("integer"));
+  SYM_json      = ID2SYM(rb_intern_const("json"));
+  SYM_name      = ID2SYM(rb_intern_const("name"));
+  SYM_relation  = ID2SYM(rb_intern_const("relation"));
+  SYM_text      = ID2SYM(rb_intern_const("text"));
+  SYM_type      = ID2SYM(rb_intern_const("type"));
 
   rb_gc_register_mark_object(SYM_bool);
   rb_gc_register_mark_object(SYM_columns);

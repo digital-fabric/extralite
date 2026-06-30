@@ -1,22 +1,12 @@
-- Transform objects:
-
-  - Transform DSL:
-
-  ```ruby
-  Extralite::Transform.new do
-    columns(
-      id:       integer.identity,
-      title:    text,
-      content:  text,
-      tags:     [{
-        columns(
-          id:     integer.identity,
-          name:   text
-        )
-      }]
-    )
-  end
-  ```
+- [ ] Version 3.0
+  - [ ] Finish work on transforms
+    - [ ] More testing with prepared queries, find out if there are any rough
+      edges, especially with one-to-many, many-to-many relationships
+    - [ ] Docs: Transform class, README
+  - [ ] Modern defaults when opening a database
+    - [ ] WAL, sync, etc
+    - [ ] Foreign keys
+  - [ ] Run benchmarks again against latest version of sqlite3 gem
 
 - More database methods:
 

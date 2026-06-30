@@ -14,10 +14,10 @@
 // debug utility
 #define INSPECT(str, obj) { \
   printf(str); \
-  VALUE s = rb_funcall(obj, rb_intern("inspect"), 0); \
+  VALUE s = rb_funcall(obj, ID_inspect, 0); \
   printf(": %s\n", StringValueCStr(s)); \
 }
-#define CALLER() rb_funcall(rb_mKernel, rb_intern("caller"), 0)
+#define CALLER() rb_funcall(rb_mKernel, rb_intern_const("caller"), 0)
 #define TRACE_CALLER() INSPECT("caller: ", CALLER())
 
 #define SAFE(f) (VALUE (*)(VALUE))(f)
@@ -43,6 +43,7 @@ extern ID ID_call;
 extern ID ID_each;
 extern ID ID_keys;
 extern ID ID_new;
+extern ID ID_parse;
 extern ID ID_strip;
 extern ID ID_to_s;
 extern ID ID_track;
