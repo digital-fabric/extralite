@@ -1,8 +1,10 @@
 - [ ] Version 3.0
-  - [ ] Finish work on transforms
-    - [ ] More testing with prepared queries, find out if there are any rough
+  - [v] Finish work on transforms
+    - [v] More testing with prepared queries, find out if there are any rough
       edges, especially with one-to-many, many-to-many relationships
-    - [ ] Docs: Transform class, README
+    - [v] Docs: Transform class, README
+    - [v] Docs: review transform docs, use the term "object graph" instead of
+      "nested objects" etc.
   - [ ] Modern defaults when opening a database
     - [ ] WAL, sync, etc
     - [ ] Foreign keys

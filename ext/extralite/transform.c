@@ -9,8 +9,8 @@
  *
  * This class represents a specification for retrieving structured data as the
  * result of a query. When querying data from multiple tables using joins,
- * transforms allow you to retrieve the results in a structured way,
- * representing the different entities as nested hashes.
+ * transforms allow you to retrieve the results as an object graph containing
+ * the different entities.
  *
  * For example, a posts table and a tags table may be joined to represent a
  * many-to-many relationship:
@@ -38,11 +38,11 @@
  * rows, and the same tag entity may be repeated for different posts.
  *
  * With a properly configured transform, we can convert those flat rows with
- * duplicate data into hashes representing the different entities (posts and
- * tags), such that each post entity will also include the corresponding tags.
- * Furthermore, we can eliminate duplication by using identity maps to create
- * each entity only once, and reuse it if it repeats (such as in the case of
- * tags):
+ * duplicate data into an object graph that represents the different entities
+ * (posts and tags), such that each post entity will also include the
+ * corresponding tags. Furthermore, we can eliminate duplication by using
+ * identity maps to create each entity only once, and reuse it if it repeats
+ * (such as in the case of tags):
  *
  *     [
  *       { id: 1, content: "foo", tags: [{id: 1, name: "blah"}] },

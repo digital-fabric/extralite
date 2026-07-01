@@ -321,10 +321,10 @@ db.query_splat(transform, 'select a, b, c from foo')
 
 ### Structured Transforms
 
-To transform rows into entities, you can use the Extralite::Transform class,
-which lets you express data as one or more nested entities. This is particularly
-useful when doing JOIN queries. For example, a query may express a many-to-many
-relationship between posts and tags:
+To transform rows into an object graph containing entities, you can use the
+`Extralite::Transform` class, which lets you express data as an object graph.
+This is particularly useful when doing `JOIN` queries. For example, a query may
+express a many-to-many relationship between posts and tags:
 
 ```sql
 select
@@ -345,11 +345,11 @@ identity map, and to include a list of tags for each post:
 ```ruby
 transform = Extralite::Transform do
   {
-    id:       integer.identity,
-    content:  text,
+    id:       integer.identity, # posts.id
+    content:  text,             # posts.content
     tags:     [{
-      id:     integer.identity,
-      name:   text
+      id:     integer.identity, # tags.id
+      name:   text              # tags.name
     }]
   }
 end
