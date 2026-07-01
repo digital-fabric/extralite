@@ -644,6 +644,81 @@ class TransformPreparedQueryTest < Minitest::Test
     ], result[1][:tags]
     assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
   end
+
+  def test_transform_prepared_query
+    t = Extralite::Transform.new(@spec)
+    q = @db.prepare(t, @sql)
+
+    result = q.to_a
+    assert_kind_of Array, result
+    assert_equal 2, result.size
+
+    assert_equal 'T1', result[0][:title]
+    assert_equal 'C1', result[0][:content]
+    assert_equal [
+      { id: 1, name: 'tag1' },
+      { id: 2, name: 'tag2' }
+    ], result[0][:tags]
+
+    assert_equal 'T2', result[1][:title]
+    assert_equal 'C2', result[1][:content]
+    assert_equal [
+      { id: 2, name: 'tag2' },
+      { id: 3, name: 'tag3' },
+    ], result[1][:tags]
+    assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
+  end
+
+  def test_transform_prepared_query_each
+    t = Extralite::Transform.new(@spec)
+    q = @db.prepare(t, @sql)
+
+    result = []
+    q.each { result << it }
+    assert_kind_of Array, result
+    assert_equal 2, result.size
+
+    assert_equal 'T1', result[0][:title]
+    assert_equal 'C1', result[0][:content]
+    assert_equal [
+      { id: 1, name: 'tag1' },
+      { id: 2, name: 'tag2' }
+    ], result[0][:tags]
+
+    assert_equal 'T2', result[1][:title]
+    assert_equal 'C2', result[1][:content]
+    assert_equal [
+      { id: 2, name: 'tag2' },
+      { id: 3, name: 'tag3' },
+    ], result[1][:tags]
+    assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
+  end
+
+  def test_transform_prepared_query_enumerable
+    t = Extralite::Transform.new(@spec)
+    q = @db.prepare(t, @sql)
+
+    result = []
+    e = q.each
+    e.each { result << it }
+    assert_kind_of Array, result
+    assert_equal 2, result.size
+
+    assert_equal 'T1', result[0][:title]
+    assert_equal 'C1', result[0][:content]
+    assert_equal [
+      { id: 1, name: 'tag1' },
+      { id: 2, name: 'tag2' }
+    ], result[0][:tags]
+
+    assert_equal 'T2', result[1][:title]
+    assert_equal 'C2', result[1][:content]
+    assert_equal [
+      { id: 2, name: 'tag2' },
+      { id: 3, name: 'tag3' },
+    ], result[1][:tags]
+    assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
+  end
 end
 
 class TransformDSLTest < Minitest::Test
