@@ -24,7 +24,6 @@ ID ID_each;
 ID ID_keys;
 ID ID_new;
 ID ID_parse;
-ID ID_pragma;
 ID ID_strip;
 ID ID_to_s;
 ID ID_track;
@@ -32,11 +31,11 @@ ID ID_track;
 VALUE SYM_at_least_once;
 VALUE SYM_full;
 VALUE SYM_gvl_release_threshold;
+VALUE SYM_legacy;
 VALUE SYM_once;
 VALUE SYM_none;
 VALUE SYM_normal;
 VALUE SYM_passive;
-VALUE SYM_pragma;
 VALUE SYM_read_only;
 VALUE SYM_restart;
 VALUE SYM_truncate;
@@ -128,26 +127,26 @@ default_flags:
 }
 
 void Database_apply_opts(VALUE self, Database_t *db, VALUE opts) {
-  VALUE value = Qnil;
+  if (NIL_P(opts)) goto modern_pragmas;
 
   // :gvl_release_threshold
-  value = rb_hash_aref(opts, SYM_gvl_release_threshold);
+  VALUE value = rb_hash_aref(opts, SYM_gvl_release_threshold);
   if (!NIL_P(value)) db->gvl_release_threshold = NUM2INT(value);
 
-  // :pragma
-  value = rb_hash_aref(opts, SYM_pragma);
-  if (!NIL_P(value)) rb_funcall(self, ID_pragma, 1, value);
+  value = rb_hash_aref(opts, SYM_legacy);
+  if (RTEST(value)) return;
 
-  // :wal
-  value = rb_hash_aref(opts, SYM_wal);
-  if (RTEST(value)) {
-    int rc = sqlite3_exec(db->sqlite3_db, "PRAGMA journal_mode=wal", NULL, NULL, NULL);
-    if (rc != SQLITE_OK)
-      rb_raise(cError, "Failed to set WAL journaling mode: %s", sqlite3_errstr(rc));
-    rc = sqlite3_exec(db->sqlite3_db, "PRAGMA synchronous=1", NULL, NULL, NULL);
-    if (rc != SQLITE_OK)
-      rb_raise(cError, "Failed to set synchronous mode: %s", sqlite3_errstr(rc));
-  }
+modern_pragmas:
+  // :modern pragmas
+  int rc = sqlite3_exec(db->sqlite3_db, "PRAGMA journal_mode=wal", NULL, NULL, NULL);
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Failed to set WAL journaling mode: %s", sqlite3_errstr(rc));
+  rc = sqlite3_exec(db->sqlite3_db, "PRAGMA synchronous=1", NULL, NULL, NULL);
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Failed to set synchronous mode: %s", sqlite3_errstr(rc));
+  rc = sqlite3_exec(db->sqlite3_db, "PRAGMA foreign_keys=1", NULL, NULL, NULL);
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Failed to set foreign keys mode: %s", sqlite3_errstr(rc));
 }
 
 int Database_progress_handler(void *ptr) {
@@ -174,16 +173,16 @@ int Database_busy_handler(void *ptr, int v) {
  *
  * - `:gvl_release_threshold` (`Integer`): sets the GVL release threshold (see
  *   `#gvl_release_threshold=`).
- * - `:pragma` (`Hash`): one or more pragmas to set upon opening the database.
  * - `:read_only` (`true`/`false`): opens the database in read-only mode if true.
- * - `:wal` (`true`/`false`): sets up the database for [WAL journaling
- *   mode](https://www.sqlite.org/wal.html) by setting `PRAGMA journal_mode=wal`
- *   and `PRAGMA synchronous=1`.
+ * - `:legacy` (`true`/`false`): By default the database is set up for
+ * concurrent access with [WAL journaling
+ * mode](https://www.sqlite.org/wal.html). To prevent Extralite from setting up
+ * WAL journaling, set this option to true.
  *
  * @overload initialize(path)
  *   @param path [String] file path (or ':memory:' for memory database)
  *   @return [void]
- * @overload initialize(path, gvl_release_threshold: , on_progress: , read_only: , wal: )
+ * @overload initialize(path, gvl_release_threshold: , on_progress: , read_only: , legacy: )
  *   @param path [String] file path (or ':memory:' for memory database)
  *   @param options [Hash] options for opening the database
  *   @return [void]
@@ -231,7 +230,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
     sqlite3_busy_handler(db->sqlite3_db, &Database_busy_handler, db);
   }
 
-  if (!NIL_P(opts)) Database_apply_opts(self, db, opts);
+  Database_apply_opts(self, db, opts);
   return Qnil;
 }
 
@@ -1611,7 +1610,6 @@ void Init_ExtraliteDatabase(void) {
   ID_keys         = rb_intern_const("keys");
   ID_new          = rb_intern_const("new");
   ID_parse        = rb_intern_const("parse");
-  ID_pragma       = rb_intern_const("pragma");
   ID_strip        = rb_intern_const("strip");
   ID_to_s         = rb_intern_const("to_s");
   ID_track        = rb_intern_const("track");
@@ -1619,11 +1617,11 @@ void Init_ExtraliteDatabase(void) {
   SYM_at_least_once         = ID2SYM(rb_intern_const("at_least_once"));
   SYM_full                  = ID2SYM(rb_intern_const("full"));
   SYM_gvl_release_threshold = ID2SYM(rb_intern_const("gvl_release_threshold"));
+  SYM_legacy                = ID2SYM(rb_intern_const("legacy"));
   SYM_once                  = ID2SYM(rb_intern_const("once"));
   SYM_none                  = ID2SYM(rb_intern_const("none"));
   SYM_normal                = ID2SYM(rb_intern_const("normal"));
   SYM_passive               = ID2SYM(rb_intern_const("passive"));
-  SYM_pragma                = ID2SYM(rb_intern_const("pragma"));
   SYM_read_only             = ID2SYM(rb_intern_const("read_only"));
   SYM_restart               = ID2SYM(rb_intern_const("restart"));
   SYM_truncate              = ID2SYM(rb_intern_const("truncate"));
@@ -1632,11 +1630,11 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(SYM_at_least_once);
   rb_gc_register_mark_object(SYM_full);
   rb_gc_register_mark_object(SYM_gvl_release_threshold);
+  rb_gc_register_mark_object(SYM_legacy);
   rb_gc_register_mark_object(SYM_once);
   rb_gc_register_mark_object(SYM_none);
   rb_gc_register_mark_object(SYM_normal);
   rb_gc_register_mark_object(SYM_passive);
-  rb_gc_register_mark_object(SYM_pragma);
   rb_gc_register_mark_object(SYM_read_only);
   rb_gc_register_mark_object(SYM_restart);
   rb_gc_register_mark_object(SYM_truncate);

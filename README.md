@@ -831,16 +831,13 @@ Extralite provides a comprehensive set of tools for dealing with concurrency
 issues, and for making sure that running queries on SQLite databases does not
 cause the app to freeze.
 
-**Note**: In order to allow concurrent access your the database, it is highly
-recommended that you set your database to use [WAL journaling
-mode](https://www.sqlite.org/wal.html) for *all* database connections.
-Otherwise, you risking running into performance problems and having queries fail
-with `BusyError` exceptions. You can easily open your database in WAL journaling
-mode by passing a `wal: true` option:
+**Note**: By default Extralite automatically configures SQLite to [WAL
+journaling mode](https://www.sqlite.org/wal.html) for *all* database
+connections. To open a legacy database without WAL journaling, you can open the
+database and pass the `legacy: true` option:
 
 ```ruby
-# This will set PRAGMA journal_mode=1 and PRAGMA synchronous=1
-db = Extralite::Database.new('path/to/db', wal: true)
+db = Extralite::Database.new('path/to/db', legacy: true)
 ```
 
 ### The Ruby GVL

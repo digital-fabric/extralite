@@ -341,7 +341,7 @@ class DatabaseTest < Minitest::Test
 
   def test_pragma
     assert_equal 'memory', @db.pragma('journal_mode')
-    assert_equal 2, @db.pragma('synchronous')
+    assert_equal 1, @db.pragma('synchronous')
 
     assert_equal 1, @db.pragma(:schema_version)
     assert_equal 0, @db.pragma(:recursive_triggers)
@@ -866,14 +866,17 @@ class DatabaseTest < Minitest::Test
     db = Extralite::Database.new(':memory:', gvl_release_threshold: 23)
     assert_equal 23, db.gvl_release_threshold
 
-    fn = Tempfile.new('extralite_test_database_initialize_options_wal').path
-    db = Extralite::Database.new(fn, wal: true)
+    fn = Tempfile.new('extralite_test_database_initialize_modern').path
+    db = Extralite::Database.new(fn)
     assert_equal 'wal', db.pragma(:journal_mode)
     assert_equal 1, db.pragma(:synchronous)
+    assert_equal 1, db.pragma(:foreign_keys)
 
-    fn = Tempfile.new('extralite_test_database_initialize_options_pragma').path
-    db = Extralite::Database.new(fn, pragma: { application_id: 42 })
-    assert_equal 42, db.pragma(:application_id)
+    fn = Tempfile.new('extralite_test_database_initialize_legacy').path
+    db = Extralite::Database.new(fn, legacy: true)
+    assert_equal 'delete', db.pragma(:journal_mode)
+    assert_equal 2, db.pragma(:synchronous)
+    assert_equal 0, db.pragma(:foreign_keys)
   end
 
   def test_database_inspect
@@ -1052,7 +1055,7 @@ class DatabaseTest < Minitest::Test
   def test_wal_checkpoint
     fn = Tempfile.new('extralite_test_wal_checkpoint').path
 
-    db = Extralite::Database.new(fn, wal: true)
+    db = Extralite::Database.new(fn)
 
     db.execute 'create table t (x, y, z)'
     rows = (1..1000).map { [rand, rand, rand] }
@@ -1126,7 +1129,7 @@ end
 class ScenarioTest < Minitest::Test
   def setup
     @fn = Tempfile.new('extralite_scenario_test').path
-    @db = Extralite::Database.new(@fn)
+    @db = Extralite::Database.new(@fn, legacy: true)
     @db.query('create table if not exists t (x,y,z)')
     @db.query('delete from t')
     @db.query('insert into t values (1, 2, 3)')
@@ -1136,7 +1139,7 @@ class ScenarioTest < Minitest::Test
   def test_concurrent_transactions
     done = false
     t = Thread.new do
-      db = Extralite::Database.new(@fn)
+      db = Extralite::Database.new(@fn, legacy: true)
       db.query 'begin immediate'
       sleep 0.01 until done
 
@@ -1806,7 +1809,7 @@ class RactorTest < Minitest::Test
     assert_equal [10] * 10, buf
 
     final_check = Ractor.new(fn) do |rfn|
-      rdb = Extralite::Database.new(rfn, wal: true)
+      rdb = Extralite::Database.new(rfn)
       count = rdb.query_single_splat('select count(*) from stress_test')
       Ractor.yield count
     end
