@@ -15,7 +15,7 @@ def common_spec(s)
   s.rdoc_options = ['--title', 'Extralite', '--main', 'README.md']
   s.extra_rdoc_files = ['README.md']
   s.require_paths = ['lib']
-  s.required_ruby_version = '>= 3.2'
+  s.required_ruby_version = '>= 3.4'
 
   s.add_development_dependency  'rake-compiler',        '1.3.1'
   s.add_development_dependency  'minitest'
