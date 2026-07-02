@@ -1131,6 +1131,10 @@ class DatabaseTest < Minitest::Test
 
     assert_equal "'abc'def", @db.query_single_splat("select '#{@db.quote("'abc'def")}'")
   end
+
+  def test_cache_flush
+    assert_equal @db, @db.cache_flush
+  end
 end
 
 class ScenarioTest < Minitest::Test

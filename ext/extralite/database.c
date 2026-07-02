@@ -1530,6 +1530,21 @@ VALUE Database_wal_checkpoint(int argc, VALUE *argv, VALUE self) {
   return rb_ary_new3(2, INT2NUM(total_frames), INT2NUM(checkpointed_frames));
 }
 
+/* Flushes dirty pages in the pager-cache to the disk. For more information see:
+ * https://sqlite.org/c3ref/db_cacheflush.html
+ *
+ * @return [Extralite::Database] Database
+*/
+VALUE Database_cache_flush(VALUE self) {
+  Database_t *db = self_to_open_database(self);
+
+  int rc = sqlite3_db_cacheflush(db->sqlite3_db);
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Failed to flush the database cache: %s", sqlite3_errstr(rc));
+
+  return self;
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -1542,10 +1557,11 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "backup",                 Database_backup, -1);
   rb_define_method(cDatabase, "batch_execute",          Database_batch_execute, 2);
   rb_define_method(cDatabase, "batch_query",            Database_batch_query, 2);
-  rb_define_method(cDatabase, "batch_query_array",        Database_batch_query_array, 2);
-  rb_define_method(cDatabase, "batch_query_splat",       Database_batch_query_splat, 2);
+  rb_define_method(cDatabase, "batch_query_array",      Database_batch_query_array, 2);
+  rb_define_method(cDatabase, "batch_query_splat",      Database_batch_query_splat, 2);
   rb_define_method(cDatabase, "batch_query_hash",       Database_batch_query, 2);
   rb_define_method(cDatabase, "busy_timeout=",          Database_busy_timeout_set, 1);
+  rb_define_method(cDatabase, "cache_flush",            Database_cache_flush, 0);
   rb_define_method(cDatabase, "changes",                Database_changes, 0);
   rb_define_method(cDatabase, "close",                  Database_close, 0);
   rb_define_method(cDatabase, "closed?",                Database_closed_p, 0);
