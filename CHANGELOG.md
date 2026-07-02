@@ -1,3 +1,13 @@
+## 3.0.0 2026-07-02
+
+- Update benchmark results in README
+- Prevent extension loading using `load_extension` SQL function
+- Remove `wal: true` option, add `legacy: true` option for
+- Change default behaviour to set WAL journal mode + synchronous + foreign keys
+- Add transform DSL
+- Add support for type coercion in transforms
+- Add `Extralite::Transform` class for transforming rows into an object graph
+
 ## 2.15 2026-06-28
 
 - Update bundled SQLite to 3.53.3
