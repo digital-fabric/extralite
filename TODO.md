@@ -2,7 +2,7 @@
   - [ ] Run benchmarks again against latest version of sqlite3 gem
   - [ ] More database methods:
     - [v] `Database#quote`
-    - [ ] `Database#cache_flush` https://sqlite.org/c3ref/db_cacheflush.html
+    - [v] `Database#cache_flush` https://sqlite.org/c3ref/db_cacheflush.html
     - [ ] `Database#release_memory` https://sqlite.org/c3ref/db_release_memory.html
   - Security
     - Enable extension loading by using

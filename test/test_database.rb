@@ -1135,6 +1135,10 @@ class DatabaseTest < Minitest::Test
   def test_cache_flush
     assert_equal @db, @db.cache_flush
   end
+
+  def test_release_memory
+    assert_equal @db, @db.release_memory
+  end
 end
 
 class ScenarioTest < Minitest::Test

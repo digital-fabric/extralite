@@ -1545,6 +1545,21 @@ VALUE Database_cache_flush(VALUE self) {
   return self;
 }
 
+/* Attempts to free up as much memory as possible. For more information see:
+ * https://sqlite.org/c3ref/db_release_memory.html
+ *
+ * @return [Extralite::Database] Database
+*/
+VALUE Database_release_memory(VALUE self) {
+  Database_t *db = self_to_open_database(self);
+
+  int rc = sqlite3_db_release_memory(db->sqlite3_db);
+  if (rc != SQLITE_OK)
+    rb_raise(cError, "Failed to release memory: %s", sqlite3_errstr(rc));
+
+  return self;
+}
+
 void Init_ExtraliteDatabase(void) {
   VALUE mExtralite = rb_define_module("Extralite");
   rb_define_singleton_method(mExtralite, "runtime_status", Extralite_runtime_status, -1);
@@ -1601,6 +1616,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "query_single_splat",     Database_query_single_splat, -1);
   rb_define_method(cDatabase, "query_single_hash",      Database_query_single, -1);
   rb_define_method(cDatabase, "read_only?",             Database_read_only_p, 0);
+  rb_define_method(cDatabase, "release_memory",         Database_release_memory, 0);
   rb_define_method(cDatabase, "status",                 Database_status, -1);
   rb_define_method(cDatabase, "total_changes",          Database_total_changes, 0);
   rb_define_method(cDatabase, "trace",                  Database_trace, 0);
