@@ -296,6 +296,10 @@ module Extralite
       raise Rollback
     end
 
+    def quote(str)
+      str.gsub("'", "''")
+    end
+
     private
 
     def pragma_set(values)

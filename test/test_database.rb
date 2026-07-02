@@ -1124,6 +1124,13 @@ class DatabaseTest < Minitest::Test
     assert_nil result
     assert_equal [7, 8], @db.query_splat('SELECT x FROM t ORDER BY x')
   end
+
+  def test_quote
+    assert_equal '"abc', @db.quote('"abc')
+    assert_equal "''abc''def", @db.quote("'abc'def")
+
+    assert_equal "'abc'def", @db.query_single_splat("select '#{@db.quote("'abc'def")}'")
+  end
 end
 
 class ScenarioTest < Minitest::Test
