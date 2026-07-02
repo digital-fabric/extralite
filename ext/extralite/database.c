@@ -210,6 +210,8 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   }
 
 #ifdef HAVE_SQLITE3_ENABLE_LOAD_EXTENSION
+  // Allow loading extensions only using the C interface, i.e. Database#load_extension
+  // see: https://www.sqlite.org/c3ref/c_dbconfig_defensive.html#sqlitedbconfigenableloadextension
   sqlite3_db_config(db->sqlite3_db ,SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL);
 #endif
 
