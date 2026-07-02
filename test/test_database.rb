@@ -302,6 +302,15 @@ class DatabaseTest < Minitest::Test
 
     r = @db.query_single_splat("select reverse('abcd')")
     assert_equal 'dcba', r
+
+    e = nil
+    begin
+      @db.execute("select load_extension('/extensions/foo')")
+    rescue => e
+    end
+
+    assert_kind_of Extralite::SQLError, e
+    assert_equal 'not authorized', e.message
   end
 
   def test_tables

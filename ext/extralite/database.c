@@ -210,11 +210,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   }
 
 #ifdef HAVE_SQLITE3_ENABLE_LOAD_EXTENSION
-  rc = sqlite3_enable_load_extension(db->sqlite3_db, 1);
-  if (rc) {
-    sqlite3_close_v2(db->sqlite3_db);
-    rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
-  }
+  sqlite3_db_config(db->sqlite3_db ,SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL);
 #endif
 
   db->trace_proc = Qnil;

@@ -1,9 +1,5 @@
 - [ ] Version 3.0
   - [ ] Run benchmarks again against latest version of sqlite3 gem
-  - [ ] More database methods:
-    - [v] `Database#quote`
-    - [v] `Database#cache_flush` https://sqlite.org/c3ref/db_cacheflush.html
-    - [ ] `Database#release_memory` https://sqlite.org/c3ref/db_release_memory.html
   - Security
     - Enable extension loading by using
       [SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION](https://www.sqlite.org/c3ref/c_dbconfig_defensive.html#sqlitedbconfigenableloadextension)
