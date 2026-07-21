@@ -1,3 +1,8 @@
+## 3.0.1 2026-07-21
+
+- Fix passing nil transform to `DB#prepare`
+- Remove support for Ruby 3.2, 3.3
+
 ## 3.0.0 2026-07-02
 
 - Update benchmark results in README
