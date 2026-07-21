@@ -669,6 +669,21 @@ class TransformPreparedQueryTest < Minitest::Test
     assert_equal result[0][:tags][1].object_id, result[1][:tags][0].object_id
   end
 
+  def test_transform_prepared_query_nil_transform
+    q = @db.prepare(nil, @sql)
+
+    result = q.to_a
+    assert_kind_of Array, result
+    assert_equal 4, result.size
+
+    assert_equal [
+      {id: 1, title: "T1", content: "C1", name: "tag1"},
+      {id: 2, title: "T1", content: "C1", name: "tag2"},
+      {id: 2, title: "T2", content: "C2", name: "tag2"},
+      {id: 3, title: "T2", content: "C2", name: "tag3"}
+    ], result
+  end
+
   def test_transform_prepared_query_each
     t = Extralite::Transform.new(@spec)
     q = @db.prepare(t, @sql)

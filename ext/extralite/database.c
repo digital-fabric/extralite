@@ -742,7 +742,7 @@ static inline VALUE Database_prepare(int argc, VALUE *argv, VALUE self, VALUE mo
   rb_check_arity(argc, 1, UNLIMITED_ARGUMENTS);
 
   VALUE transform = Qnil;
-  if (argc > 1 && rb_obj_is_instance_of(argv[0], cTransform)) {
+  if (argc > 1 && (NIL_P(argv[0]) || rb_obj_is_instance_of(argv[0], cTransform))) {
     transform = argv[0];
     argv++;
     argc--;
