@@ -58,12 +58,14 @@ static size_t Database_size(const void *ptr) {
 
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
+  rb_gc_mark_movable(db->stmt_cache);
   rb_gc_mark_movable(db->trace_proc);
   rb_gc_mark_movable(db->progress_handler.proc);
 }
 
 static void Database_compact(void *ptr) {
   Database_t *db = ptr;
+  db->stmt_cache            = rb_gc_location(db->stmt_cache);
   db->trace_proc            = rb_gc_location(db->trace_proc);
   db->progress_handler.proc = rb_gc_location(db->progress_handler.proc);
 }
@@ -83,6 +85,7 @@ static const rb_data_type_t Database_type = {
 static VALUE Database_allocate(VALUE klass) {
   Database_t *db = ALLOC(Database_t);
   db->sqlite3_db = NULL;
+  db->stmt_cache = Qnil;
   db->trace_proc = Qnil;
   db->progress_handler.proc = Qnil;
   db->progress_handler.mode = PROGRESS_NONE;
@@ -215,6 +218,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   sqlite3_db_config(db->sqlite3_db ,SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL);
 #endif
 
+  db->stmt_cache = rb_hash_new();
   db->trace_proc = Qnil;
   db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
 
@@ -273,6 +277,10 @@ VALUE Database_closed_p(VALUE self) {
 
 inline enum gvl_mode Database_prepare_gvl_mode(Database_t *db) {
   return db->gvl_release_threshold < 0 ? GVL_HOLD : GVL_RELEASE;
+}
+
+static inline void cache_prepare_single_stmt(Database_t *extralite_db, enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
+  return prepare_single_stmt(mode, db, stmt, sql);
 }
 
 static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *), enum query_mode query_mode) {

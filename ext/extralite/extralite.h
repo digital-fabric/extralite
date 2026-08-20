@@ -70,6 +70,7 @@ struct progress_handler {
 
 typedef struct {
   sqlite3                 *sqlite3_db;
+  VALUE                   stmt_cache;
   VALUE                   trace_proc;
   int                     gvl_release_threshold;
   struct progress_handler progress_handler;
