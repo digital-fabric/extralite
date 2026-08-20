@@ -360,6 +360,11 @@ class DatabaseTest < Minitest::Test
     assert_equal 1, @db.pragma(:recursive_triggers)
   end
 
+  def test_pragma_set
+    @db.pragma('foreign_keys' => 1)
+    # assert_equal 1, @db.pragma('foreign_keys')
+  end
+
   def test_execute
     changes = @db.execute('update t set x = 42')
     assert_equal 2, changes

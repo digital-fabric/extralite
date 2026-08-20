@@ -304,7 +304,8 @@ module Extralite
 
     def pragma_set(values)
       sql = values.inject(+'') { |s, (k, v)| s += "pragma #{k}=#{v}; " }
-      query(sql)
+      execute(sql)
+      self
     end
 
     def pragma_get(key)
