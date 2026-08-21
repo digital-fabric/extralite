@@ -285,12 +285,14 @@ static inline void cache_prepare_single_stmt(Database_t *extralite_db, enum gvl_
 
 static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *), enum query_mode query_mode) {
   Database_t *db = self_to_open_database(self);
-  sqlite3_stmt *stmt;
+  sqlite3_stmt *stmt = NULL;
   VALUE sql = Qnil;
   VALUE transform = Qnil;
   // transform mode is set and the first parameter is not a string, so we expect
   // a transform.,
   int got_transform = (TYPE(argv[0]) != T_STRING);
+  int execute_mode = query_mode == QUERY_VOID;
+  int total_changes = 0;
 
   // extract query from args
   rb_check_arity(argc, got_transform ? 2 : 1, UNLIMITED_ARGUMENTS);
@@ -301,26 +303,35 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
     argv++;
   }
 
-  sql = rb_funcall(argv[0], ID_strip, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
-  // sql = argv[0];
+  sql= argv[0];
 
-  prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
+  if (execute_mode) {
+    Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
+    total_changes = exec_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql, argc, argv);
+    stmt = NULL;
+  }
+  else
+    cache_prepare_single_stmt(db, DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
   RB_GC_GUARD(sql);
-
-  if (stmt == NULL) return Qnil;
-
-  bind_all_parameters(stmt, argc - 1, argv + 1);
-  Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
 
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, Qnil, transform,
     query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
   );
+  if (stmt) {
+    bind_all_parameters(stmt, argc - 1, argv + 1);
+    Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
 
-  VALUE result = rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
-  RB_GC_GUARD(result);
-  return result;
+    VALUE result = rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+    RB_GC_GUARD(result);
+    return result;    
+  }
+  else if (execute_mode) {
+    ctx.total_changes = total_changes;
+    VALUE result = (VALUE)call(&ctx);
+    return result;
+  }
+  return Qnil;
 }
 
 /* call-seq:
@@ -514,10 +525,10 @@ VALUE Database_query_single_array(int argc, VALUE *argv, VALUE self) {
  *
  * @param sql [String] query SQL
  * @param parameters [Array, Hash] parameters to run query with
- * @return [Integer, nil] Total number of changes effected or `nil` if the query ends with a comment.
+ * @return [Integer] Total number of changes effected
  */
 VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_changes, QUERY_HASH);
+  return Database_perform_query(argc, argv, self, safe_total_changes, QUERY_VOID);
 }
 
 /* call-seq:

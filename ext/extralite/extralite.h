@@ -79,7 +79,8 @@ typedef struct {
 enum query_mode {
   QUERY_HASH,
   QUERY_SPLAT,
-  QUERY_ARRAY
+  QUERY_ARRAY,
+  QUERY_VOID
 };
 
 typedef struct {
@@ -168,6 +169,7 @@ typedef struct {
 
   int                 eof;
   int                 step_count;
+  int                 total_changes;
 } query_ctx;
 
 enum gvl_mode {
@@ -192,7 +194,8 @@ enum gvl_mode {
   row_mode, \
   max_rows, \
   0, \
-  0 \
+  0, \
+  0  \
 }
 
 #define DEFAULT_GVL_RELEASE_THRESHOLD 1000
@@ -210,6 +213,7 @@ VALUE safe_batch_query_array(query_ctx *ctx);
 VALUE safe_query_splat(query_ctx *ctx);
 VALUE safe_query_array(query_ctx *ctx);
 VALUE safe_query_changes(query_ctx *ctx);
+VALUE safe_total_changes(query_ctx *ctx);
 VALUE safe_query_columns(query_ctx *ctx);
 VALUE safe_query_hash(query_ctx *ctx);
 VALUE safe_query_transform(query_ctx *ctx);
@@ -224,7 +228,7 @@ VALUE Query_to_a(VALUE self);
 VALUE Query_transform_set(VALUE self, VALUE transform);
 
 void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
-void prepare_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
+int exec_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
 void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);
 void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);
 int stmt_iterate(query_ctx *ctx);

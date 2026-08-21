@@ -109,10 +109,13 @@ class DatabaseTest < Minitest::Test
     assert_equal false, @db.transaction_active?
   end
 
-  def test_multiple_statements
-    @db.query("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');")
+  def test_query_multiple_statements
+    @db.query("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f')")
+    assert_equal [1, 4, 'a'], @db.query_splat('select x from t order by x')
 
-    assert_equal [1, 4, 'a', 'd'], @db.query_splat('select x from t order by x')
+    assert_equal 2, @db.execute("insert into t values ('d', 'e', 'f'); insert into t values ('g', 'h', 'i');")
+
+    assert_equal [1, 4, 'a', 'd', 'g'], @db.query_splat('select x from t order by x')
   end
 
   def test_multiple_statements_with_error
@@ -355,7 +358,7 @@ class DatabaseTest < Minitest::Test
     assert_equal 1, @db.pragma(:schema_version)
     assert_equal 0, @db.pragma(:recursive_triggers)
 
-    assert_equal [], @db.pragma(schema_version: 33, recursive_triggers: 1)
+    assert_equal @db, @db.pragma(schema_version: 33, recursive_triggers: 1)
     assert_equal 33, @db.pragma(:schema_version)
     assert_equal 1, @db.pragma(:recursive_triggers)
   end
@@ -380,6 +383,16 @@ class DatabaseTest < Minitest::Test
     changes = @db.execute('update t set x = ? where z = ?', [42, 6])
     assert_equal 1, changes
     assert_equal [[1, 2, 3], [42, 5, 6]], @db.query_array('select * from t order by x')
+  end
+
+  def test_execute_multi_stmt_params
+    changes = @db.execute <<~SQL, 42, 43, 44
+      insert into t values (?, ?, ?);
+      update t set x = 45 where x = 42;
+    SQL
+
+    assert_equal 2, changes
+    assert_equal [[1, 2, 3], [4, 5, 6], [45, 43, 44]], @db.query_array('select * from t order by x')
   end
 
   def test_batch_execute
@@ -1097,18 +1110,22 @@ class DatabaseTest < Minitest::Test
     assert_equal [0, 0], r
   end
 
+  def test_execute_simple
+    @db.execute('select 1')
+  end
+
   def test_execute_with_comments
     result = @db.execute(<<~SQL)
       -- this is a comment
     SQL
-    assert_nil result
+    assert_equal 0, result
 
     result = @db.execute(<<~SQL)
       DELETE FROM t;
       INSERT INTO t (x, y, z) VALUES (1, 1, 1);
       INSERT INTO t (x, y, z) VALUES (2, 2, 2);
     SQL
-    assert_equal 1, result
+    assert_equal 4, result
     assert_equal [1, 2], @db.query_splat('SELECT x FROM t ORDER BY x')
 
     result = @db.execute(<<~SQL)
@@ -1117,7 +1134,7 @@ class DatabaseTest < Minitest::Test
       INSERT INTO t (x, y, z) VALUES (3, 3, 3);
       INSERT INTO t (x, y, z) VALUES (4, 4, 4);
     SQL
-    assert_equal 1, result
+    assert_equal 4, result
     assert_equal [3, 4], @db.query_splat('SELECT x FROM t ORDER BY x')
 
     result = @db.execute(<<~SQL)
@@ -1126,17 +1143,16 @@ class DatabaseTest < Minitest::Test
       -- this is a comment in the middle
       INSERT INTO t (x, y, z) VALUES (6, 6, 6);
     SQL
-    assert_equal 1, result
+    assert_equal 4, result
     assert_equal [5, 6], @db.query_splat('SELECT x FROM t ORDER BY x')
 
     result = @db.execute(<<~SQL)
       DELETE FROM t;
       INSERT INTO t (x, y, z) VALUES (7, 7, 7);
-      INSERT INTO t (x, y, z) VALUES (8, 8, 8);
       -- this is a comment at the end
     SQL
-    assert_nil result
-    assert_equal [7, 8], @db.query_splat('SELECT x FROM t ORDER BY x')
+    assert_equal 3, result
+    assert_equal [7], @db.query_splat('SELECT x FROM t ORDER BY x')
   end
 
   def test_quote

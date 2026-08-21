@@ -219,32 +219,63 @@ typedef struct {
   const char *str;
   long len;
   int rc;
+  int total_changes;
+  int argc;
+  VALUE *argv;
 } prepare_stmt_ctx;
 
-void *prepare_multi_stmt_impl(void *ptr) {
+inline int exec_stmt_iterate(sqlite3_stmt *stmt) {
+  while (true) {
+    int rc = sqlite3_step(stmt);
+    switch (rc) {
+      case SQLITE_ROW:  continue;
+      case SQLITE_DONE: return 0;
+      default:          return rc;
+    }
+  }
+}
+
+void *exec_bind_parameters(void *ptr) {
+  prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
+  bind_all_parameters(*(ctx->stmt), ctx->argc - 1, ctx->argv + 1);
+  return NULL;
+}
+
+void *exec_multi_stmt_impl(void *ptr) {
   prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
   const char *rest = NULL;
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
+  ctx->total_changes = 0;
   while (1) {
     ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
-    if (ctx->rc) {
-      // error
-      sqlite3_finalize(*ctx->stmt);
+
+    // check for error
+    if (ctx->rc != SQLITE_OK) {
+      if (*(ctx->stmt)) {
+        sqlite3_finalize(*(ctx->stmt));
+        *(ctx->stmt) = NULL;
+      }
       return NULL;
     }
+
+    if (!*(ctx->stmt))
+      return NULL;
+
+    rb_thread_call_with_gvl(exec_bind_parameters, ctx);
+
+    ctx->rc = exec_stmt_iterate(*(ctx->stmt));
+    if (ctx->rc != SQLITE_OK) {
+      sqlite3_finalize(*(ctx->stmt));
+      *(ctx->stmt) = NULL;
+      return NULL;
+    }
+
+    ctx->total_changes += sqlite3_changes(ctx->db);
+    sqlite3_finalize(*(ctx->stmt));
+    *(ctx->stmt) = NULL;
 
     if (rest == end) return NULL;
-
-    // perform current query, but discard its results
-    ctx->rc = sqlite3_step(*ctx->stmt);
-    sqlite3_finalize(*ctx->stmt);
-    switch (ctx->rc) {
-    case SQLITE_BUSY:
-    case SQLITE_ERROR:
-    case SQLITE_MISUSE:
-      return NULL;
-    }
     str = rest;
   }
   return NULL;
@@ -255,25 +286,30 @@ This function prepares a statement from an SQL string containing one or more SQL
 statements. It will release the GVL while the statements are being prepared and
 executed. All statements excluding the last one are executed. The last statement
 is not executed, but instead handed back to the caller for looping over results.
+
+@return [int] total changes
 */
-void prepare_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
-  prepare_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
-  gvl_call(mode, prepare_multi_stmt_impl, (void *)&ctx);
+int exec_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv) {
+  prepare_stmt_ctx ctx = {
+    db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0, 0, argc, argv
+  };
+  gvl_call(mode, exec_multi_stmt_impl, (void *)&ctx);
   RB_GC_GUARD(sql);
 
   switch (ctx.rc) {
   case 0:
-    return;
+    return ctx.total_changes;
   case SQLITE_BUSY:
+    if (*stmt) sqlite3_finalize(*stmt);
     rb_raise(cBusyError, "Database is busy");
   case SQLITE_ERROR:
+    if (*stmt) sqlite3_finalize(*stmt);
     rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
   default:
+    if (*stmt) sqlite3_finalize(*stmt);
     rb_raise(cError, "%s", sqlite3_errmsg(db));
   }
 }
-
-#define SQLITE_MULTI_STMT -1
 
 void *prepare_single_stmt_impl(void *ptr) {
   prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
@@ -284,10 +320,6 @@ void *prepare_single_stmt_impl(void *ptr) {
   ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
   if (ctx->rc)
     goto discard_stmt;
-  else if (rest != end) {
-    ctx->rc = SQLITE_MULTI_STMT;
-    goto discard_stmt;
-  }
   goto end;
 discard_stmt:
   if (*ctx->stmt) {
@@ -310,8 +342,6 @@ void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, V
     rb_raise(cBusyError, "Database is busy");
   case SQLITE_ERROR:
     rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
-  case SQLITE_MULTI_STMT:
-    rb_raise(cError, "A prepared statement does not accept SQL strings with multiple queries");
   default:
     rb_raise(cError, "%s", sqlite3_errmsg(db));
   }
@@ -1007,4 +1037,8 @@ VALUE safe_query_columns(query_ctx *ctx) {
 VALUE safe_query_changes(query_ctx *ctx) {
   while (stmt_iterate(ctx));
   return INT2FIX(sqlite3_changes(ctx->sqlite3_db));
+}
+
+VALUE safe_total_changes(query_ctx *ctx) {
+  return INT2FIX(ctx->total_changes);
 }
