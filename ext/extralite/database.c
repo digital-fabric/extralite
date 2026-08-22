@@ -307,7 +307,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
 
   if (execute_mode) {
     Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
-    total_changes = exec_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql, argc, argv);
+    total_changes = exec_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql, argc - 1, argv + 1);
     stmt = NULL;
   }
   else
@@ -509,7 +509,9 @@ VALUE Database_query_single_array(int argc, VALUE *argv, VALUE self) {
  *   db.execute(sql, *parameters) -> changes
  *
  * Runs a query returning the total changes effected. This method should be used
- * for data- or schema-manipulation queries.
+ * for data- or schema-manipulation queries. If the given SQL string contains
+ * multiple statements, they will be executed in the order given. If multiple
+ * statements are given along with query parameters, an error is raised.
  *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When

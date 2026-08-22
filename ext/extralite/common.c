@@ -224,7 +224,7 @@ typedef struct {
   VALUE *argv;
 } prepare_stmt_ctx;
 
-inline int exec_stmt_iterate(sqlite3_stmt *stmt) {
+static inline int exec_stmt_iterate(sqlite3_stmt *stmt) {
   while (true) {
     int rc = sqlite3_step(stmt);
     switch (rc) {
@@ -235,9 +235,16 @@ inline int exec_stmt_iterate(sqlite3_stmt *stmt) {
   }
 }
 
-void *exec_bind_parameters(void *ptr) {
+static inline void finalize_stmt(sqlite3_stmt **stmt) {
+  if (*stmt) {
+    sqlite3_finalize(*stmt);
+    *stmt = NULL;
+  }
+}
+
+static inline void *exec_bind_parameters(void *ptr) {
   prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
-  bind_all_parameters(*(ctx->stmt), ctx->argc - 1, ctx->argv + 1);
+  bind_all_parameters(*(ctx->stmt), ctx->argc, ctx->argv);
   return NULL;
 }
 
@@ -246,38 +253,42 @@ void *exec_multi_stmt_impl(void *ptr) {
   const char *rest = NULL;
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
+  sqlite3_stmt *next_stmt = NULL;
   ctx->total_changes = 0;
   while (1) {
-    ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
-
-    // check for error
-    if (ctx->rc != SQLITE_OK) {
-      if (*(ctx->stmt)) {
-        sqlite3_finalize(*(ctx->stmt));
-        *(ctx->stmt) = NULL;
-      }
-      return NULL;
+    if (next_stmt) {
+      *(ctx->stmt) = next_stmt;
+      next_stmt = NULL;
+      ctx->rc = SQLITE_OK;
     }
-
-    if (!*(ctx->stmt))
-      return NULL;
-
-    rb_thread_call_with_gvl(exec_bind_parameters, ctx);
+    else
+      ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
+    if ((ctx->rc != SQLITE_OK) || !(*(ctx->stmt))) goto done;
+    if (ctx->argc) {
+      // parameters were provided - check if str contains multiple statements
+      if (rest != end) {
+        int res = sqlite3_prepare_v2(ctx->db, rest, end-rest, &next_stmt, NULL);
+        if (next_stmt) res = SQLITE_MISUSE;
+        if (res != SQLITE_OK) {
+          ctx->rc = res;
+          goto done;
+        }
+      }
+      rb_thread_call_with_gvl(exec_bind_parameters, ctx);
+    }
 
     ctx->rc = exec_stmt_iterate(*(ctx->stmt));
-    if (ctx->rc != SQLITE_OK) {
-      sqlite3_finalize(*(ctx->stmt));
-      *(ctx->stmt) = NULL;
-      return NULL;
-    }
+    if (ctx->rc != SQLITE_OK) goto done;
 
     ctx->total_changes += sqlite3_changes(ctx->db);
-    sqlite3_finalize(*(ctx->stmt));
-    *(ctx->stmt) = NULL;
+    finalize_stmt(ctx->stmt);
 
     if (rest == end) return NULL;
     str = rest;
   }
+done:
+  finalize_stmt(&next_stmt);
+  finalize_stmt(ctx->stmt);
   return NULL;
 }
 
@@ -305,6 +316,9 @@ int exec_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE 
   case SQLITE_ERROR:
     if (*stmt) sqlite3_finalize(*stmt);
     rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+  case SQLITE_MISUSE:
+    if (*stmt) sqlite3_finalize(*stmt);
+    rb_raise(cError, "Multiple statements cannot take parameters");
   default:
     if (*stmt) sqlite3_finalize(*stmt);
     rb_raise(cError, "%s", sqlite3_errmsg(db));
@@ -318,14 +332,22 @@ void *prepare_single_stmt_impl(void *ptr) {
   const char *end = ctx->str + ctx->len;
 
   ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
-  if (ctx->rc)
-    goto discard_stmt;
+  if (ctx->rc != SQLITE_OK) goto discard_stmt;
+  if (rest != end) {
+    sqlite3_stmt *next = NULL;
+    int res = sqlite3_prepare_v2(ctx->db, rest, end - rest, &next, NULL);
+    if (next) {
+      finalize_stmt(&next);
+      res = SQLITE_MISUSE;
+    }
+    if (res != SQLITE_OK) {
+      ctx->rc = res;
+      goto discard_stmt;
+    }
+  }
   goto end;
 discard_stmt:
-  if (*ctx->stmt) {
-    sqlite3_finalize(*ctx->stmt);
-    *ctx->stmt = NULL;
-  }
+  finalize_stmt(ctx->stmt);
 end:
   return NULL;
 }
@@ -342,6 +364,8 @@ void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, V
     rb_raise(cBusyError, "Database is busy");
   case SQLITE_ERROR:
     rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+  case SQLITE_MISUSE:
+    rb_raise(cError, "Multiple statements given");
   default:
     rb_raise(cError, "%s", sqlite3_errmsg(db));
   }

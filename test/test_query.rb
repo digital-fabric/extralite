@@ -410,21 +410,21 @@ class QueryTest < Minitest::Test
     assert_raises(Extralite::SQLError) { @db.prepare('blah').to_a }
   end
 
-  def test_query_prepare_multiple_statements
+  def test_query_prepare_multi_stmt
     q = @db.prepare('select 1; select 2')
-    assert_equal [{ '1': 1 }], q.to_a
+    assert_raises(Extralite::Error) { q.to_a }
   end
 
-  def test_query_prepare_multiple_statements_execute
+  def test_query_prepare_multi_stmt_execute
     q = @db.prepare("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');")
-    assert_equal 1, q.execute
-    assert_equal [{ x: 'a' }], @db.query("select x from t where x = 'a'")
+    assert_raises(Extralite::Error) { q.execute }
+    assert_equal [], @db.query("select x from t where x = 'a'")
   end
 
-  def test_query_prepare_multiple_statements_with_bad_sql
+  def test_query_prepare_multi_stmt_bad_sql
     error = nil
     begin
-      query =@db.prepare("insert into t values foo; insert into t values ('d', 'e', 'f');")
+      query = @db.prepare("insert into t values foo; insert into t values ('d', 'e', 'f');")
       query.next
     rescue => error
     end

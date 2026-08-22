@@ -1,3 +1,7 @@
+- Change handling of multi stmt query and execute invocations.
+  - For #execute, accept multiple statements but raise error if parameters are given
+  - For #query, raise error on multiple statements
+
 ## 3.0.1 2026-07-21
 
 - Fix passing nil transform to `DB#prepare`
