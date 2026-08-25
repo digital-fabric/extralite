@@ -11,7 +11,6 @@
 
 VALUE cQuery;
 
-ID ID_inspect;
 ID ID_slice;
 
 VALUE SYM_hash;
@@ -685,7 +684,6 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "transform",      Query_transform_get, 0);
   rb_define_method(cQuery, "transform=",     Query_transform_set, 1);
 
-  ID_inspect  = rb_intern_const("inspect");
   ID_slice    = rb_intern_const("slice");
 
   SYM_hash    = ID2SYM(rb_intern_const("hash"));

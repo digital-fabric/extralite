@@ -213,18 +213,25 @@ static inline void row_to_splat_values(sqlite3_stmt *stmt, int column_count, VAL
   }
 }
 
-typedef struct {
-  VALUE stmt_cache;
-  sqlite3 *db;
-  sqlite3_stmt **stmt;
-  const char *str;
-  long len;
-  int rc;
-  int total_changes;
-  int argc;
-  VALUE *argv;
-  VALUE sql;
-} prepare_stmt_ctx;
+void make_stmt_ctx(
+  stmt_ctx *ctx, Database_t *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv
+) {
+  ctx->stmt_cache = db->stmt_cache;
+  ctx->sql = sql;
+
+  ctx->db = db->sqlite3_db;
+  ctx->stmt = stmt;
+
+  ctx->str = RSTRING_PTR(sql);
+  ctx->len = RSTRING_LEN(sql);
+
+  ctx->gvl_mode = db->gvl_release_threshold < 0 ? GVL_HOLD : GVL_RELEASE;
+  ctx->cached = 0;
+  ctx->rc = 0;
+  ctx->total_changes = 0;
+  ctx->argc = argc;
+  ctx->argv = argv;
+}
 
 static inline int exec_stmt_iterate(sqlite3_stmt *stmt) {
   while (true) {
@@ -245,13 +252,13 @@ static inline void finalize_stmt(sqlite3_stmt **stmt) {
 }
 
 static inline void *exec_bind_parameters(void *ptr) {
-  prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
+  stmt_ctx *ctx = (stmt_ctx *)ptr;
   bind_all_parameters(*(ctx->stmt), ctx->argc, ctx->argv);
   return NULL;
 }
 
 void *exec_multi_stmt_impl(void *ptr) {
-  prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
+  stmt_ctx *ctx = (stmt_ctx *)ptr;
   const char *rest = NULL;
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
@@ -265,6 +272,7 @@ void *exec_multi_stmt_impl(void *ptr) {
     }
     else
       ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
+
     if ((ctx->rc != SQLITE_OK) || !(*(ctx->stmt))) goto done;
     if (ctx->argc) {
       // parameters were provided - check if str contains multiple statements
@@ -302,34 +310,30 @@ is not executed, but instead handed back to the caller for looping over results.
 
 @return [int] total changes
 */
-int exec_multi_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv) {
-  prepare_stmt_ctx ctx = {
-    stmt_cache, db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql),
-    0, 0, argc, argv, sql
-  };
-  gvl_call(mode, exec_multi_stmt_impl, (void *)&ctx);
-  RB_GC_GUARD(sql);
+int exec_multi_stmt(stmt_ctx *ctx) {
+  gvl_call(ctx->gvl_mode, exec_multi_stmt_impl, (void *)ctx);
+  RB_GC_GUARD(ctx->sql);
 
-  switch (ctx.rc) {
+  switch (ctx->rc) {
   case 0:
-    return ctx.total_changes;
+    return ctx->total_changes;
   case SQLITE_BUSY:
-    if (*stmt) sqlite3_finalize(*stmt);
+    if (*(ctx->stmt)) sqlite3_finalize(*(ctx->stmt));
     rb_raise(cBusyError, "Database is busy");
   case SQLITE_ERROR:
-    if (*stmt) sqlite3_finalize(*stmt);
-    rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
+    if (*(ctx->stmt)) sqlite3_finalize(*(ctx->stmt));
+    rb_raise(cSQLError, "%s", sqlite3_errmsg(ctx->db));
   case SQLITE_MISUSE:
-    if (*stmt) sqlite3_finalize(*stmt);
+    if (*(ctx->stmt)) sqlite3_finalize(*(ctx->stmt));
     rb_raise(cError, "Multiple statements cannot take parameters");
   default:
-    if (*stmt) sqlite3_finalize(*stmt);
-    rb_raise(cError, "%s", sqlite3_errmsg(db));
+    if (*(ctx->stmt)) sqlite3_finalize(*(ctx->stmt));
+    rb_raise(cError, "%s", sqlite3_errmsg(ctx->db));
   }
 }
 
 void *prepare_single_stmt_impl(void *ptr) {
-  prepare_stmt_ctx *ctx = (prepare_stmt_ctx *)ptr;
+  stmt_ctx *ctx = (stmt_ctx *)ptr;
   const char *rest = NULL;
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
@@ -356,9 +360,11 @@ end:
 }
 
 void prepare_single_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv) {
-  prepare_stmt_ctx ctx = {
-    stmt_cache, db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql),
-    0, 0, argc, argv, sql
+  stmt_ctx ctx = {
+    stmt_cache, sql,
+    db, stmt,
+    RSTRING_PTR(sql), RSTRING_LEN(sql),
+    mode, 0, 0, 0, argc, argv
   };
   gvl_call(mode, prepare_single_stmt_impl, (void *)&ctx);
   RB_GC_GUARD(sql);

@@ -31,6 +31,8 @@ extern VALUE cChangeset;
 extern VALUE cBlob;
 extern VALUE cTransform;
 
+extern ID ID_inspect;
+
 extern VALUE mJSON;
 
 extern VALUE cError;
@@ -177,6 +179,24 @@ enum gvl_mode {
   GVL_HOLD
 };
 
+typedef struct {
+  VALUE stmt_cache;
+  VALUE sql;
+  
+  sqlite3 *db;
+  sqlite3_stmt **stmt;
+
+  const char *str;
+  size_t len;
+
+  enum gvl_mode gvl_mode;
+  int cached; // true if stmt is cached
+  int rc;
+  int total_changes;
+  int argc;
+  VALUE *argv;
+} stmt_ctx;
+
 #define ALL_ROWS -1
 #define SINGLE_ROW -2
 #define ROW_YIELD_OR_MODE(default) (rb_block_given_p() ? ROW_YIELD : default)
@@ -227,8 +247,9 @@ VALUE Query_next(int argc, VALUE *argv, VALUE self);
 VALUE Query_to_a(VALUE self);
 VALUE Query_transform_set(VALUE self, VALUE transform);
 
+void make_stmt_ctx(stmt_ctx *ctx, Database_t *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
 void prepare_single_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
-int exec_multi_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
+int exec_multi_stmt(stmt_ctx *ctx);
 void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);
 void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);
 int stmt_iterate(query_ctx *ctx);

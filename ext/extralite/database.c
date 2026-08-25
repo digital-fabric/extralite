@@ -19,6 +19,7 @@ VALUE cParameterError;
 VALUE eArgumentError;
 
 ID ID_bind;
+ID ID_inspect;
 ID ID_call;
 ID ID_each;
 ID ID_keys;
@@ -303,11 +304,15 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
     argv++;
   }
 
-  sql= argv[0];
+  sql = argv[0];
 
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, argc - 1, argv + 1);
+  
   if (execute_mode) {
     Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
-    total_changes = exec_multi_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, argc - 1, argv + 1);
+    exec_multi_stmt(&stmt_ctx);
+    total_changes = stmt_ctx.total_changes;
     stmt = NULL;
   }
   else
@@ -1664,6 +1669,8 @@ void Init_ExtraliteDatabase(void) {
   ID_strip        = rb_intern_const("strip");
   ID_to_s         = rb_intern_const("to_s");
   ID_track        = rb_intern_const("track");
+
+  ID_inspect  = rb_intern_const("inspect");
 
   SYM_at_least_once         = ID2SYM(rb_intern_const("at_least_once"));
   SYM_full                  = ID2SYM(rb_intern_const("full"));
