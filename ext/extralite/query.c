@@ -134,7 +134,7 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
 
 static inline void query_reset(Query_t *query) {
   if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->db_struct->stmt_cache, query->sqlite3_db, &query->stmt, query->sql, 0, NULL);
   else
     sqlite3_reset(query->stmt);
 
@@ -146,7 +146,7 @@ static inline void query_reset(Query_t *query) {
 
 static inline void query_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->db_struct->stmt_cache, query->sqlite3_db, &query->stmt, query->sql, 0, NULL);
   else
     // we call sqlite3_reset because that's what the SQLite API expects before
     // changing the binding. See note at bottom of
@@ -407,7 +407,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->db_struct->stmt_cache, query->sqlite3_db, &query->stmt, query->sql, 0, NULL);
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -456,7 +456,7 @@ VALUE Query_batch_query(VALUE self, VALUE parameters) {
   if (query->closed) rb_raise(cError, "Query is closed");
 
   if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->db_struct->stmt_cache, query->sqlite3_db, &query->stmt, query->sql, 0, NULL);
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -564,7 +564,7 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
   Query_t *query = self_to_query_verify(self);
 
   if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+    prepare_single_stmt(DB_GVL_MODE(query), query->db_struct->stmt_cache, query->sqlite3_db, &query->stmt, query->sql, 0, NULL);
 
   int value = sqlite3_stmt_status(query->stmt, NUM2INT(op), RTEST(reset) ? 1 : 0);
   return INT2NUM(value);

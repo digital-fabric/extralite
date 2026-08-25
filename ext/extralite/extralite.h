@@ -227,8 +227,8 @@ VALUE Query_next(int argc, VALUE *argv, VALUE self);
 VALUE Query_to_a(VALUE self);
 VALUE Query_transform_set(VALUE self, VALUE transform);
 
-void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql);
-int exec_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
+void prepare_single_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
+int exec_multi_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
 void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);
 void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);
 int stmt_iterate(query_ctx *ctx);

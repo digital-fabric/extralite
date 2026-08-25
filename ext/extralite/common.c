@@ -214,6 +214,7 @@ static inline void row_to_splat_values(sqlite3_stmt *stmt, int column_count, VAL
 }
 
 typedef struct {
+  VALUE stmt_cache;
   sqlite3 *db;
   sqlite3_stmt **stmt;
   const char *str;
@@ -222,6 +223,7 @@ typedef struct {
   int total_changes;
   int argc;
   VALUE *argv;
+  VALUE sql;
 } prepare_stmt_ctx;
 
 static inline int exec_stmt_iterate(sqlite3_stmt *stmt) {
@@ -300,9 +302,10 @@ is not executed, but instead handed back to the caller for looping over results.
 
 @return [int] total changes
 */
-int exec_multi_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv) {
+int exec_multi_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv) {
   prepare_stmt_ctx ctx = {
-    db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0, 0, argc, argv
+    stmt_cache, db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql),
+    0, 0, argc, argv, sql
   };
   gvl_call(mode, exec_multi_stmt_impl, (void *)&ctx);
   RB_GC_GUARD(sql);
@@ -352,8 +355,11 @@ end:
   return NULL;
 }
 
-void prepare_single_stmt(enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
-  prepare_stmt_ctx ctx = {db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql), 0};
+void prepare_single_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv) {
+  prepare_stmt_ctx ctx = {
+    stmt_cache, db, stmt, RSTRING_PTR(sql), RSTRING_LEN(sql),
+    0, 0, argc, argv, sql
+  };
   gvl_call(mode, prepare_single_stmt_impl, (void *)&ctx);
   RB_GC_GUARD(sql);
 
