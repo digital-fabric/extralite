@@ -184,7 +184,7 @@ typedef struct {
   VALUE sql;
   
   sqlite3 *db;
-  sqlite3_stmt **stmt;
+  sqlite3_stmt **stmtptr;
 
   const char *str;
   size_t len;

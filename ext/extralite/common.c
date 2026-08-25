@@ -220,7 +220,7 @@ void make_stmt_ctx(
   ctx->sql = sql;
 
   ctx->db = db->sqlite3_db;
-  ctx->stmt = stmt;
+  ctx->stmtptr = stmt;
 
   ctx->str = RSTRING_PTR(sql);
   ctx->len = RSTRING_LEN(sql);
@@ -253,7 +253,7 @@ static inline void finalize_stmt(sqlite3_stmt **stmt) {
 
 static inline void *exec_bind_parameters(void *ptr) {
   stmt_ctx *ctx = (stmt_ctx *)ptr;
-  bind_all_parameters(*(ctx->stmt), ctx->argc, ctx->argv);
+  bind_all_parameters(*(ctx->stmtptr), ctx->argc, ctx->argv);
   return NULL;
 }
 
@@ -266,14 +266,14 @@ void *exec_multi_stmt_impl(void *ptr) {
   ctx->total_changes = 0;
   while (1) {
     if (next_stmt) {
-      *(ctx->stmt) = next_stmt;
+      *(ctx->stmtptr) = next_stmt;
       next_stmt = NULL;
       ctx->rc = SQLITE_OK;
     }
     else
-      ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
+      ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmtptr, &rest);
 
-    if ((ctx->rc != SQLITE_OK) || !(*(ctx->stmt))) goto done;
+    if ((ctx->rc != SQLITE_OK) || !(*(ctx->stmtptr))) goto done;
     if (ctx->argc) {
       // parameters were provided - check if str contains multiple statements
       if (rest != end) {
@@ -287,18 +287,18 @@ void *exec_multi_stmt_impl(void *ptr) {
       rb_thread_call_with_gvl(exec_bind_parameters, ctx);
     }
 
-    ctx->rc = exec_stmt_iterate(*(ctx->stmt));
+    ctx->rc = exec_stmt_iterate(*(ctx->stmtptr));
     if (ctx->rc != SQLITE_OK) goto done;
 
     ctx->total_changes += sqlite3_changes(ctx->db);
-    finalize_stmt(ctx->stmt);
+    finalize_stmt(ctx->stmtptr);
 
     if (rest == end) return NULL;
     str = rest;
   }
 done:
   finalize_stmt(&next_stmt);
-  finalize_stmt(ctx->stmt);
+  finalize_stmt(ctx->stmtptr);
   return NULL;
 }
 
@@ -318,16 +318,16 @@ int exec_multi_stmt(stmt_ctx *ctx) {
   case 0:
     return ctx->total_changes;
   case SQLITE_BUSY:
-    if (*(ctx->stmt)) sqlite3_finalize(*(ctx->stmt));
+    if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
     rb_raise(cBusyError, "Database is busy");
   case SQLITE_ERROR:
-    if (*(ctx->stmt)) sqlite3_finalize(*(ctx->stmt));
+    if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
     rb_raise(cSQLError, "%s", sqlite3_errmsg(ctx->db));
   case SQLITE_MISUSE:
-    if (*(ctx->stmt)) sqlite3_finalize(*(ctx->stmt));
+    if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
     rb_raise(cError, "Multiple statements cannot take parameters");
   default:
-    if (*(ctx->stmt)) sqlite3_finalize(*(ctx->stmt));
+    if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
     rb_raise(cError, "%s", sqlite3_errmsg(ctx->db));
   }
 }
@@ -338,7 +338,7 @@ void *prepare_single_stmt_impl(void *ptr) {
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
 
-  ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmt, &rest);
+  ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmtptr, &rest);
   if (ctx->rc != SQLITE_OK) goto discard_stmt;
   if (rest != end) {
     sqlite3_stmt *next = NULL;
@@ -354,7 +354,7 @@ void *prepare_single_stmt_impl(void *ptr) {
   }
   goto end;
 discard_stmt:
-  finalize_stmt(ctx->stmt);
+  finalize_stmt(ctx->stmtptr);
 end:
   return NULL;
 }
@@ -583,7 +583,7 @@ VALUE safe_query_transform(query_ctx *ctx) {
   VALUE array = rb_ary_new();
   VALUE identity_storage = rb_hash_new();
   VALUE row = Qnil;
-  // int column_count = sqlite3_column_count(ctx->stmt);
+  // int column_count = sqlite3_column_count(ctx->stmtptr);
   struct transform_node *transform_root = get_transform_root(ctx->transform);
 
   int row_count = 0;
@@ -618,7 +618,7 @@ VALUE safe_query_single_row_transform(query_ctx *ctx) {
   VALUE array = rb_ary_new();
   VALUE identity_storage = rb_hash_new();
   VALUE row = Qnil;
-  // int column_count = sqlite3_column_count(ctx->stmt);
+  // int column_count = sqlite3_column_count(ctx->stmtptr);
   struct transform_node *transform_root = get_transform_root(ctx->transform);
 
   int row_count = 0;
