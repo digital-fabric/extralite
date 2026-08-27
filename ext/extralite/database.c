@@ -39,6 +39,7 @@ VALUE SYM_normal;
 VALUE SYM_passive;
 VALUE SYM_read_only;
 VALUE SYM_restart;
+VALUE SYM_stmt_cache;
 VALUE SYM_truncate;
 VALUE SYM_wal;
 
@@ -131,11 +132,16 @@ default_flags:
 }
 
 void Database_apply_opts(VALUE self, Database_t *db, VALUE opts) {
+  db->flags = DB_F_STMT_CACHE;
   if (NIL_P(opts)) goto modern_pragmas;
 
   // :gvl_release_threshold
   VALUE value = rb_hash_aref(opts, SYM_gvl_release_threshold);
   if (!NIL_P(value)) db->gvl_release_threshold = NUM2INT(value);
+
+  value = rb_hash_aref(opts, SYM_stmt_cache);
+  if (value == Qfalse)
+    db->flags &= !DB_F_STMT_CACHE;
 
   value = rb_hash_aref(opts, SYM_legacy);
   if (RTEST(value)) return;
@@ -179,9 +185,9 @@ int Database_busy_handler(void *ptr, int v) {
  *   `#gvl_release_threshold=`).
  * - `:read_only` (`true`/`false`): opens the database in read-only mode if true.
  * - `:legacy` (`true`/`false`): By default the database is set up for
- * concurrent access with [WAL journaling
- * mode](https://www.sqlite.org/wal.html). To prevent Extralite from setting up
- * WAL journaling, set this option to true.
+ *   concurrent access with [WAL journaling mode](https://www.sqlite.org/wal.html).
+ *   To prevent Extralite from setting up WAL journaling, set this option to true.
+ * - `:stmt_cache`: true by default, set to false to disable stmt caching
  *
  * @overload initialize(path)
  *   @param path [String] file path (or ':memory:' for memory database)
@@ -1421,13 +1427,14 @@ VALUE Database_errmsg(VALUE self) {
   return rb_str_new2(sqlite3_errmsg(db->sqlite3_db));
 }
 
-/* Returns the stmt cache for the database.
+/* Returns the stmt cache for the database. If the database was setup with
+ * stmt_cache set to false, returns nil.
  *
- * @return [Hash] stmt cache
+ * @return [Hash, nil] stmt cache or nil if disabled
  */
 VALUE Database_stmt_cache(VALUE self) {
   Database_t *db = self_to_open_database(self);
-  return db->stmt_cache;
+  return (db->flags & DB_F_STMT_CACHE) ? db->stmt_cache : Qnil;
 }
 
 #ifdef HAVE_SQLITE3_ERROR_OFFSET
@@ -1690,6 +1697,7 @@ void Init_ExtraliteDatabase(void) {
   SYM_passive               = ID2SYM(rb_intern_const("passive"));
   SYM_read_only             = ID2SYM(rb_intern_const("read_only"));
   SYM_restart               = ID2SYM(rb_intern_const("restart"));
+  SYM_stmt_cache            = ID2SYM(rb_intern_const("stmt_cache"));
   SYM_truncate              = ID2SYM(rb_intern_const("truncate"));
   SYM_wal                   = ID2SYM(rb_intern_const("wal"));
 
@@ -1703,6 +1711,7 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(SYM_passive);
   rb_gc_register_mark_object(SYM_read_only);
   rb_gc_register_mark_object(SYM_restart);
+  rb_gc_register_mark_object(SYM_stmt_cache);
   rb_gc_register_mark_object(SYM_truncate);
   rb_gc_register_mark_object(SYM_wal);
 

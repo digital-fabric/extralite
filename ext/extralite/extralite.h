@@ -70,10 +70,13 @@ struct progress_handler {
   int                         call_count;
 };
 
+#define DB_F_STMT_CACHE (1L << 0) // cache stmts
+
 typedef struct {
   sqlite3                 *sqlite3_db;
   VALUE                   stmt_cache;
   VALUE                   trace_proc;
+  int                     flags;
   int                     gvl_release_threshold;
   struct progress_handler progress_handler;
 } Database_t;

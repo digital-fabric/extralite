@@ -2126,6 +2126,31 @@ class StmtCacheText < Minitest::Test
     @db.query('create table t (x)')
   end
 
+  def test_stmt_cache
+    assert_kind_of Hash, @db.stmt_cache
+
+    db2 = Extralite::Database.new(':memory:', stmt_cache: false)
+    assert_nil db2.stmt_cache
+  end
+
+  def test_stmt_cache_disabled
+    db2 = Extralite::Database.new(':memory:', stmt_cache: false)
+    assert_nil db2.stmt_cache
+    db2.query('create table t (x)')
+    sql = 'insert into t values (?)'
+    
+    assert_nil db2.stmt_cache
+    changes = db2.execute(sql, 42)
+    assert_equal 1, changes
+    assert_nil db2.stmt_cache
+
+    changes = db2.execute(sql, 43)
+    assert_equal 1, changes
+    assert_nil db2.stmt_cache
+
+    assert_equal [[42], [43]], db2.query_array('select x from t order by x')
+  end
+
   def test_stmt_cache_execute_with_params
     sql = 'insert into t values (?)'
     

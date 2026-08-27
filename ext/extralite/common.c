@@ -217,13 +217,9 @@ static inline void lookup_cache_entry(stmt_ctx *ctx) {
   VALUE cached = rb_hash_aref(ctx->stmt_cache, ctx->sql);
   *(ctx->stmtptr) = NIL_P(cached) ? NULL : (sqlite3_stmt *)NUM2ULONG(cached);
   if (*(ctx->stmtptr)) {
-    printf("lookup_cache_entry cache hit\n");
     sqlite3_reset(*(ctx->stmtptr));
     ctx->flags |= STMT_CTX_F_CACHE_HIT;
   }
-  else
-    printf("lookup_cache_entry cache miss\n");
-  printf("  ctx->flags %x\n", ctx->flags);
 }
 
 static inline void finalize_stmt_ctx(stmt_ctx *ctx) {
@@ -248,7 +244,7 @@ void make_stmt_ctx(
   ctx->db = db->sqlite3_db;
   ctx->stmtptr = stmt;
 
-  int use_cache = argc > 0;
+  int use_cache = (argc > 0) && (db->flags & DB_F_STMT_CACHE);
   ctx->flags = use_cache ? STMT_CTX_F_USE_CACHE : 0;
   if (use_cache) {
     lookup_cache_entry(ctx);
@@ -294,8 +290,6 @@ void *exec_multi_stmt_impl(void *ptr) {
   stmt_ctx *ctx = (stmt_ctx *)ptr;
 
   if (ctx->flags & STMT_CTX_F_CACHE_HIT) {
-    // cache hit, we 
-    printf("cache hit\n");
     rb_thread_call_with_gvl(exec_bind_parameters, ctx);
     ctx->rc = exec_stmt_iterate(*(ctx->stmtptr));
     if (ctx->rc == SQLITE_OK)
@@ -312,7 +306,6 @@ void *exec_multi_stmt_impl(void *ptr) {
   sqlite3_stmt *next_stmt = NULL;
   ctx->total_changes = 0;
   while (1) {
-    if (ctx->flags & STMT_CTX_F_USE_CACHE) printf("cache miss\n");
     if (next_stmt) {
       *(ctx->stmtptr) = next_stmt;
       next_stmt = NULL;
