@@ -1409,7 +1409,6 @@ VALUE Extralite_on_progress(int argc, VALUE *argv, VALUE self) {
  */
 VALUE Database_errcode(VALUE self) {
   Database_t *db = self_to_open_database(self);
-
   return INT2NUM(sqlite3_errcode(db->sqlite3_db));
 }
 
@@ -1419,8 +1418,16 @@ VALUE Database_errcode(VALUE self) {
  */
 VALUE Database_errmsg(VALUE self) {
   Database_t *db = self_to_open_database(self);
-
   return rb_str_new2(sqlite3_errmsg(db->sqlite3_db));
+}
+
+/* Returns the stmt cache for the database.
+ *
+ * @return [Hash] stmt cache
+ */
+VALUE Database_stmt_cache(VALUE self) {
+  Database_t *db = self_to_open_database(self);
+  return db->stmt_cache;
 }
 
 #ifdef HAVE_SQLITE3_ERROR_OFFSET
@@ -1607,6 +1614,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "columns",                Database_columns, 1);
   rb_define_method(cDatabase, "errcode",                Database_errcode, 0);
   rb_define_method(cDatabase, "errmsg",                 Database_errmsg, 0);
+  rb_define_method(cDatabase, "stmt_cache",             Database_stmt_cache, 0);
 
   #ifdef HAVE_SQLITE3_ERROR_OFFSET
   rb_define_method(cDatabase, "error_offset",           Database_error_offset, 0);

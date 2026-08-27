@@ -2119,3 +2119,28 @@ class MultiStmtTest < Minitest::Test
     assert_equal [], @db.query('select x from t order by x')
   end
 end
+
+class StmtCacheText < Minitest::Test
+  def setup
+    @db = Extralite::Database.new(':memory:')
+    @db.query('create table t (x)')
+  end
+
+  def test_stmt_cache_execute_with_params
+    sql = 'insert into t values (?)'
+    
+    assert_equal({}, @db.stmt_cache)
+    changes = @db.execute(sql, 42)
+    assert_equal 1, changes
+    assert_equal [sql], @db.stmt_cache.keys
+
+    changes = @db.execute(sql, 43)
+    assert_equal 1, changes
+    assert_equal [sql], @db.stmt_cache.keys
+    assert_kind_of Integer, @db.stmt_cache[sql]
+    
+    assert_equal [[42], [43]], @db.query_array('select x from t order by x')
+  end
+
+
+end

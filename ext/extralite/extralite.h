@@ -179,6 +179,9 @@ enum gvl_mode {
   GVL_HOLD
 };
 
+#define STMT_CTX_F_USE_CACHE (1L << 0)
+#define STMT_CTX_F_CACHE_HIT (1L << 1)
+
 typedef struct {
   VALUE stmt_cache;
   VALUE sql;
@@ -190,7 +193,7 @@ typedef struct {
   size_t len;
 
   enum gvl_mode gvl_mode;
-  int cached; // true if stmt is cached
+  int flags;
   int rc;
   int total_changes;
   int argc;

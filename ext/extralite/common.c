@@ -213,6 +213,32 @@ static inline void row_to_splat_values(sqlite3_stmt *stmt, int column_count, VAL
   }
 }
 
+static inline void lookup_cache_entry(stmt_ctx *ctx) {
+  VALUE cached = rb_hash_aref(ctx->stmt_cache, ctx->sql);
+  *(ctx->stmtptr) = NIL_P(cached) ? NULL : (sqlite3_stmt *)NUM2ULONG(cached);
+  if (*(ctx->stmtptr)) {
+    printf("lookup_cache_entry cache hit\n");
+    sqlite3_reset(*(ctx->stmtptr));
+    ctx->flags |= STMT_CTX_F_CACHE_HIT;
+  }
+  else
+    printf("lookup_cache_entry cache miss\n");
+  printf("  ctx->flags %x\n", ctx->flags);
+}
+
+static inline void finalize_stmt_ctx(stmt_ctx *ctx) {
+  if (!*(ctx->stmtptr)) return;
+
+  if (!(ctx->flags & STMT_CTX_F_USE_CACHE)) {
+    sqlite3_finalize(*(ctx->stmtptr));
+    *(ctx->stmtptr) = NULL;
+    return;
+  }
+
+  if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
+    rb_hash_aset(ctx->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)*(ctx->stmtptr)));
+}
+
 void make_stmt_ctx(
   stmt_ctx *ctx, Database_t *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv
 ) {
@@ -222,11 +248,18 @@ void make_stmt_ctx(
   ctx->db = db->sqlite3_db;
   ctx->stmtptr = stmt;
 
-  ctx->str = RSTRING_PTR(sql);
-  ctx->len = RSTRING_LEN(sql);
+  int use_cache = argc > 0;
+  ctx->flags = use_cache ? STMT_CTX_F_USE_CACHE : 0;
+  if (use_cache) {
+    lookup_cache_entry(ctx);
+  }
+
+  if (!use_cache || !(*(ctx->stmtptr))) {
+    ctx->str = RSTRING_PTR(sql);
+    ctx->len = RSTRING_LEN(sql);
+  }
 
   ctx->gvl_mode = db->gvl_release_threshold < 0 ? GVL_HOLD : GVL_RELEASE;
-  ctx->cached = 0;
   ctx->rc = 0;
   ctx->total_changes = 0;
   ctx->argc = argc;
@@ -259,12 +292,27 @@ static inline void *exec_bind_parameters(void *ptr) {
 
 void *exec_multi_stmt_impl(void *ptr) {
   stmt_ctx *ctx = (stmt_ctx *)ptr;
+
+  if (ctx->flags & STMT_CTX_F_CACHE_HIT) {
+    // cache hit, we 
+    printf("cache hit\n");
+    rb_thread_call_with_gvl(exec_bind_parameters, ctx);
+    ctx->rc = exec_stmt_iterate(*(ctx->stmtptr));
+    if (ctx->rc == SQLITE_OK)
+      ctx->total_changes += sqlite3_changes(ctx->db);
+    else
+      ctx->total_changes = 0;
+    finalize_stmt_ctx(ctx);
+    return NULL;
+  }
+  
   const char *rest = NULL;
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
   sqlite3_stmt *next_stmt = NULL;
   ctx->total_changes = 0;
   while (1) {
+    if (ctx->flags & STMT_CTX_F_USE_CACHE) printf("cache miss\n");
     if (next_stmt) {
       *(ctx->stmtptr) = next_stmt;
       next_stmt = NULL;
@@ -291,14 +339,14 @@ void *exec_multi_stmt_impl(void *ptr) {
     if (ctx->rc != SQLITE_OK) goto done;
 
     ctx->total_changes += sqlite3_changes(ctx->db);
-    finalize_stmt(ctx->stmtptr);
+    finalize_stmt_ctx(ctx);
 
     if (rest == end) return NULL;
     str = rest;
   }
 done:
   finalize_stmt(&next_stmt);
-  finalize_stmt(ctx->stmtptr);
+  finalize_stmt_ctx(ctx);
   return NULL;
 }
 

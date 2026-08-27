@@ -1,3 +1,14 @@
+## Stmt caching
+
+- We cache only parametric queries
+- We need a cache flag to set when query parameters are given
+- We need to pass that flag in order to tell `exec_multi_stmt` to not finalize the stmt
+- When cache flag is set, we do the following:
+  - lookup the stmt in the cache
+  - if not found, go get it, then set cache
+  - if found, run it
+  - 
+
 ## Transforms
 
 - Add ability to exclude a column:
