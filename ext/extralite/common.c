@@ -248,6 +248,8 @@ void make_stmt_ctx(
   ctx->flags = use_cache ? STMT_CTX_F_USE_CACHE : 0;
   if (use_cache) {
     lookup_cache_entry(ctx);
+    if (ctx->flags & STMT_CTX_F_CACHE_HIT)
+      sqlite3_clear_bindings(*(ctx->stmtptr));
   }
 
   if (!use_cache || !(*(ctx->stmtptr))) {
@@ -353,25 +355,67 @@ is not executed, but instead handed back to the caller for looping over results.
 */
 int exec_multi_stmt(stmt_ctx *ctx) {
   gvl_call(ctx->gvl_mode, exec_multi_stmt_impl, (void *)ctx);
-  RB_GC_GUARD(ctx->sql);
+  if (ctx->rc == SQLITE_OK) return ctx->total_changes;
 
+  if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
   switch (ctx->rc) {
-  case 0:
-    return ctx->total_changes;
   case SQLITE_BUSY:
-    if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
     rb_raise(cBusyError, "Database is busy");
   case SQLITE_ERROR:
-    if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
     rb_raise(cSQLError, "%s", sqlite3_errmsg(ctx->db));
   case SQLITE_MISUSE:
-    if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
     rb_raise(cError, "Multiple statements cannot take parameters");
   default:
-    if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
     rb_raise(cError, "%s", sqlite3_errmsg(ctx->db));
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+void *prep_single_stmt_impl(void *ptr) {
+  stmt_ctx *ctx = (stmt_ctx *)ptr;
+
+  if (ctx->flags & STMT_CTX_F_CACHE_HIT) return NULL;
+
+  const char *rest = NULL;
+  const char *str = ctx->str;
+  const char *end = ctx->str + ctx->len;
+
+  ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmtptr, &rest);
+  if (ctx->rc != SQLITE_OK) {
+    finalize_stmt(ctx->stmtptr);
+    return NULL;
+  }
+  if (rest != end) {
+    sqlite3_stmt *next = NULL;
+    ctx->rc = sqlite3_prepare_v2(ctx->db, rest, end - rest, &next, NULL);
+    if (next) {
+      sqlite3_finalize(next);
+      ctx->rc = SQLITE_MISUSE;
+    }
+    if (ctx->rc != SQLITE_OK) finalize_stmt(ctx->stmtptr);
+  }
+  return NULL;
+}
+
+void prep_single_stmt(stmt_ctx *ctx) {
+  gvl_call(ctx->gvl_mode, prep_single_stmt_impl, (void *)ctx);
+  if (ctx->rc == SQLITE_OK) return;
+
+  if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
+  switch (ctx->rc) {
+  case SQLITE_BUSY:
+    rb_raise(cBusyError, "Database is busy");
+  case SQLITE_ERROR:
+    rb_raise(cSQLError, "%s", sqlite3_errmsg(ctx->db));
+  case SQLITE_MISUSE:
+    rb_raise(cError, "Multiple statements cannot take parameters");
+  default:
+    rb_raise(cError, "%s", sqlite3_errmsg(ctx->db));
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 void *prepare_single_stmt_impl(void *ptr) {
   stmt_ctx *ctx = (stmt_ctx *)ptr;
@@ -469,7 +513,15 @@ inline int stmt_iterate(query_ctx *ctx) {
 }
 
 VALUE cleanup_stmt(query_ctx *ctx) {
-  if (ctx->stmt) sqlite3_finalize(ctx->stmt);
+  if (!ctx->stmt) goto done;
+
+  if (ctx->flags & STMT_CTX_F_USE_CACHE) {
+    if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
+      rb_hash_aset(ctx->db->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)(ctx->stmt)));
+  }
+  else
+    sqlite3_finalize(ctx->stmt);
+done:
   return Qnil;
 }
 

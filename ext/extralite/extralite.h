@@ -166,6 +166,7 @@ typedef struct {
   Database_t          *db;
   sqlite3             *sqlite3_db;
   sqlite3_stmt        *stmt;
+  unsigned int        flags;
 
   int                 gvl_release_threshold;
   enum query_mode     query_mode;
@@ -196,7 +197,7 @@ typedef struct {
   size_t len;
 
   enum gvl_mode gvl_mode;
-  int flags;
+  unsigned int flags;
   int rc;
   int total_changes;
   int argc;
@@ -208,20 +209,10 @@ typedef struct {
 #define ROW_YIELD_OR_MODE(default) (rb_block_given_p() ? ROW_YIELD : default)
 #define ROW_MULTI_P(mode) (mode == ROW_MULTI)
 #define QUERY_CTX(self, sql, db, stmt, params, transform, query_mode, row_mode, max_rows) { \
-  self, \
-  sql, \
-  params, \
-  transform, \
-  db, \
-  db->sqlite3_db, \
-  stmt, \
-  db->gvl_release_threshold, \
-  query_mode, \
-  row_mode, \
-  max_rows, \
-  0, \
-  0, \
-  0  \
+  self, sql, params, transform, \
+  db, db->sqlite3_db, stmt, 0, \
+  db->gvl_release_threshold, query_mode, row_mode, max_rows, \
+  0, 0, 0  \
 }
 
 #define DEFAULT_GVL_RELEASE_THRESHOLD 1000
@@ -255,6 +246,7 @@ VALUE Query_transform_set(VALUE self, VALUE transform);
 
 void make_stmt_ctx(stmt_ctx *ctx, Database_t *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
 void prepare_single_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
+void prep_single_stmt(stmt_ctx *ctx);
 int exec_multi_stmt(stmt_ctx *ctx);
 void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);
 void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);

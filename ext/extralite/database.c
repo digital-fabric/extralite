@@ -286,10 +286,6 @@ inline enum gvl_mode Database_prepare_gvl_mode(Database_t *db) {
   return db->gvl_release_threshold < 0 ? GVL_HOLD : GVL_RELEASE;
 }
 
-static inline void cache_prepare_single_stmt(Database_t *extralite_db, enum gvl_mode mode, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql) {
-  return prepare_single_stmt(mode, extralite_db->stmt_cache, db, stmt, sql, 0, NULL);
-}
-
 static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *), enum query_mode query_mode) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt = NULL;
@@ -299,7 +295,6 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   // a transform.,
   int got_transform = (TYPE(argv[0]) != T_STRING);
   int execute_mode = query_mode == QUERY_VOID;
-  int total_changes = 0;
 
   // extract query from args
   rb_check_arity(argc, got_transform ? 2 : 1, UNLIMITED_ARGUMENTS);
@@ -315,34 +310,35 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
   stmt_ctx stmt_ctx;
   make_stmt_ctx(&stmt_ctx, db, &stmt, sql, argc - 1, argv + 1);
   
+  Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
   if (execute_mode) {
-    Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
     exec_multi_stmt(&stmt_ctx);
-    total_changes = stmt_ctx.total_changes;
-    stmt = NULL;
+
+    query_ctx ctx = QUERY_CTX(
+      self, sql, db, NULL, Qnil, transform,
+      query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
+    );
+    ctx.flags = stmt_ctx.flags;
+    ctx.total_changes = stmt_ctx.total_changes;
+    VALUE result = (VALUE)call(&ctx);
+    return result;
   }
-  else
-    cache_prepare_single_stmt(db, DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  RB_GC_GUARD(sql);
+  else {
+    // Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
+    prep_single_stmt(&stmt_ctx);
+    // prepare_single_stmt(mode, extralite_db->stmt_cache, db, stmt, sql, 0, NULL);    cache_prepare_single_stmt(db, DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
+    query_ctx ctx = QUERY_CTX(
+      self, sql, db, stmt, Qnil, transform,
+      query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
+    );
+    ctx.flags = stmt_ctx.flags;
+    if (!stmt) return Qnil;
 
-  query_ctx ctx = QUERY_CTX(
-    self, sql, db, stmt, Qnil, transform,
-    query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
-  );
-  if (stmt) {
     bind_all_parameters(stmt, argc - 1, argv + 1);
-    Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
-
     VALUE result = rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
     RB_GC_GUARD(result);
     return result;    
   }
-  else if (execute_mode) {
-    ctx.total_changes = total_changes;
-    VALUE result = (VALUE)call(&ctx);
-    return result;
-  }
-  return Qnil;
 }
 
 /* call-seq:

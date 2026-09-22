@@ -1226,8 +1226,9 @@ class ScenarioTest < Minitest::Test
     # "upgrade" to a write transaction
 
     @db.query('commit')
+    sleep 0.1
 
-    while true
+    loop do
       begin
         @db.query('begin immediate')
         break
@@ -2163,9 +2164,59 @@ class StmtCacheText < Minitest::Test
     assert_equal 1, changes
     assert_equal [sql], @db.stmt_cache.keys
     assert_kind_of Integer, @db.stmt_cache[sql]
-    
+
     assert_equal [[42], [43]], @db.query_array('select x from t order by x')
   end
 
+  def test_stmt_cache_execute_without_params
+    sql = 'insert into t values (42)'
+    
+    assert_equal({}, @db.stmt_cache)
+    changes = @db.execute(sql)
+    assert_equal 1, changes
+    assert_equal({}, @db.stmt_cache)
 
+    changes = @db.execute(sql)
+    assert_equal 1, changes
+    assert_equal({}, @db.stmt_cache)
+    
+    assert_equal [42, 42], @db.query_splat('select x from t order by x')
+  end
+
+
+  def test_stmt_cache_query_with_params
+    @db.execute <<~SQL
+      insert into t values (42), (13), (6)
+    SQL
+
+    sql = 'select x from t where x = ?'
+
+    assert_equal({}, @db.stmt_cache)
+
+    rows = @db.query(sql, 42)
+    assert_equal [{ x: 42 }], rows
+    assert_equal [sql], @db.stmt_cache.keys
+    id = @db.stmt_cache[sql]
+
+    rows = @db.query(sql, 13)
+    assert_equal [{ x: 13 }], rows
+    assert_equal [sql], @db.stmt_cache.keys
+    assert_equal id, @db.stmt_cache[sql]
+  end
+
+  def test_stmt_cache_query_without_params
+    sql = 'select x from t where x = 42'
+
+    rows = @db.query(sql)
+    assert_equal [], rows
+    assert_equal({}, @db.stmt_cache)
+    
+    @db.execute <<~SQL
+      insert into t values (42)
+    SQL
+
+    rows = @db.query(sql)
+    assert_equal [{ x: 42 }], rows
+    assert_equal({}, @db.stmt_cache)
+  end
 end
