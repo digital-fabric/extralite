@@ -2164,8 +2164,14 @@ class StmtCacheText < Minitest::Test
     assert_equal 1, changes
     assert_equal [sql], @db.stmt_cache.keys
     assert_kind_of Integer, @db.stmt_cache[sql]
-
     assert_equal [[42], [43]], @db.query_array('select x from t order by x')
+
+    stmt = @db.stmt_cache[sql]
+    changes = @db.batch_execute(sql, [47, 48, 49])
+    assert_equal 3, changes
+    assert_equal [sql], @db.stmt_cache.keys
+    assert_equal stmt, @db.stmt_cache[sql]
+    assert_equal [[42], [43], [47], [48], [49]], @db.query_array('select x from t order by x')
   end
 
   def test_stmt_cache_execute_without_params
