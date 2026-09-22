@@ -363,6 +363,16 @@ To use the transform, pass it along with the SQL string to `Database#query`:
 db.qurey(transform, sql) #=> [...]
 ```
 
+Structured transforms support the following column types:
+
+- `integer`
+- `float`
+- `text`
+- `bool` - represented as an integer value of 0/1.
+- `json` - represented as a string (text).
+- A custom proc/lambda - e.g. `->(v) { v.split(',') }`.
+- `auto` - uses the native database data type.
+
 Transforms can also be used with [prepared
 queries](#transforms-in-prepared-queries).
 
