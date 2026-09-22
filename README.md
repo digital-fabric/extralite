@@ -49,7 +49,7 @@ latest features and enhancements.
   allowing iterating through single records or batches of records.
 - [Prepared queries](#prepared-queries).
 - [Parameter binding](#parameter-binding).
-- [Automatic query caching](#automatic-query-caching) for queries with parameters.
+- [Automatic query caching](#automatic-query-caching) for parametric queries.
 - [Batch execution](#batch-execution-of-queries) of queries.
 - [transactions and savepoints](#transactions-and-savepoints).
 - Advanced features: load [SQLite extensions](#loading-extensions), create
