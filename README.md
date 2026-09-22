@@ -49,6 +49,7 @@ latest features and enhancements.
   allowing iterating through single records or batches of records.
 - [Prepared queries](#prepared-queries).
 - [Parameter binding](#parameter-binding).
+- [Automatic query caching] for queries with parameters.
 - [Batch execution](#batch-execution-of-queries) of queries.
 - [transactions and savepoints](#transactions-and-savepoints).
 - Advanced features: load [SQLite extensions](#loading-extensions), create
@@ -69,6 +70,7 @@ latest features and enhancements.
 - [Data Types](#data-types)
 - [Prepared Queries](#prepared-queries)
 - [Batch Execution of Queries](#batch-execution-of-queries)
+- [Automatic query caching](#automatic-query-caching)
 - [Transactions and Savepoints](#transactions-and-savepoints)
 - [Database Information](#database-information)
 - [Error Handling](#error-handling)
@@ -652,6 +654,13 @@ query.batch_execute([[42, 3], [43, 6]])
 query.batch_query([[42, 3], [43, 6]])
 #=> [{ x: 42, y: 2, z: 3 }, { x: 43, y: 5, z: 6 }]
 ```
+
+## Automatic query caching
+
+Extralite implements automatic caching of parametric queries. This means that
+any time you run one of the `execute` or `query_xxx` methods with parameters,
+Extralite will only prepare the query once, and the underlying `sqlite_stmt`
+object will be cached for reuse.
 
 ## Transactions and Savepoints
 
