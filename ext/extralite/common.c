@@ -157,11 +157,6 @@ static inline void column_names_set(struct column_names *names, int idx, VALUE v
     rb_ary_push(names->array, value);
 }
 
-static inline VALUE column_names_get(struct column_names *names, int idx) {
-  return (names->count <= MAX_EMBEDDED_COLUMN_NAMES) ?
-    names->names[idx] : RARRAY_AREF(names->array, idx);
-}
-
 static inline struct column_names get_column_names(sqlite3_stmt *stmt, int column_count) {
   struct column_names names;
   column_names_setup(&names, column_count);
@@ -301,7 +296,7 @@ void *exec_multi_stmt_impl(void *ptr) {
     finalize_stmt_ctx(ctx);
     return NULL;
   }
-  
+
   const char *rest = NULL;
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
@@ -345,6 +340,20 @@ done:
   return NULL;
 }
 
+inline int raise_error(stmt_ctx *ctx) {
+  switch (ctx->rc) {
+  case SQLITE_BUSY:
+    rb_raise(cBusyError, "Database is busy");
+  case SQLITE_ERROR:
+    rb_raise(cSQLError, "%s", sqlite3_errmsg(ctx->db));
+  case SQLITE_MISUSE:
+    rb_raise(cError, "Multiple statements cannot take parameters");
+  default:
+    rb_raise(cError, "%s", sqlite3_errmsg(ctx->db));
+  }
+  return 0;
+}
+
 /*
 This function prepares a statement from an SQL string containing one or more SQL
 statements. It will release the GVL while the statements are being prepared and
@@ -358,16 +367,7 @@ int exec_multi_stmt(stmt_ctx *ctx) {
   if (ctx->rc == SQLITE_OK) return ctx->total_changes;
 
   if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
-  switch (ctx->rc) {
-  case SQLITE_BUSY:
-    rb_raise(cBusyError, "Database is busy");
-  case SQLITE_ERROR:
-    rb_raise(cSQLError, "%s", sqlite3_errmsg(ctx->db));
-  case SQLITE_MISUSE:
-    rb_raise(cError, "Multiple statements cannot take parameters");
-  default:
-    rb_raise(cError, "%s", sqlite3_errmsg(ctx->db));
-  }
+  return raise_error(ctx);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -403,69 +403,7 @@ void prep_single_stmt(stmt_ctx *ctx) {
   if (ctx->rc == SQLITE_OK) return;
 
   if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
-  switch (ctx->rc) {
-  case SQLITE_BUSY:
-    rb_raise(cBusyError, "Database is busy");
-  case SQLITE_ERROR:
-    rb_raise(cSQLError, "%s", sqlite3_errmsg(ctx->db));
-  case SQLITE_MISUSE:
-    rb_raise(cError, "Multiple statements cannot take parameters");
-  default:
-    rb_raise(cError, "%s", sqlite3_errmsg(ctx->db));
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void *prepare_single_stmt_impl(void *ptr) {
-  stmt_ctx *ctx = (stmt_ctx *)ptr;
-  const char *rest = NULL;
-  const char *str = ctx->str;
-  const char *end = ctx->str + ctx->len;
-
-  ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmtptr, &rest);
-  if (ctx->rc != SQLITE_OK) goto discard_stmt;
-  if (rest != end) {
-    sqlite3_stmt *next = NULL;
-    int res = sqlite3_prepare_v2(ctx->db, rest, end - rest, &next, NULL);
-    if (next) {
-      finalize_stmt(&next);
-      res = SQLITE_MISUSE;
-    }
-    if (res != SQLITE_OK) {
-      ctx->rc = res;
-      goto discard_stmt;
-    }
-  }
-  goto end;
-discard_stmt:
-  finalize_stmt(ctx->stmtptr);
-end:
-  return NULL;
-}
-
-void prepare_single_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv) {
-  stmt_ctx ctx = {
-    stmt_cache, sql,
-    db, stmt,
-    RSTRING_PTR(sql), RSTRING_LEN(sql),
-    mode, 0, 0, 0, argc, argv
-  };
-  gvl_call(mode, prepare_single_stmt_impl, (void *)&ctx);
-  RB_GC_GUARD(sql);
-
-  switch (ctx.rc) {
-  case 0:
-    return;
-  case SQLITE_BUSY:
-    rb_raise(cBusyError, "Database is busy");
-  case SQLITE_ERROR:
-    rb_raise(cSQLError, "%s", sqlite3_errmsg(db));
-  case SQLITE_MISUSE:
-    rb_raise(cError, "Multiple statements given");
-  default:
-    rb_raise(cError, "%s", sqlite3_errmsg(db));
-  }
+  raise_error(ctx);
 }
 
 struct step_ctx {
@@ -701,10 +639,10 @@ done:
       return rb_ary_entry(array, 0);
   }
 
-  return Qnil;
   RB_GC_GUARD(identity_storage);
   RB_GC_GUARD(row);
   RB_GC_GUARD(array);
+  return Qnil;
 }
 
 VALUE safe_query_single_row_transform(query_ctx *ctx) {
@@ -731,10 +669,10 @@ VALUE safe_query_single_row_transform(query_ctx *ctx) {
       return row;
   }
 
-  return Qnil;
   RB_GC_GUARD(identity_storage);
   RB_GC_GUARD(row);
   RB_GC_GUARD(array);
+  return Qnil;
 }
 
 VALUE safe_query_splat(query_ctx *ctx);

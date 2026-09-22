@@ -88,7 +88,7 @@ class DatabaseTraceTest < Minitest::Test
 
   def test_trace_database_batch_query_with_enumerable
     @db.batch_query('select ?', 1..3)
-    
+
     assert_equal [
       { sql: 'select ?', args: [1] },
       { sql: 'select ?', args: [2] },
@@ -100,7 +100,7 @@ class DatabaseTraceTest < Minitest::Test
     values = [4, 5, 6]
 
     @db.batch_query('select ?', -> { values.shift })
-    
+
     assert_equal [
       { sql: 'select ?', args: [4] },
       { sql: 'select ?', args: [5] },
@@ -184,6 +184,6 @@ class QueryTraceTest < Minitest::Test
       { sql: 'select ?', args: [43] },
       { sql: 'select ?', args: [44] },
     ], @trace_buf
-    
+
   end
 end

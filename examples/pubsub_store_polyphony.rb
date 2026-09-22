@@ -62,7 +62,7 @@ class PubSub
     create table if not exists messages(
       subscriber_id integer,
       topic text,
-      message text, 
+      message text,
       foreign key (subscriber_id, topic)
         references subscriber_topics(subscriber_id, topic)
         on delete cascade

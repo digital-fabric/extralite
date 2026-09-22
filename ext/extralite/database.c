@@ -309,7 +309,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
 
   stmt_ctx stmt_ctx;
   make_stmt_ctx(&stmt_ctx, db, &stmt, sql, argc - 1, argv + 1);
-  
+
   Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
   if (execute_mode) {
     exec_multi_stmt(&stmt_ctx);
@@ -324,9 +324,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
     return result;
   }
   else {
-    // Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
     prep_single_stmt(&stmt_ctx);
-    // prepare_single_stmt(mode, extralite_db->stmt_cache, db, stmt, sql, 0, NULL);    cache_prepare_single_stmt(db, DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
     query_ctx ctx = QUERY_CTX(
       self, sql, db, stmt, Qnil, transform,
       query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
@@ -337,7 +335,7 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
     bind_all_parameters(stmt, argc - 1, argv + 1);
     VALUE result = rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
     RB_GC_GUARD(result);
-    return result;    
+    return result;
   }
 }
 
@@ -574,7 +572,10 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
 
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  prepare_single_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  prep_single_stmt(&stmt_ctx);
+  // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS
@@ -610,7 +611,10 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  prep_single_stmt(&stmt_ctx);
+  // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS
@@ -644,7 +648,10 @@ VALUE Database_batch_query_array(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  prep_single_stmt(&stmt_ctx);
+  // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_ARRAY, ROW_MULTI, ALL_ROWS
@@ -678,7 +685,10 @@ VALUE Database_batch_query_splat(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  prep_single_stmt(&stmt_ctx);
+  // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_SPLAT, ROW_MULTI, ALL_ROWS

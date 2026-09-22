@@ -2139,7 +2139,7 @@ class StmtCacheText < Minitest::Test
     assert_nil db2.stmt_cache
     db2.query('create table t (x)')
     sql = 'insert into t values (?)'
-    
+
     assert_nil db2.stmt_cache
     changes = db2.execute(sql, 42)
     assert_equal 1, changes
@@ -2154,7 +2154,7 @@ class StmtCacheText < Minitest::Test
 
   def test_stmt_cache_execute_with_params
     sql = 'insert into t values (?)'
-    
+
     assert_equal({}, @db.stmt_cache)
     changes = @db.execute(sql, 42)
     assert_equal 1, changes
@@ -2170,7 +2170,7 @@ class StmtCacheText < Minitest::Test
 
   def test_stmt_cache_execute_without_params
     sql = 'insert into t values (42)'
-    
+
     assert_equal({}, @db.stmt_cache)
     changes = @db.execute(sql)
     assert_equal 1, changes
@@ -2179,7 +2179,7 @@ class StmtCacheText < Minitest::Test
     changes = @db.execute(sql)
     assert_equal 1, changes
     assert_equal({}, @db.stmt_cache)
-    
+
     assert_equal [42, 42], @db.query_splat('select x from t order by x')
   end
 
@@ -2210,7 +2210,7 @@ class StmtCacheText < Minitest::Test
     rows = @db.query(sql)
     assert_equal [], rows
     assert_equal({}, @db.stmt_cache)
-    
+
     @db.execute <<~SQL
       insert into t values (42)
     SQL

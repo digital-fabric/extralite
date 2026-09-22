@@ -115,7 +115,6 @@ typedef struct {
 } Changeset_t;
 #endif
 
-// #define TRANSFORM_F_CONTAINER (1 << 0) // node is a container
 #define TRANSFORM_F_ARRAY     (1 << 0) // node is an array container
 #define TRANSFORM_F_IDENTITY  (1 << 1) // node is an identity column
 #define TRANSFORM_F_NAME      (1 << 2) // node has a name VALUE
@@ -189,7 +188,7 @@ enum gvl_mode {
 typedef struct {
   VALUE stmt_cache;
   VALUE sql;
-  
+
   sqlite3 *db;
   sqlite3_stmt **stmtptr;
 
@@ -245,7 +244,6 @@ VALUE Query_to_a(VALUE self);
 VALUE Query_transform_set(VALUE self, VALUE transform);
 
 void make_stmt_ctx(stmt_ctx *ctx, Database_t *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
-void prepare_single_stmt(enum gvl_mode mode, VALUE stmt_cache, sqlite3 *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv);
 void prep_single_stmt(stmt_ctx *ctx);
 int exec_multi_stmt(stmt_ctx *ctx);
 void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);
