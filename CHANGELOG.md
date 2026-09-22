@@ -1,3 +1,8 @@
+# 3.1.0 2026-09-22
+
+- Update bundled SQLite to 3.53.4
+- Add `stmt_cache` option to `Database#initialize`
+- Implement automatic stmt caching for parametric queries
 - Change handling of multi stmt query and execute invocations.
   - For #execute, accept multiple statements but raise error if parameters are given
   - For #query, raise error on multiple statements
