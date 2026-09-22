@@ -25,7 +25,7 @@ static void Iterator_compact(void *ptr) {
 
 static const rb_data_type_t Iterator_type = {
     "Iterator",
-    {Iterator_mark, free, Iterator_size, Iterator_compact},
+    {Iterator_mark, xfree, Iterator_size, Iterator_compact},
     0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 

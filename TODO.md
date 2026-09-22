@@ -28,7 +28,7 @@ end
 ]
 ```
 
-- Can we get rid of the hash container?
+- Use single value instead of hash
 
 ```ruby
 Extralite::Transform.new do
@@ -38,7 +38,7 @@ Extralite::Transform.new do
     content: text,
     _tag_id: skip,
     tags: [
-      name: text
+      { name: text.unbox }
     ]
   }
 end

@@ -11,7 +11,6 @@
 
 VALUE cQuery;
 
-ID ID_inspect;
 ID ID_slice;
 
 VALUE SYM_hash;
@@ -132,9 +131,15 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
   return Qnil;
 }
 
+static inline void prep_query(Query_t *query) {
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, query->db_struct, &(query->stmt), query->sql, 0, NULL);
+  prep_single_stmt(&stmt_ctx);
+}
+
 static inline void query_reset(Query_t *query) {
   if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+    prep_query(query);
   else
     sqlite3_reset(query->stmt);
 
@@ -146,7 +151,7 @@ static inline void query_reset(Query_t *query) {
 
 static inline void query_bind(Query_t *query, int argc, VALUE * argv) {
   if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+    prep_query(query);
   else
     // we call sqlite3_reset because that's what the SQLite API expects before
     // changing the binding. See note at bottom of
@@ -406,8 +411,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
   Query_t *query = self_to_query_verify(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
-  if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+  if (!query->stmt) prep_query(query);
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -455,8 +459,7 @@ VALUE Query_batch_query(VALUE self, VALUE parameters) {
   Query_t *query = self_to_query_verify(self);
   if (query->closed) rb_raise(cError, "Query is closed");
 
-  if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+  if (!query->stmt) prep_query(query);
 
   query_ctx ctx = QUERY_CTX(
     self,
@@ -562,9 +565,7 @@ VALUE Query_status(int argc, VALUE* argv, VALUE self) {
   rb_scan_args(argc, argv, "11", &op, &reset);
 
   Query_t *query = self_to_query_verify(self);
-
-  if (!query->stmt)
-    prepare_single_stmt(DB_GVL_MODE(query), query->sqlite3_db, &query->stmt, query->sql);
+  if (!query->stmt) prep_query(query);
 
   int value = sqlite3_stmt_status(query->stmt, NUM2INT(op), RTEST(reset) ? 1 : 0);
   return INT2NUM(value);
@@ -685,7 +686,6 @@ void Init_ExtraliteQuery(void) {
   rb_define_method(cQuery, "transform",      Query_transform_get, 0);
   rb_define_method(cQuery, "transform=",     Query_transform_set, 1);
 
-  ID_inspect  = rb_intern_const("inspect");
   ID_slice    = rb_intern_const("slice");
 
   SYM_hash    = ID2SYM(rb_intern_const("hash"));

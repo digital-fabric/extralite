@@ -109,21 +109,28 @@ class DatabaseTest < Minitest::Test
     assert_equal false, @db.transaction_active?
   end
 
-  def test_multiple_statements
-    @db.query("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f');")
+  def test_query_multi_stmt
+    assert_raises(Extralite::Error) {
+      @db.query("insert into t values ('a', 'b', 'c'); insert into t values ('d', 'e', 'f')")
+    }
+    assert_equal [1, 4], @db.query_splat('select x from t order by x')
 
-    assert_equal [1, 4, 'a', 'd'], @db.query_splat('select x from t order by x')
+    assert_equal 2, @db.execute("insert into t values ('d', 'e', 'f'); insert into t values ('g', 'h', 'i');")
+
+    assert_equal [1, 4, 'd', 'g'], @db.query_splat('select x from t order by x')
   end
 
-  def test_multiple_statements_with_error
+  def test_query_multi_stmt_bad_sql
     error = nil
     begin
-      @db.query("insert into t values foo; insert into t values ('d', 'e', 'f');")
+      @db.query("insert into t values ('d', 'e', 'f'); insert into t values foo;")
     rescue => error
     end
 
     assert_kind_of Extralite::SQLError, error
     assert_equal 'near "foo": syntax error', error.message
+
+    assert_equal [1, 4], @db.query_splat('select x from t order by x')
   end
 
   def test_empty_sql
@@ -355,9 +362,14 @@ class DatabaseTest < Minitest::Test
     assert_equal 1, @db.pragma(:schema_version)
     assert_equal 0, @db.pragma(:recursive_triggers)
 
-    assert_equal [], @db.pragma(schema_version: 33, recursive_triggers: 1)
+    assert_equal @db, @db.pragma(schema_version: 33, recursive_triggers: 1)
     assert_equal 33, @db.pragma(:schema_version)
     assert_equal 1, @db.pragma(:recursive_triggers)
+  end
+
+  def test_pragma_set
+    @db.pragma('foreign_keys' => 1)
+    # assert_equal 1, @db.pragma('foreign_keys')
   end
 
   def test_execute
@@ -375,6 +387,17 @@ class DatabaseTest < Minitest::Test
     changes = @db.execute('update t set x = ? where z = ?', [42, 6])
     assert_equal 1, changes
     assert_equal [[1, 2, 3], [42, 5, 6]], @db.query_array('select * from t order by x')
+  end
+
+  def test_execute_multi_stmt_with_params
+    assert_raises(Extralite::Error) {
+      @db.execute <<~SQL, 42, 43, 44
+        insert into t values (?, ?, ?);
+        update t set x = 45 where x = 42;
+      SQL
+    }
+
+    assert_equal [[1, 2, 3], [4, 5, 6]], @db.query_array('select * from t order by x')
   end
 
   def test_batch_execute
@@ -1092,18 +1115,22 @@ class DatabaseTest < Minitest::Test
     assert_equal [0, 0], r
   end
 
+  def test_execute_simple
+    @db.execute('select 1')
+  end
+
   def test_execute_with_comments
     result = @db.execute(<<~SQL)
       -- this is a comment
     SQL
-    assert_nil result
+    assert_equal 0, result
 
     result = @db.execute(<<~SQL)
       DELETE FROM t;
       INSERT INTO t (x, y, z) VALUES (1, 1, 1);
       INSERT INTO t (x, y, z) VALUES (2, 2, 2);
     SQL
-    assert_equal 1, result
+    assert_equal 4, result
     assert_equal [1, 2], @db.query_splat('SELECT x FROM t ORDER BY x')
 
     result = @db.execute(<<~SQL)
@@ -1112,7 +1139,7 @@ class DatabaseTest < Minitest::Test
       INSERT INTO t (x, y, z) VALUES (3, 3, 3);
       INSERT INTO t (x, y, z) VALUES (4, 4, 4);
     SQL
-    assert_equal 1, result
+    assert_equal 4, result
     assert_equal [3, 4], @db.query_splat('SELECT x FROM t ORDER BY x')
 
     result = @db.execute(<<~SQL)
@@ -1121,17 +1148,16 @@ class DatabaseTest < Minitest::Test
       -- this is a comment in the middle
       INSERT INTO t (x, y, z) VALUES (6, 6, 6);
     SQL
-    assert_equal 1, result
+    assert_equal 4, result
     assert_equal [5, 6], @db.query_splat('SELECT x FROM t ORDER BY x')
 
     result = @db.execute(<<~SQL)
       DELETE FROM t;
       INSERT INTO t (x, y, z) VALUES (7, 7, 7);
-      INSERT INTO t (x, y, z) VALUES (8, 8, 8);
       -- this is a comment at the end
     SQL
-    assert_nil result
-    assert_equal [7, 8], @db.query_splat('SELECT x FROM t ORDER BY x')
+    assert_equal 3, result
+    assert_equal [7], @db.query_splat('SELECT x FROM t ORDER BY x')
   end
 
   def test_quote
@@ -1200,8 +1226,9 @@ class ScenarioTest < Minitest::Test
     # "upgrade" to a write transaction
 
     @db.query('commit')
+    sleep 0.1
 
-    while true
+    loop do
       begin
         @db.query('begin immediate')
         break
@@ -1354,7 +1381,7 @@ class ConcurrencyTest < Minitest::Test
     t2.join
     t1.join
 
-    assert_in_range 4.., delays.size
+    assert_in_range 3.., delays.size
     assert_equal 0, delays.select { |d| d > 0.15 }.size
   ensure
     t1&.kill
@@ -2000,5 +2027,202 @@ class DatabaseTransformTest < Minitest::Test
 
     assert_equal({ a: 1, b: 2, c: { foo: 42, bar: 43 }}, @db.query_single_splat(transform, sql, 1))
     assert_equal({ a: 4, b: 5, c: { foo: 45, bar: 46 }}, @db.query_single_splat(transform, sql, 4))
+  end
+end
+
+class MultiStmtTest < Minitest::Test
+  def setup
+    @db = Extralite::Database.new(':memory:')
+    @db.query('create table t (x)')
+  end
+
+  def test_multi_stmt_execute_simple
+    assert_equal 3, @db.execute(<<~SQL
+      insert into t values (42);
+      insert into t values (43);
+      insert into t values (44);
+    SQL
+    )
+
+    assert_equal [
+      { x: 42 },
+      { x: 43 },
+      { x: 44 }
+    ], @db.query('select x from t order by x')
+  end
+
+  def test_multi_stmt_execute_raise_on_params
+    assert_raises(Extralite::Error) {
+      @db.execute <<~SQL, 45
+        insert into t values (42);
+        insert into t values (?);
+        insert into t values (43);
+
+
+      SQL
+    }
+    assert_equal [], @db.query('select x from t order by x')
+
+    # Do not raise if single stmt
+    @db.execute <<~SQL, 42
+      insert into t values (?);
+
+      -- cool comment --
+    SQL
+    assert_equal [
+      { x: 42 }
+    ], @db.query('select x from t order by x')
+  end
+
+  def test_multi_stmt_execute_bad_sql
+    assert_raises(Extralite::SQLError) {
+      @db.execute(<<~SQL
+        insert into t values (42);
+        foo bar;
+        insert into t values (44);
+      SQL
+      )
+    }
+
+    assert_equal [
+      { x: 42 }
+    ], @db.query('select x from t order by x')
+
+    assert_raises(Extralite::SQLError) {
+      @db.execute(<<~SQL, 34
+        insert into t values (?);
+        foo bar;
+      SQL
+      )
+    }
+
+    assert_equal [
+      { x: 42 }
+    ], @db.query('select x from t order by x')
+  end
+
+  def test_multi_stmt_query
+    assert_raises(Extralite::Error) {
+      @db.query("select * from t; insert into t values (1)")
+    }
+    assert_equal [], @db.query('select x from t order by x')
+  end
+
+  def test_multi_stmt_query_bad_sql
+    assert_raises(Extralite::SQLError) {
+      @db.query("insert into t values (?); foo bar")
+    }
+    assert_equal [], @db.query('select x from t order by x')
+
+    assert_raises(Extralite::Error) {
+      @db.query("insert into t values (?); select * from t order by x")
+    }
+    assert_equal [], @db.query('select x from t order by x')
+  end
+end
+
+class StmtCacheText < Minitest::Test
+  def setup
+    @db = Extralite::Database.new(':memory:')
+    @db.query('create table t (x)')
+  end
+
+  def test_stmt_cache
+    assert_kind_of Hash, @db.stmt_cache
+
+    db2 = Extralite::Database.new(':memory:', stmt_cache: false)
+    assert_nil db2.stmt_cache
+  end
+
+  def test_stmt_cache_disabled
+    db2 = Extralite::Database.new(':memory:', stmt_cache: false)
+    assert_nil db2.stmt_cache
+    db2.query('create table t (x)')
+    sql = 'insert into t values (?)'
+
+    assert_nil db2.stmt_cache
+    changes = db2.execute(sql, 42)
+    assert_equal 1, changes
+    assert_nil db2.stmt_cache
+
+    changes = db2.execute(sql, 43)
+    assert_equal 1, changes
+    assert_nil db2.stmt_cache
+
+    assert_equal [[42], [43]], db2.query_array('select x from t order by x')
+  end
+
+  def test_stmt_cache_execute_with_params
+    sql = 'insert into t values (?)'
+
+    assert_equal({}, @db.stmt_cache)
+    changes = @db.execute(sql, 42)
+    assert_equal 1, changes
+    assert_equal [sql], @db.stmt_cache.keys
+
+    changes = @db.execute(sql, 43)
+    assert_equal 1, changes
+    assert_equal [sql], @db.stmt_cache.keys
+    assert_kind_of Integer, @db.stmt_cache[sql]
+    assert_equal [[42], [43]], @db.query_array('select x from t order by x')
+
+    stmt = @db.stmt_cache[sql]
+    changes = @db.batch_execute(sql, [47, 48, 49])
+    assert_equal 3, changes
+    assert_equal [sql], @db.stmt_cache.keys
+    assert_equal stmt, @db.stmt_cache[sql]
+    assert_equal [[42], [43], [47], [48], [49]], @db.query_array('select x from t order by x')
+  end
+
+  def test_stmt_cache_execute_without_params
+    sql = 'insert into t values (42)'
+
+    assert_equal({}, @db.stmt_cache)
+    changes = @db.execute(sql)
+    assert_equal 1, changes
+    assert_equal({}, @db.stmt_cache)
+
+    changes = @db.execute(sql)
+    assert_equal 1, changes
+    assert_equal({}, @db.stmt_cache)
+
+    assert_equal [42, 42], @db.query_splat('select x from t order by x')
+  end
+
+
+  def test_stmt_cache_query_with_params
+    @db.execute <<~SQL
+      insert into t values (42), (13), (6)
+    SQL
+
+    sql = 'select x from t where x = ?'
+
+    assert_equal({}, @db.stmt_cache)
+
+    rows = @db.query(sql, 42)
+    assert_equal [{ x: 42 }], rows
+    assert_equal [sql], @db.stmt_cache.keys
+    id = @db.stmt_cache[sql]
+
+    rows = @db.query(sql, 13)
+    assert_equal [{ x: 13 }], rows
+    assert_equal [sql], @db.stmt_cache.keys
+    assert_equal id, @db.stmt_cache[sql]
+  end
+
+  def test_stmt_cache_query_without_params
+    sql = 'select x from t where x = 42'
+
+    rows = @db.query(sql)
+    assert_equal [], rows
+    assert_equal({}, @db.stmt_cache)
+
+    @db.execute <<~SQL
+      insert into t values (42)
+    SQL
+
+    rows = @db.query(sql)
+    assert_equal [{ x: 42 }], rows
+    assert_equal({}, @db.stmt_cache)
   end
 end

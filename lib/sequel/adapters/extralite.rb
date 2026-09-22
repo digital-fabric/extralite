@@ -86,15 +86,15 @@ module Sequel
 
     class Database < Sequel::Database
       include ::Sequel::SQLite::DatabaseMethods
-      
+
       set_adapter_scheme :extralite
-      
+
       # Mimic the file:// uri, by having 2 preceding slashes specify a relative
       # path, and 3 preceding slashes specify an absolute path.
       def self.uri_to_options(uri) # :nodoc:
         { :database => (uri.host.nil? && uri.path == '/') ? nil : "#{uri.host}#{uri.path}" }
       end
-      
+
       private_class_method :uri_to_options
 
       # The conversion procs to use for this database
@@ -129,12 +129,12 @@ module Sequel
             func.result = Regexp.new(regexp_str).match(string) ? 1 : 0
           end
         end
-        
+
         class << db
           attr_reader :prepared_statements
         end
         db.instance_variable_set(:@prepared_statements, {})
-        
+
         db
       end
 
@@ -148,7 +148,7 @@ module Sequel
       def disconnect_connection(c)
         c.close
       end
-      
+
       # Run the given SQL with the given arguments and yield each row.
       def execute(sql, opts=OPTS, &block)
         _execute(:select, sql, opts, &block)
@@ -158,7 +158,7 @@ module Sequel
       def execute_dui(sql, opts=OPTS)
         _execute(:update, sql, opts)
       end
-      
+
       # Drop any prepared statements on the connection when executing DDL.  This is because
       # prepared statements lock the table in such a way that you can't drop or alter the
       # table while a prepared statement that references it still exists.
@@ -169,11 +169,11 @@ module Sequel
           super
         end
       end
-      
+
       def execute_insert(sql, opts=OPTS)
         _execute(:insert, sql, opts)
       end
-      
+
       def freeze
         @conversion_procs.freeze
         super
@@ -194,13 +194,13 @@ module Sequel
       end
 
       private
-      
+
       def adapter_initialize
         @conversion_procs = SQLITE_TYPES.dup
         @conversion_procs['datetime'] = @conversion_procs['timestamp'] = method(:to_application_timestamp)
         set_integer_booleans
       end
-      
+
       # Yield an available connection.  Rescue
       # any Extralite::Errors and turn them into DatabaseErrors.
       def _execute(type, sql, opts, &block)
@@ -228,7 +228,7 @@ module Sequel
       rescue ::Extralite::Error => e
         raise_error(e)
       end
-      
+
       # The Extralite adapter does not need the pool to convert exceptions.
       # Also, force the max connections to 1 if a memory database is being
       # used, as otherwise each connection gets a separate database.
@@ -239,7 +239,7 @@ module Sequel
         o[:max_connections] = 1 if @opts[:database] == ':memory:' || blank_object?(@opts[:database])
         o
       end
-      
+
       def prepared_statement_argument(arg)
         case arg
         when Date, DateTime, Time
@@ -295,7 +295,7 @@ module Sequel
           end
         end
       end
-      
+
       def database_error_classes
         [::Extralite::Error]
       end
@@ -308,15 +308,15 @@ module Sequel
         exception.code if exception.respond_to?(:code)
       end
     end
-    
+
     class Dataset < Sequel::Dataset
       include ::Sequel::SQLite::DatasetMethods
 
       module ArgumentMapper
         include Sequel::Dataset::ArgumentMapper
-        
+
         protected
-        
+
         # Return a hash with the same values as the given hash,
         # but with the keys converted to strings.
         def map_to_prepared_args(hash)
@@ -324,16 +324,16 @@ module Sequel
           hash.each{|k,v| args[k.to_s.gsub('.', '__')] = v}
           args
         end
-        
+
         private
-        
+
         # Extralite uses a : before the name of the argument for named
         # arguments.
         def prepared_arg(k)
           LiteralString.new("#{prepared_arg_placeholder}#{k.to_s.gsub('.', '__')}")
         end
       end
-      
+
       BindArgumentMethods = prepared_statements_module(:bind, ArgumentMapper)
       PreparedStatementMethods = prepared_statements_module(:prepare, BindArgumentMethods)
 
@@ -371,9 +371,9 @@ module Sequel
       def supports_regexp?
         db.allow_regexp?
       end
-      
+
       private
-      
+
       # The base type name for a given type, without any parenthetical part.
       def base_type_name(t)
         (t =~ /^(.*?)\(/ ? $1 : t).downcase if t

@@ -48,13 +48,13 @@ class SequelExtraliteTest < Minitest::Test
     # Adapted from https://github.com/digital-fabric/extralite/issues/8
     Dir.mktmpdir('extralite-migration') do |dir|
       File.write(dir + '/001_migrate.rb', <<~RUBY)
-        Sequel.migration do 
+        Sequel.migration do
           change do
-            create_table(:foobars) { primary_key :id } 
+            create_table(:foobars) { primary_key :id }
           end
         end
       RUBY
-    
+
       Sequel.extension :migration
       db = Sequel.connect('extralite://')
       Sequel::Migrator.run(db, dir)

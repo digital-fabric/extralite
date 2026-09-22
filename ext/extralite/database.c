@@ -19,6 +19,7 @@ VALUE cParameterError;
 VALUE eArgumentError;
 
 ID ID_bind;
+ID ID_inspect;
 ID ID_call;
 ID ID_each;
 ID ID_keys;
@@ -38,6 +39,7 @@ VALUE SYM_normal;
 VALUE SYM_passive;
 VALUE SYM_read_only;
 VALUE SYM_restart;
+VALUE SYM_stmt_cache;
 VALUE SYM_truncate;
 VALUE SYM_wal;
 
@@ -58,12 +60,14 @@ static size_t Database_size(const void *ptr) {
 
 static void Database_mark(void *ptr) {
   Database_t *db = ptr;
+  rb_gc_mark_movable(db->stmt_cache);
   rb_gc_mark_movable(db->trace_proc);
   rb_gc_mark_movable(db->progress_handler.proc);
 }
 
 static void Database_compact(void *ptr) {
   Database_t *db = ptr;
+  db->stmt_cache            = rb_gc_location(db->stmt_cache);
   db->trace_proc            = rb_gc_location(db->trace_proc);
   db->progress_handler.proc = rb_gc_location(db->progress_handler.proc);
 }
@@ -83,6 +87,7 @@ static const rb_data_type_t Database_type = {
 static VALUE Database_allocate(VALUE klass) {
   Database_t *db = ALLOC(Database_t);
   db->sqlite3_db = NULL;
+  db->stmt_cache = Qnil;
   db->trace_proc = Qnil;
   db->progress_handler.proc = Qnil;
   db->progress_handler.mode = PROGRESS_NONE;
@@ -127,11 +132,16 @@ default_flags:
 }
 
 void Database_apply_opts(VALUE self, Database_t *db, VALUE opts) {
+  db->flags = DB_F_STMT_CACHE;
   if (NIL_P(opts)) goto modern_pragmas;
 
   // :gvl_release_threshold
   VALUE value = rb_hash_aref(opts, SYM_gvl_release_threshold);
   if (!NIL_P(value)) db->gvl_release_threshold = NUM2INT(value);
+
+  value = rb_hash_aref(opts, SYM_stmt_cache);
+  if (value == Qfalse)
+    db->flags &= !DB_F_STMT_CACHE;
 
   value = rb_hash_aref(opts, SYM_legacy);
   if (RTEST(value)) return;
@@ -175,9 +185,9 @@ int Database_busy_handler(void *ptr, int v) {
  *   `#gvl_release_threshold=`).
  * - `:read_only` (`true`/`false`): opens the database in read-only mode if true.
  * - `:legacy` (`true`/`false`): By default the database is set up for
- * concurrent access with [WAL journaling
- * mode](https://www.sqlite.org/wal.html). To prevent Extralite from setting up
- * WAL journaling, set this option to true.
+ *   concurrent access with [WAL journaling mode](https://www.sqlite.org/wal.html).
+ *   To prevent Extralite from setting up WAL journaling, set this option to true.
+ * - `:stmt_cache`: true by default, set to false to disable stmt caching
  *
  * @overload initialize(path)
  *   @param path [String] file path (or ':memory:' for memory database)
@@ -215,6 +225,7 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   sqlite3_db_config(db->sqlite3_db ,SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL);
 #endif
 
+  db->stmt_cache = rb_hash_new();
   db->trace_proc = Qnil;
   db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
 
@@ -277,12 +288,13 @@ inline enum gvl_mode Database_prepare_gvl_mode(Database_t *db) {
 
 static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VALUE (*call)(query_ctx *), enum query_mode query_mode) {
   Database_t *db = self_to_open_database(self);
-  sqlite3_stmt *stmt;
+  sqlite3_stmt *stmt = NULL;
   VALUE sql = Qnil;
   VALUE transform = Qnil;
   // transform mode is set and the first parameter is not a string, so we expect
   // a transform.,
   int got_transform = (TYPE(argv[0]) != T_STRING);
+  int execute_mode = query_mode == QUERY_VOID;
 
   // extract query from args
   rb_check_arity(argc, got_transform ? 2 : 1, UNLIMITED_ARGUMENTS);
@@ -293,26 +305,38 @@ static inline VALUE Database_perform_query(int argc, VALUE *argv, VALUE self, VA
     argv++;
   }
 
-  sql = rb_funcall(argv[0], ID_strip, 0);
-  if (RSTRING_LEN(sql) == 0) return Qnil;
-  // sql = argv[0];
+  sql = argv[0];
 
-  prepare_multi_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
-  RB_GC_GUARD(sql);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, argc - 1, argv + 1);
 
-  if (stmt == NULL) return Qnil;
-
-  bind_all_parameters(stmt, argc - 1, argv + 1);
   Database_pre_query_hook(db, stmt, sql, argc - 1, argv + 1);
+  if (execute_mode) {
+    exec_multi_stmt(&stmt_ctx);
 
-  query_ctx ctx = QUERY_CTX(
-    self, sql, db, stmt, Qnil, transform,
-    query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
-  );
+    query_ctx ctx = QUERY_CTX(
+      self, sql, db, NULL, Qnil, transform,
+      query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
+    );
+    ctx.flags = stmt_ctx.flags;
+    ctx.total_changes = stmt_ctx.total_changes;
+    VALUE result = (VALUE)call(&ctx);
+    return result;
+  }
+  else {
+    prep_single_stmt(&stmt_ctx);
+    query_ctx ctx = QUERY_CTX(
+      self, sql, db, stmt, Qnil, transform,
+      query_mode, ROW_YIELD_OR_MODE(ROW_MULTI), ALL_ROWS
+    );
+    ctx.flags = stmt_ctx.flags;
+    if (!stmt) return Qnil;
 
-  VALUE result = rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
-  RB_GC_GUARD(result);
-  return result;
+    bind_all_parameters(stmt, argc - 1, argv + 1);
+    VALUE result = rb_ensure(SAFE(call), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
+    RB_GC_GUARD(result);
+    return result;
+  }
 }
 
 /* call-seq:
@@ -490,7 +514,9 @@ VALUE Database_query_single_array(int argc, VALUE *argv, VALUE self) {
  *   db.execute(sql, *parameters) -> changes
  *
  * Runs a query returning the total changes effected. This method should be used
- * for data- or schema-manipulation queries.
+ * for data- or schema-manipulation queries. If the given SQL string contains
+ * multiple statements, they will be executed in the order given. If multiple
+ * statements are given along with query parameters, an error is raised.
  *
  * Query parameters to be bound to placeholders in the query can be specified as
  * a list of values or as a hash mapping parameter names to values. When
@@ -506,10 +532,10 @@ VALUE Database_query_single_array(int argc, VALUE *argv, VALUE self) {
  *
  * @param sql [String] query SQL
  * @param parameters [Array, Hash] parameters to run query with
- * @return [Integer, nil] Total number of changes effected or `nil` if the query ends with a comment.
+ * @return [Integer] Total number of changes effected
  */
 VALUE Database_execute(int argc, VALUE *argv, VALUE self) {
-  return Database_perform_query(argc, argv, self, safe_query_changes, QUERY_HASH);
+  return Database_perform_query(argc, argv, self, safe_total_changes, QUERY_VOID);
 }
 
 /* call-seq:
@@ -546,7 +572,10 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
 
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
-  prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  prep_single_stmt(&stmt_ctx);
+  // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS
@@ -582,7 +611,10 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  prep_single_stmt(&stmt_ctx);
+  // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS
@@ -616,7 +648,10 @@ VALUE Database_batch_query_array(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  prep_single_stmt(&stmt_ctx);
+  // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_ARRAY, ROW_MULTI, ALL_ROWS
@@ -650,7 +685,10 @@ VALUE Database_batch_query_splat(VALUE self, VALUE sql, VALUE parameters) {
   Database_t *db = self_to_open_database(self);
   sqlite3_stmt *stmt;
 
-  prepare_single_stmt(DB_GVL_MODE(db), db->sqlite3_db, &stmt, sql);
+  stmt_ctx stmt_ctx;
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  prep_single_stmt(&stmt_ctx);
+  // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_SPLAT, ROW_MULTI, ALL_ROWS
@@ -1383,7 +1421,6 @@ VALUE Extralite_on_progress(int argc, VALUE *argv, VALUE self) {
  */
 VALUE Database_errcode(VALUE self) {
   Database_t *db = self_to_open_database(self);
-
   return INT2NUM(sqlite3_errcode(db->sqlite3_db));
 }
 
@@ -1393,8 +1430,17 @@ VALUE Database_errcode(VALUE self) {
  */
 VALUE Database_errmsg(VALUE self) {
   Database_t *db = self_to_open_database(self);
-
   return rb_str_new2(sqlite3_errmsg(db->sqlite3_db));
+}
+
+/* Returns the stmt cache for the database. If the database was setup with
+ * stmt_cache set to false, returns nil.
+ *
+ * @return [Hash, nil] stmt cache or nil if disabled
+ */
+VALUE Database_stmt_cache(VALUE self) {
+  Database_t *db = self_to_open_database(self);
+  return (db->flags & DB_F_STMT_CACHE) ? db->stmt_cache : Qnil;
 }
 
 #ifdef HAVE_SQLITE3_ERROR_OFFSET
@@ -1581,6 +1627,7 @@ void Init_ExtraliteDatabase(void) {
   rb_define_method(cDatabase, "columns",                Database_columns, 1);
   rb_define_method(cDatabase, "errcode",                Database_errcode, 0);
   rb_define_method(cDatabase, "errmsg",                 Database_errmsg, 0);
+  rb_define_method(cDatabase, "stmt_cache",             Database_stmt_cache, 0);
 
   #ifdef HAVE_SQLITE3_ERROR_OFFSET
   rb_define_method(cDatabase, "error_offset",           Database_error_offset, 0);
@@ -1644,6 +1691,8 @@ void Init_ExtraliteDatabase(void) {
   ID_to_s         = rb_intern_const("to_s");
   ID_track        = rb_intern_const("track");
 
+  ID_inspect  = rb_intern_const("inspect");
+
   SYM_at_least_once         = ID2SYM(rb_intern_const("at_least_once"));
   SYM_full                  = ID2SYM(rb_intern_const("full"));
   SYM_gvl_release_threshold = ID2SYM(rb_intern_const("gvl_release_threshold"));
@@ -1654,6 +1703,7 @@ void Init_ExtraliteDatabase(void) {
   SYM_passive               = ID2SYM(rb_intern_const("passive"));
   SYM_read_only             = ID2SYM(rb_intern_const("read_only"));
   SYM_restart               = ID2SYM(rb_intern_const("restart"));
+  SYM_stmt_cache            = ID2SYM(rb_intern_const("stmt_cache"));
   SYM_truncate              = ID2SYM(rb_intern_const("truncate"));
   SYM_wal                   = ID2SYM(rb_intern_const("wal"));
 
@@ -1667,6 +1717,7 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(SYM_passive);
   rb_gc_register_mark_object(SYM_read_only);
   rb_gc_register_mark_object(SYM_restart);
+  rb_gc_register_mark_object(SYM_stmt_cache);
   rb_gc_register_mark_object(SYM_truncate);
   rb_gc_register_mark_object(SYM_wal);
 
