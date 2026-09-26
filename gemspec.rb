@@ -19,7 +19,7 @@ def common_spec(s)
 
   s.add_development_dependency  'rake-compiler',        '1.3.1'
   s.add_development_dependency  'minitest'
-  s.add_development_dependency  'simplecov',            '0.22.0'
-  s.add_development_dependency  'yard',                 '0.9.38'
-  s.add_development_dependency  'sequel',               '5.105.0'
+  s.add_development_dependency  'simplecov'
+  s.add_development_dependency  'yard'
+  s.add_development_dependency  'sequel',               '5.108.0'
 end
