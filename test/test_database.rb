@@ -2225,4 +2225,39 @@ class StmtCacheText < Minitest::Test
     assert_equal [{ x: 42 }], rows
     assert_equal({}, @db.stmt_cache)
   end
+
+  def test_stmt_cache_close
+    fn = Tempfile.new('extralite_test_stmt_cache_close').path
+
+    db = Extralite::Database.new(fn)
+    db.query('create table t (x)')
+
+    db.execute <<~SQL
+      insert into t values (42)
+    SQL
+    assert File.file?("#{fn}-wal"), "WAL file should exist"
+
+    assert_equal [{x: 42}], db.query('select * from t where x = ?', 42)
+
+    db.close
+    refute File.file?("#{fn}-wal"), "WAL file should not exist after close"
+  end
+
+  def test_stmt_cache_gc
+    fn = Tempfile.new('extralite_test_stmt_cache_close').path
+
+    db = Extralite::Database.new(fn)
+    db.query('create table t (x)')
+
+    db.execute <<~SQL
+      insert into t values (42)
+    SQL
+    assert File.file?("#{fn}-wal"), "WAL file should exist"
+
+    assert_equal [{x: 42}], db.query('select * from t where x = ?', 42)
+
+    db = nil
+    GC.start
+    refute File.file?("#{fn}-wal"), "WAL file should not exist after GC"
+  end
 end

@@ -16,3 +16,13 @@ module Minitest::Assertions
     assert exp_range.include?(act), msg
   end
 end
+
+module TestExtensions
+  def teardown
+    @db = nil
+    GC.start
+    super
+  end
+end
+
+Minitest::Test.prepend(TestExtensions)

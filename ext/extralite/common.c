@@ -318,6 +318,7 @@ void *exec_multi_stmt_impl(void *ptr) {
         int res = sqlite3_prepare_v2(ctx->db, rest, end-rest, &next_stmt, NULL);
         if (next_stmt) res = SQLITE_MISUSE;
         if (res != SQLITE_OK) {
+          ctx->flags &= ~STMT_CTX_F_USE_CACHE;
           ctx->rc = res;
           goto done;
         }
@@ -367,6 +368,7 @@ int exec_multi_stmt(stmt_ctx *ctx) {
   if (ctx->rc == SQLITE_OK) return ctx->total_changes;
 
   if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
+
   return raise_error(ctx);
 }
 
@@ -403,6 +405,7 @@ void prep_single_stmt(stmt_ctx *ctx) {
   if (ctx->rc == SQLITE_OK) return;
 
   if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
+
   raise_error(ctx);
 }
 
@@ -453,12 +456,10 @@ inline int stmt_iterate(query_ctx *ctx) {
 VALUE cleanup_stmt(query_ctx *ctx) {
   if (!ctx->stmt) goto done;
 
-  if (ctx->flags & STMT_CTX_F_USE_CACHE) {
-    if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
-      rb_hash_aset(ctx->db->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)(ctx->stmt)));
-  }
-  else
+  if (!(ctx->flags & STMT_CTX_F_USE_CACHE))
     sqlite3_finalize(ctx->stmt);
+  else if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
+    rb_hash_aset(ctx->db->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)(ctx->stmt)));
 done:
   return Qnil;
 }
@@ -600,8 +601,6 @@ VALUE run_transform_no_identity(
 static inline VALUE run_transform(
   VALUE identity_storage, struct transform_node *node, sqlite3_stmt *stmt
 ) {
-  // fprintf(stdout, "transform_container: %p flags: %02x identity_idx: %d\n", node, node->flags, node->identity_idx);
-  // if (node->flags & TRANSFORM_F_NAME) INSPECT("  name", node->name);
   if (node->identity_node) {
     return run_transform_with_identity(identity_storage, node, stmt);
   }

@@ -20,6 +20,7 @@ class SequelExtraliteTest < Minitest::Test
 
   def teardown
     @db.disconnect
+    super
   end
 
   def test_sequel

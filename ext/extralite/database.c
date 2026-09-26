@@ -72,9 +72,27 @@ static void Database_compact(void *ptr) {
   db->progress_handler.proc = rb_gc_location(db->progress_handler.proc);
 }
 
+static int stmt_cache_iter(VALUE key, VALUE value, VALUE _param) {
+  sqlite3_stmt *stmt = (sqlite3_stmt *)NUM2ULONG(value);
+  sqlite3_finalize(stmt);
+  return ST_CONTINUE;
+}
+
+static void stmt_cache_clear(sqlite3 *db, VALUE stmt_cache) {
+  if (stmt_cache == Qnil) return;
+  if (rb_hash_size_num(stmt_cache) == 0) return;
+
+  rb_hash_foreach(stmt_cache, stmt_cache_iter, Qnil);
+  rb_hash_clear(stmt_cache);
+  RB_GC_GUARD(stmt_cache);
+}
+
 static void Database_free(void *ptr) {
   Database_t *db = ptr;
-  if (db->sqlite3_db) sqlite3_close_v2(db->sqlite3_db);
+  if (db->sqlite3_db) {
+    stmt_cache_clear(db->sqlite3_db, db->stmt_cache);
+    sqlite3_close_v2(db->sqlite3_db);
+  }
   free(ptr);
 }
 
@@ -261,6 +279,7 @@ VALUE Database_close(VALUE self) {
   int rc;
   Database_t *db = self_to_database(self);
 
+  stmt_cache_clear(db->sqlite3_db, db->stmt_cache);
   rc = sqlite3_close_v2(db->sqlite3_db);
   if (rc) {
     rb_raise(cError, "%s", sqlite3_errmsg(db->sqlite3_db));
@@ -573,13 +592,14 @@ VALUE Database_batch_execute(VALUE self, VALUE sql, VALUE parameters) {
   if (RSTRING_LEN(sql) == 0) return Qnil;
 
   stmt_ctx stmt_ctx;
-  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, 1, NULL);
   prep_single_stmt(&stmt_ctx);
   // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
     self, sql, db, stmt, parameters,
     Qnil, QUERY_HASH, ROW_MULTI, ALL_ROWS
   );
+  ctx.flags = stmt_ctx.flags;
 
   return rb_ensure(SAFE(safe_batch_execute), (VALUE)&ctx, SAFE(cleanup_stmt), (VALUE)&ctx);
 }
