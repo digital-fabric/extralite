@@ -1,3 +1,7 @@
+# 3.1.1 2026-09-26
+
+- Fix clearing of stmt cache after `DB#close` or after GC (#87)
+
 # 3.1.0 2026-09-22
 
 - Update bundled SQLite to 3.53.4
