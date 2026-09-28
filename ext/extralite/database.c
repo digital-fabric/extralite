@@ -1565,11 +1565,11 @@ int checkpoint_mode_symbol_to_int(VALUE mode) {
  *
  * @overload wal_checkpoint(mode)
  *   @param mode [Symbol] checkpoint mode (`:passive`, `:full`, `:restart`, `:truncate`)
- *   @return [Array<int>] total and checkpointed frame count
+ *   @return [Array<Integer>] total and checkpointed frame count
  * @overload wal_checkpoint(mode, db_name)
  *   @param mode [Symbol] checkpoint mode (`:passive`, `:full`, `:restart`, `:truncate`)
  *   @param db_name [String] attached database name
- *   @return [Array<int>] total and checkpointed frame count
+ *   @return [Array<Integer>] total and checkpointed frame count
 */
 VALUE Database_wal_checkpoint(int argc, VALUE *argv, VALUE self) {
   Database_t *db = self_to_open_database(self);

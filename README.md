@@ -56,7 +56,7 @@ latest features and enhancements.
   [backups](#creating-backups), retrieve [status
   information](#retrieving-status-information), work with
   [changesets](#working-with-changesets), interrogate [database
-  limits](#working-with-database-limits), [trace](#tracing-sql-statements)
+  limits](#working-with-database-limits), [trace](#tracing-sql-statements), [WAL checkpoints](#wal-checkpoints), and run [integrity checks](#integrity-checks).
   queries.
 - [Sequel](#usage-with-sequel) adapter.
 
@@ -1311,6 +1311,31 @@ Any bound parameters will also be passed to the trace block:
 db.trace { |sql, *args| p sql: sql, args: args }
 db.query('select ?, ?', 1, 2)
 # { sql: "select ?, ?", args: [1, 2] }
+```
+
+### WAL Checkpoints
+
+Exrtralite lets you manually perform a WAL checkpoint in order to truncate the
+WAL file at any given moment using the `Database#wal_checkpoint` method:
+
+```ruby
+db.wal_checkpoint(:full)
+```
+
+The `#wal_checkpoint` method takes a mode argument, which should be one
+`:passive`, `:full`, `:restart`, `:truncate`. For a discussion of the different
+modes, you can refer to the [SQLite
+documentation](https://sqlite.org/c3ref/wal_checkpoint_v2.html).
+
+### Integrity Checks
+
+Extralite provides two methods for performing integrity checks,
+`Database#integrity_check` and `Database#quick_check`, which map to the
+corresponding pragmas. The two methods return an array of error messages. In the
+case of a normal, uncorrupted database, the methods will return `['ok']`:
+
+```ruby
+db.integrity_check #=> ['ok'] (hopefully)
 ```
 
 ## Usage with Sequel

@@ -406,6 +406,10 @@ class DatabaseTest < Minitest::Test
     r = db.integrity_check
     assert_equal 2, r.size
     assert_equal 'database disk image is malformed', r[1]
+
+    r = db.integrity_check(1)
+    assert_equal 1, r.size
+    assert_match /^\*\*\* in database main \*\*\*/, r[0]
   end
 
   def test_quick_check_ok
@@ -442,6 +446,10 @@ class DatabaseTest < Minitest::Test
     r = db.quick_check
     assert_equal 2, r.size
     assert_equal 'database disk image is malformed', r[1]
+
+    r = db.integrity_check(1)
+    assert_equal 1, r.size
+    assert_match /^\*\*\* in database main \*\*\*/, r[0]
   end
 
   def test_execute
