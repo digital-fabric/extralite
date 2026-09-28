@@ -372,6 +372,78 @@ class DatabaseTest < Minitest::Test
     # assert_equal 1, @db.pragma('foreign_keys')
   end
 
+  def test_integrity_check_ok
+    r = @db.integrity_check
+    assert_equal ['ok'], r
+  end
+
+  def test_integrity_check_bad_var
+    assert_raises(Extralite::Error) { @db.integrity_check('foobar') }
+  end
+
+  def test_integrity_check_damaged
+    fn = Tempfile.new('extralite_test_integrity_check_damaged').path
+    db = Extralite::Database.new(fn)
+
+    db.execute <<~SQL
+      create table foo (x);
+    SQL
+
+    db.batch_execute("insert into foo values (?)", 1..100)
+
+    assert_equal (1..100).to_a, db.query_splat('select * from foo')
+    db.close
+
+    File.open(fn, 'r+b') do |f|
+      1.times do
+        f.seek(8015)
+        f.write('\x00' * 16)
+      end
+    end
+
+    db = Extralite::Database.new(fn, legacy: true)
+    assert_raises(Extralite::Error) { db.query_splat('select * from foo') }
+    r = db.integrity_check
+    assert_equal 2, r.size
+    assert_equal 'database disk image is malformed', r[1]
+  end
+
+  def test_quick_check_ok
+    r = @db.quick_check
+    assert_equal ['ok'], r
+  end
+
+  def test_quick_check_bad_var
+    assert_raises(Extralite::Error) { @db.quick_check('foobar') }
+  end
+
+  def test_quick_check_damaged
+    fn = Tempfile.new('extralite_test_quick_check_damaged').path
+    db = Extralite::Database.new(fn)
+
+    db.execute <<~SQL
+      create table foo (x);
+    SQL
+
+    db.batch_execute("insert into foo values (?)", 1..100)
+
+    assert_equal (1..100).to_a, db.query_splat('select * from foo')
+    db.close
+
+    File.open(fn, 'r+b') do |f|
+      1.times do
+        f.seek(8015)
+        f.write('\x00' * 16)
+      end
+    end
+
+    db = Extralite::Database.new(fn, legacy: true)
+    assert_raises(Extralite::Error) { db.query_splat('select * from foo') }
+    r = db.quick_check
+    assert_equal 2, r.size
+    assert_equal 'database disk image is malformed', r[1]
+  end
+
   def test_execute
     changes = @db.execute('update t set x = 42')
     assert_equal 2, changes

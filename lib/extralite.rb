@@ -215,6 +215,29 @@ module Extralite
       value.is_a?(Hash) ? pragma_set(value) : pragma_get(value)
     end
 
+    # Performs a low-level formatting and consistency check of the database
+    # using PRAGMA integrity_check. See:
+    # https://www.sqlite.org/pragma.html#pragma_integrity_check
+    #
+    # @param v [Integer, String, nil] max errors or table name
+    # @return [Array<String>] array of error strings or 'ok'
+    def integrity_check(v = nil)
+      query_splat(
+        v ? "pragma integrity_check(#{v})" : 'pragma integrity_check'
+      )
+    end
+
+    # Performs a quicker integrity check of the database using PRAGMA
+    # quick_check. See: https://www.sqlite.org/pragma.html#pragma_quick_check
+    #
+    # @param v [Integer, String, nil] max errors or table name
+    # @return [Array<String>] array of error strings or 'ok'
+    def quick_check(v = nil)
+      query_splat(
+        v ? "pragma quick_check(#{v})" : 'pragma quick_check'
+      )
+    end
+
     # Error class used to roll back a transaction without propagating an
     # exception.
     class Rollback < Error

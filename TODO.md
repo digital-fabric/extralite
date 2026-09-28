@@ -1,3 +1,9 @@
+## Remove Query objects
+
+- Remove Query
+- Cleanup code
+- Update README
+
 ## Transforms
 
 - Add ability to exclude a column:
