@@ -226,6 +226,8 @@ static inline void finalize_stmt_ctx(stmt_ctx *ctx) {
     return;
   }
 
+  sqlite3_reset(*(ctx->stmtptr));
+  sqlite3_clear_bindings(*(ctx->stmtptr));
   if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
     rb_hash_aset(ctx->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)*(ctx->stmtptr)));
 }
@@ -241,11 +243,7 @@ void make_stmt_ctx(
 
   int use_cache = (argc > 0) && (db->flags & DB_F_STMT_CACHE);
   ctx->flags = use_cache ? STMT_CTX_F_USE_CACHE : 0;
-  if (use_cache) {
-    lookup_cache_entry(ctx);
-    if (ctx->flags & STMT_CTX_F_CACHE_HIT)
-      sqlite3_clear_bindings(*(ctx->stmtptr));
-  }
+  if (use_cache) lookup_cache_entry(ctx);
 
   if (!use_cache || !(*(ctx->stmtptr))) {
     ctx->str = RSTRING_PTR(sql);
@@ -458,8 +456,12 @@ VALUE cleanup_stmt(query_ctx *ctx) {
 
   if (!(ctx->flags & STMT_CTX_F_USE_CACHE))
     sqlite3_finalize(ctx->stmt);
-  else if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
-    rb_hash_aset(ctx->db->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)(ctx->stmt)));
+  else {
+    sqlite3_reset(ctx->stmt);
+    sqlite3_clear_bindings(ctx->stmt);
+    if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
+      rb_hash_aset(ctx->db->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)(ctx->stmt)));
+  }
 done:
   return Qnil;
 }

@@ -2324,7 +2324,7 @@ class StmtCacheText < Minitest::Test
   end
 
   def test_stmt_cache_gc
-    fn = Tempfile.new('extralite_test_stmt_cache_close').path
+    fn = Tempfile.new('extralite_test_stmt_cache_gc').path
 
     db = Extralite::Database.new(fn)
     db.query('create table t (x)')
@@ -2339,5 +2339,36 @@ class StmtCacheText < Minitest::Test
     db = nil
     GC.start
     refute File.file?("#{fn}-wal"), "WAL file should not exist after GC"
+  end
+
+  def test_stmt_cache_concurrent_access
+    # https://github.com/digital-fabric/extralite/issues/88
+    fn = Tempfile.new('extralite_test_stmt_cache_concurrent_access').path
+
+    a = Extralite::Database.new(fn)
+    a.execute("pragma journal_mode=wal")
+    a.execute("create table t (id integer primary key, x)")
+    a.execute("insert into t (x) values (1)")
+    a.query_single("select * from t where id = ?", 1)
+    
+    b = Extralite::Database.new(fn)
+    b.execute("insert into t (x) values (2)")
+    
+    assert_equal 2, b.query_single_splat("select count(*) from t")
+    assert_equal 2, a.query_single_splat("select count(*) from t")
+  end
+
+  def test_stmt_cache_concurrent_transactions
+    # https://github.com/digital-fabric/extralite/issues/89
+    fn = Tempfile.new('extralite_test_stmt_cache_concurrent_access').path
+
+    a = Extralite::Database.new(fn)
+    a.execute('create table t (x)')
+    b = Extralite::Database.new(fn)
+    b.execute('begin immediate transaction')
+    
+    assert_raises(Extralite::BusyError) {
+      a.transaction { a.execute("insert into t values (1)") }
+    }
   end
 end
