@@ -1,3 +1,8 @@
+# 3.1.3 2026-10-03
+
+- Fix database finalization of stmts (on free/close)
+- Use stmt_cache for storing Query stmts
+
 # 3.1.2 2026-10-03
 
 - Fix handling of failed BEGIN in #transaction (#89)
