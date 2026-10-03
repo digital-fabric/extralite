@@ -260,12 +260,13 @@ module Extralite
     def transaction(mode = :immediate)
       abort = false
       execute "begin #{mode} transaction"
+      started = true
       yield self
     rescue => e
       abort = true
       e.is_a?(Rollback) ? nil : raise
     ensure
-      execute(abort ? 'rollback' : 'commit')
+      execute(abort ? 'rollback' : 'commit') if started
     end
 
     # Creates a savepoint with the given name. For more information on

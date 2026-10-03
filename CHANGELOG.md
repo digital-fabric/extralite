@@ -1,3 +1,8 @@
+- Fix handling of failed BEGIN in #transaction (#89)
+- Reset of cached statements post-query (#88)
+- Add missing wal checkpoint, integrity_check docs to README
+- Implement `Database#integrity_check`, `Database#quick_check`
+
 # 3.1.1 2026-09-26
 
 - Fix clearing of stmt cache after `DB#close` or after GC (#87)
