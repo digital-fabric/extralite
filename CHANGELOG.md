@@ -1,3 +1,5 @@
+# 3.1.2 2026-10-03
+
 - Fix handling of failed BEGIN in #transaction (#89)
 - Reset of cached statements post-query (#88)
 - Add missing wal checkpoint, integrity_check docs to README
