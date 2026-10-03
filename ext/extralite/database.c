@@ -72,24 +72,19 @@ static void Database_compact(void *ptr) {
   db->progress_handler.proc = rb_gc_location(db->progress_handler.proc);
 }
 
-static int stmt_cache_iter(VALUE key, VALUE value, VALUE _param) {
-  sqlite3_stmt *stmt = (sqlite3_stmt *)NUM2ULONG(value);
-  sqlite3_finalize(stmt);
-  return ST_CONTINUE;
-}
-
-static void stmt_cache_finalize(sqlite3 *db, VALUE stmt_cache) {
-  if (stmt_cache == Qnil) return;
-  if (rb_hash_size_num(stmt_cache) == 0) return;
-
-  rb_hash_foreach(stmt_cache, stmt_cache_iter, Qnil);
-  RB_GC_GUARD(stmt_cache);
+static inline void finalize_all_stmts(sqlite3 *db) {
+  sqlite3_stmt *stmt = sqlite3_next_stmt(db, NULL);
+  while (stmt) {
+    sqlite3_stmt *next = sqlite3_next_stmt(db, stmt);
+    sqlite3_finalize(stmt);
+    stmt = next;
+  }
 }
 
 static void Database_free(void *ptr) {
   Database_t *db = ptr;
   if (db->sqlite3_db) {
-    stmt_cache_finalize(db->sqlite3_db, db->stmt_cache);
+    finalize_all_stmts(db->sqlite3_db);
     sqlite3_close_v2(db->sqlite3_db);
   }
   free(ptr);
@@ -278,7 +273,7 @@ VALUE Database_close(VALUE self) {
   int rc;
   Database_t *db = self_to_database(self);
 
-  stmt_cache_finalize(db->sqlite3_db, db->stmt_cache);
+  finalize_all_stmts(db->sqlite3_db);
   rb_hash_clear(db->stmt_cache);
   rc = sqlite3_close_v2(db->sqlite3_db);
   if (rc) {
