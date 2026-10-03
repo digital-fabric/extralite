@@ -40,8 +40,7 @@ static void Query_compact(void *ptr) {
 }
 
 static void Query_free(void *ptr) {
-  Query_t *query = ptr;
-  if (query->stmt) sqlite3_finalize(query->stmt);
+  // Query_t *query = ptr;
   free(ptr);
 }
 
@@ -70,7 +69,7 @@ static inline Query_t *self_to_query(VALUE obj) {
 // verifies that the query is not closed
 static inline Query_t *self_to_query_verify(VALUE obj) {
   Query_t *query = self_to_query(obj);
-  if (query->closed) rb_raise(cError, "Query is closed");
+  if (query->closed || !(query->db_struct->sqlite3_db)) rb_raise(cError, "Query is closed");
   return query;
 }
 
@@ -133,8 +132,10 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
 
 static inline void prep_query(Query_t *query) {
   stmt_ctx stmt_ctx;
-  make_stmt_ctx(&stmt_ctx, query->db_struct, &(query->stmt), query->sql, 0, NULL);
+  make_stmt_ctx(&stmt_ctx, query->db_struct, &(query->stmt), query->sql, 1, NULL);
   prep_single_stmt(&stmt_ctx);
+  if (!(stmt_ctx.flags & STMT_CTX_F_CACHE_HIT))
+    rb_hash_aset(query->db_struct->stmt_cache, query->sql, ULONG2NUM((uint64_t)(query->stmt)));
 }
 
 static inline void query_reset(Query_t *query) {
@@ -531,7 +532,6 @@ VALUE Query_clone(VALUE self) {
 VALUE Query_close(VALUE self) {
   Query_t *query = self_to_query(self);
   if (query->stmt) {
-    sqlite3_finalize(query->stmt);
     query->stmt = NULL;
   }
   query->closed = 1;

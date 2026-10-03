@@ -933,7 +933,7 @@ class QueryTest < Minitest::Test
   def test_query_after_db_close
     assert_equal [{ x: 4, y: 5, z: 6}], @query.bind(4).to_a
     @db.close
-    assert_equal [{ x: 4, y: 5, z: 6}], @query.bind(4).to_a
+    assert_raises(Extralite::Error) { @query.bind(4).to_a }
   end
 
   def test_query_eof
