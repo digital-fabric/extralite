@@ -1,0 +1,30 @@
+name: Tests (AddressSanitizer)
+
+on: [push, pull_request]
+
+concurrency:
+  group: tests-${{ format('{0}-{1}', github.head_ref || github.run_number, github.job) }}
+  cancel-in-progress: true
+
+jobs:
+  asan:
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.4', '4.0']
+
+    name: ASan, ${{matrix.ruby}}
+
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{matrix.ruby}}
+        bundler-cache: true
+    - name: Compile C-extension with ASan (bundled SQLite)
+      run: EXTRALITE_BUNDLE=1 EXTRALITE_ASAN=1 bundle exec rake compile
+    - name: Run tests
+      run: bundle exec rake test:asan
