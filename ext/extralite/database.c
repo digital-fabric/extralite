@@ -237,11 +237,12 @@ VALUE Database_initialize(int argc, VALUE *argv, VALUE self) {
   sqlite3_db_config(db->sqlite3_db ,SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL);
 #endif
 
-  db->stmt_cache = rb_hash_new();
+  RB_OBJ_WRITE(self, &db->stmt_cache, rb_hash_new());
   db->trace_proc = Qnil;
   db->gvl_release_threshold = DEFAULT_GVL_RELEASE_THRESHOLD;
 
   db->progress_handler = global_progress_handler;
+  RB_OBJ_WRITTEN(self, Qundef, db->progress_handler.proc);
   db->progress_handler.tick_count = 0;
   db->progress_handler.call_count = 0;
   if (db->progress_handler.mode != PROGRESS_NONE) {
@@ -1736,7 +1737,9 @@ void Init_ExtraliteDatabase(void) {
   rb_gc_register_mark_object(SYM_truncate);
   rb_gc_register_mark_object(SYM_wal);
 
-  rb_gc_register_mark_object(global_progress_handler.proc);
+  // the proc is replaced by Extralite.on_progress, so register the address,
+  // not the current value
+  rb_gc_register_address(&global_progress_handler.proc);
 
   UTF8_ENCODING = rb_utf8_encoding();
 }
