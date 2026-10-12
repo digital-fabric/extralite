@@ -3,6 +3,7 @@
 require 'bundler/setup'
 require 'extralite'
 require 'minitest/autorun'
+require 'tempfile'
 
 puts "sqlite3 version: #{Extralite.sqlite3_version}"
 
@@ -22,6 +23,15 @@ module TestExtensions
     @db = nil
     GC.start
     super
+  ensure
+    @tempfiles&.each(&:close!)
+  end
+
+  # Returns the path of a new temp file. The Tempfile is kept until teardown,
+  # otherwise GC may delete the file while a database is still using it.
+  def tempfile_path(name)
+    (@tempfiles ||= []) << (tmp = Tempfile.new(name))
+    tmp.path
   end
 end
 

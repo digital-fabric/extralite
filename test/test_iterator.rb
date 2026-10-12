@@ -118,7 +118,7 @@ class IteratorTest < Minitest::Test
   end
 
   def test_return_from_block_issue_26
-    fn = Tempfile.new('extralite_test_return_from_block_issue_26').path
+    fn = tempfile_path('extralite_test_return_from_block_issue_26')
     db = Extralite::Database.new(fn)
 
     λ = ->(sql) {

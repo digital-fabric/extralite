@@ -347,7 +347,7 @@ class DatabaseTest < Minitest::Test
 
     assert_raises { @db.tables('foo') }
 
-    fn = Tempfile.new('extralite_test_tables_with_db_name').path
+    fn = tempfile_path('extralite_test_tables_with_db_name')
     @db.execute "attach database '#{fn}' as foo"
 
     assert_equal [], @db.tables('foo')
@@ -382,7 +382,7 @@ class DatabaseTest < Minitest::Test
   end
 
   def test_integrity_check_damaged
-    fn = Tempfile.new('extralite_test_integrity_check_damaged').path
+    fn = tempfile_path('extralite_test_integrity_check_damaged')
     db = Extralite::Database.new(fn)
 
     db.execute <<~SQL
@@ -422,7 +422,7 @@ class DatabaseTest < Minitest::Test
   end
 
   def test_quick_check_damaged
-    fn = Tempfile.new('extralite_test_quick_check_damaged').path
+    fn = tempfile_path('extralite_test_quick_check_damaged')
     db = Extralite::Database.new(fn)
 
     db.execute <<~SQL
@@ -882,7 +882,7 @@ class DatabaseTest < Minitest::Test
   end
 
   def test_database_busy_timeout
-    fn = Tempfile.new('extralite_test_database_busy_timeout').path
+    fn = tempfile_path('extralite_test_database_busy_timeout')
     db1 = Extralite::Database.new(fn)
     db2 = Extralite::Database.new(fn)
 
@@ -978,13 +978,13 @@ class DatabaseTest < Minitest::Test
     db = Extralite::Database.new(':memory:', gvl_release_threshold: 23)
     assert_equal 23, db.gvl_release_threshold
 
-    fn = Tempfile.new('extralite_test_database_initialize_modern').path
+    fn = tempfile_path('extralite_test_database_initialize_modern')
     db = Extralite::Database.new(fn)
     assert_equal 'wal', db.pragma(:journal_mode)
     assert_equal 1, db.pragma(:synchronous)
     assert_equal 1, db.pragma(:foreign_keys)
 
-    fn = Tempfile.new('extralite_test_database_initialize_legacy').path
+    fn = tempfile_path('extralite_test_database_initialize_legacy')
     db = Extralite::Database.new(fn, legacy: true)
     assert_equal 'delete', db.pragma(:journal_mode)
     assert_equal 2, db.pragma(:synchronous)
@@ -1011,7 +1011,7 @@ class DatabaseTest < Minitest::Test
   end
 
   def test_database_transaction_commit
-    path = Tempfile.new('extralite_test_database_transaction_commit').path
+    path = tempfile_path('extralite_test_database_transaction_commit')
     db1 = Extralite::Database.new(path)
     db2 = Extralite::Database.new(path)
 
@@ -1165,7 +1165,7 @@ class DatabaseTest < Minitest::Test
   end
 
   def test_wal_checkpoint
-    fn = Tempfile.new('extralite_test_wal_checkpoint').path
+    fn = tempfile_path('extralite_test_wal_checkpoint')
 
     db = Extralite::Database.new(fn)
 
@@ -1258,7 +1258,7 @@ end
 
 class ScenarioTest < Minitest::Test
   def setup
-    @fn = Tempfile.new('extralite_scenario_test').path
+    @fn = tempfile_path('extralite_scenario_test')
     @db = Extralite::Database.new(@fn, legacy: true)
     @db.query('create table if not exists t (x,y,z)')
     @db.query('delete from t')
@@ -1411,7 +1411,7 @@ class BackupTest < Minitest::Test
   end
 
   def test_backup_with_fn
-    tmp_fn = Tempfile.new('extralite_test_backup_with_fn').path
+    tmp_fn = tempfile_path('extralite_test_backup_with_fn')
     @src.backup(tmp_fn)
 
     db = Extralite::Database.new(tmp_fn)
@@ -1795,7 +1795,7 @@ class ConcurrencyTest < Minitest::Test
   end
 
   def test_progress_handler_busy_timeout
-    fn = Tempfile.new('extralite_test_progress_handler_busy_timeout').path
+    fn = tempfile_path('extralite_test_progress_handler_busy_timeout')
     db1 = Extralite::Database.new(fn)
     db2 = Extralite::Database.new(fn)
 
@@ -1865,7 +1865,7 @@ class RactorTest < Minitest::Test
   def test_ractor_simple
     skip if SKIP_RACTOR_TESTS
 
-    fn = Tempfile.new('extralite_test_database_in_ractor').path
+    fn = tempfile_path('extralite_test_database_in_ractor')
 
     r = Ractor.new do
       path = receive
@@ -1917,7 +1917,7 @@ class RactorTest < Minitest::Test
   def test_ractor_stress
     skip if SKIP_RACTOR_TESTS
 
-    fn = Tempfile.new('extralite_test_ractor_stress').path
+    fn = tempfile_path('extralite_test_ractor_stress')
     random = Random.new.freeze
 
     ractors = (0..9).map do |ractor_number|
@@ -2307,7 +2307,7 @@ class StmtCacheText < Minitest::Test
   end
 
   def test_stmt_cache_close
-    fn = Tempfile.new('extralite_test_stmt_cache_close').path
+    fn = tempfile_path('extralite_test_stmt_cache_close')
 
     db = Extralite::Database.new(fn)
     db.query('create table t (x)')
@@ -2324,7 +2324,7 @@ class StmtCacheText < Minitest::Test
   end
 
   def test_stmt_cache_gc
-    fn = Tempfile.new('extralite_test_stmt_cache_gc').path
+    fn = tempfile_path('extralite_test_stmt_cache_gc')
 
     db = Extralite::Database.new(fn)
     db.query('create table t (x)')
@@ -2343,7 +2343,7 @@ class StmtCacheText < Minitest::Test
 
   def test_stmt_cache_concurrent_access
     # https://github.com/digital-fabric/extralite/issues/88
-    fn = Tempfile.new('extralite_test_stmt_cache_concurrent_access').path
+    fn = tempfile_path('extralite_test_stmt_cache_concurrent_access')
 
     a = Extralite::Database.new(fn)
     a.execute("pragma journal_mode=wal")
@@ -2360,7 +2360,7 @@ class StmtCacheText < Minitest::Test
 
   def test_stmt_cache_concurrent_transactions
     # https://github.com/digital-fabric/extralite/issues/89
-    fn = Tempfile.new('extralite_test_stmt_cache_concurrent_access').path
+    fn = tempfile_path('extralite_test_stmt_cache_concurrent_access')
 
     a = Extralite::Database.new(fn)
     a.execute('create table t (x)')
