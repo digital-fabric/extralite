@@ -57,3 +57,9 @@ if ENV['EXTRALITE_GC_STRESS']
 
   Minitest::Test.prepend(GCStressExtensions)
 end
+
+module Minitest::Assertions
+  def skip_with_gc_stress
+    skip 'timing-sensitive, too slow with GC.stress' if ENV['EXTRALITE_GC_STRESS']
+  end
+end

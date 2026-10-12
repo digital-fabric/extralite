@@ -882,6 +882,7 @@ class DatabaseTest < Minitest::Test
   end
 
   def test_database_busy_timeout
+    skip_with_gc_stress
     fn = tempfile_path('extralite_test_database_busy_timeout')
     db1 = Extralite::Database.new(fn)
     db2 = Extralite::Database.new(fn)
@@ -1438,6 +1439,7 @@ class ConcurrencyTest < Minitest::Test
   end
 
   def test_gvl_always_release
+    skip_with_gc_stress
     skip if !IS_LINUX
 
     delays = []
@@ -1522,6 +1524,7 @@ class ConcurrencyTest < Minitest::Test
   end
 
   def test_progress_handler_simple
+    skip_with_gc_stress
     db = Extralite::Database.new(':memory:')
 
     # SQLite's behaviour post 3.46.0 has changed, such that the first time the
@@ -1714,6 +1717,7 @@ class ConcurrencyTest < Minitest::Test
   SQL
 
   def test_progress_handler_timeout_interrupt
+    skip_with_gc_stress
     db = Extralite::Database.new(':memory:')
     t0 = Time.now
     db.on_progress do
@@ -1756,6 +1760,7 @@ class ConcurrencyTest < Minitest::Test
   end
 
   def test_progress_handler_timeout_raise
+    skip_with_gc_stress
     db = Extralite::Database.new(':memory:')
     t0 = Time.now
     db.on_progress do
@@ -1795,6 +1800,7 @@ class ConcurrencyTest < Minitest::Test
   end
 
   def test_progress_handler_busy_timeout
+    skip_with_gc_stress
     fn = tempfile_path('extralite_test_progress_handler_busy_timeout')
     db1 = Extralite::Database.new(fn)
     db2 = Extralite::Database.new(fn)
