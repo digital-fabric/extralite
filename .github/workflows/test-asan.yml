@@ -11,13 +11,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ['3.4', '4.0']
+        include:
+          # Ruby is not instrumented, rake test:asan preloads libasan
+          - { ruby: '3.4', os: ubuntu-latest, test_task: 'test:asan' }
+          - { ruby: '4.0', os: ubuntu-latest, test_task: 'test:asan' }
+          # Ruby built with ASan (latest stable release), only on ubuntu-24.04
+          - { ruby: 'asan-release', os: ubuntu-24.04, test_task: 'test' }
 
     name: ASan, ${{matrix.ruby}}
 
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
 
-    runs-on: ubuntu-latest
+    runs-on: ${{matrix.os}}
     steps:
     - uses: actions/checkout@v4
     - uses: ruby/setup-ruby@v1
@@ -27,4 +32,4 @@ jobs:
     - name: Compile C-extension with ASan (bundled SQLite)
       run: EXTRALITE_BUNDLE=1 EXTRALITE_ASAN=1 bundle exec rake compile
     - name: Run tests
-      run: bundle exec rake test:asan
+      run: bundle exec rake ${{matrix.test_task}}
