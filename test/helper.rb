@@ -36,3 +36,24 @@ module TestExtensions
 end
 
 Minitest::Test.prepend(TestExtensions)
+
+# EXTRALITE_GC_STRESS=1 runs every test with GC.stress enabled, which makes GC
+# bugs in the C extension (objects freed too early, wrong free order) show up
+# reliably. It's slow, so you may want to run only some test files, e.g.:
+#
+#   EXTRALITE_GC_STRESS=1 ruby test/test_stmt_cache.rb
+if ENV['EXTRALITE_GC_STRESS']
+  module GCStressExtensions
+    def before_setup
+      super
+      GC.stress = true
+    end
+
+    def after_teardown
+      GC.stress = false
+      super
+    end
+  end
+
+  Minitest::Test.prepend(GCStressExtensions)
+end
