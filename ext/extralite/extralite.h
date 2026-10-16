@@ -72,6 +72,8 @@ struct progress_handler {
 
 #define DB_F_STMT_CACHE (1L << 0) // cache stmts
 
+struct Query;
+
 typedef struct {
   sqlite3                 *sqlite3_db;
   VALUE                   stmt_cache;
@@ -79,6 +81,7 @@ typedef struct {
   int                     flags;
   int                     gvl_release_threshold;
   struct progress_handler progress_handler;
+  struct Query            *queries; // open Query objects, see query.c
 } Database_t;
 
 enum query_mode {
@@ -88,7 +91,7 @@ enum query_mode {
   QUERY_VOID
 };
 
-typedef struct {
+typedef struct Query {
   VALUE               self;
   VALUE               db;
   VALUE               sql;
@@ -102,6 +105,9 @@ typedef struct {
   int                 should_reset;
   int                 transform_object;
   enum query_mode     query_mode;
+  int                 linked;
+  struct Query        *prev_query;
+  struct Query        *next_query;
 } Query_t;
 
 typedef struct {
@@ -175,6 +181,8 @@ typedef struct {
   int                 eof;
   int                 step_count;
   int                 total_changes;
+
+  Query_t             *query; // set when run from a Query object
 } query_ctx;
 
 enum gvl_mode {
@@ -186,6 +194,7 @@ enum gvl_mode {
 #define STMT_CTX_F_CACHE_HIT (1L << 1)
 
 typedef struct {
+  Database_t *database;
   VALUE stmt_cache;
   VALUE sql;
 
@@ -211,7 +220,7 @@ typedef struct {
   self, sql, params, transform, \
   db, db->sqlite3_db, stmt, 0, \
   db->gvl_release_threshold, query_mode, row_mode, max_rows, \
-  0, 0, 0  \
+  0, 0, 0, NULL  \
 }
 
 #define DEFAULT_GVL_RELEASE_THRESHOLD 1000
@@ -249,7 +258,8 @@ int exec_multi_stmt(stmt_ctx *ctx);
 void bind_all_parameters(sqlite3_stmt *stmt, int argc, VALUE *argv);
 void bind_all_parameters_from_object(sqlite3_stmt *stmt, VALUE obj);
 int stmt_iterate(query_ctx *ctx);
-VALUE cleanup_stmt(query_ctx *ctx);
+void release_stmt(Database_t *db, VALUE sql, sqlite3_stmt *stmt, unsigned int flags, int ok);
+VALUE run_stmt(query_ctx *ctx, VALUE (*call)(query_ctx *), int argc, VALUE *argv);
 
 void Database_pre_query_hook(Database_t *db, sqlite3_stmt *stmt, VALUE sql, int argc, VALUE *argv);
 sqlite3 *Database_sqlite3_db(VALUE self);

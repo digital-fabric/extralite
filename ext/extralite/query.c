@@ -39,8 +39,41 @@ static void Query_compact(void *ptr) {
   query->bound_params = rb_gc_location(query->bound_params);
 }
 
+// Each query owns a private stmt (not cached). The database keeps a list of its
+// queries and detaches them when closed or freed, since GC may free a query
+// and its database in any order.
+static inline void query_link(Query_t *query) {
+  Database_t *db = query->db_struct;
+  query->prev_query = NULL;
+  query->next_query = db->queries;
+  if (db->queries) db->queries->prev_query = query;
+  db->queries = query;
+  query->linked = 1;
+}
+
+static inline void query_unlink(Query_t *query) {
+  if (!query->linked) return;
+
+  if (query->prev_query)
+    query->prev_query->next_query = query->next_query;
+  else
+    query->db_struct->queries = query->next_query;
+  if (query->next_query)
+    query->next_query->prev_query = query->prev_query;
+  query->prev_query = query->next_query = NULL;
+  query->linked = 0;
+}
+
+static inline void query_finalize_stmt(Query_t *query) {
+  if (query->stmt && query->db_struct && query->db_struct->sqlite3_db)
+    sqlite3_finalize(query->stmt);
+  query->stmt = NULL;
+}
+
 static void Query_free(void *ptr) {
-  // Query_t *query = ptr;
+  Query_t *query = ptr;
+  query_finalize_stmt(query);
+  query_unlink(query);
   free(ptr);
 }
 
@@ -69,7 +102,8 @@ static inline Query_t *self_to_query(VALUE obj) {
 // verifies that the query is not closed
 static inline Query_t *self_to_query_verify(VALUE obj) {
   Query_t *query = self_to_query(obj);
-  if (query->closed || !(query->db_struct->sqlite3_db)) rb_raise(cError, "Query is closed");
+  if (query->closed || !query->db_struct || !(query->db_struct->sqlite3_db))
+    rb_raise(cError, "Query is closed");
   return query;
 }
 
@@ -117,11 +151,15 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
   if (rb_block_given_p())
     RB_OBJ_WRITE(self, &query->transform, rb_block_proc());
 
+  query_finalize_stmt(query);
+  query_unlink(query);
+
   query->self = self;
   query->db = db;
   query->db_struct = self_to_database(db);
   query->sqlite3_db = Database_sqlite3_db(db);
   query->stmt = NULL;
+  query_link(query);
   query->closed = 0;
   query->eof = 0;
   query->should_reset = 0;
@@ -132,10 +170,8 @@ VALUE Query_initialize(VALUE self, VALUE db, VALUE sql, VALUE mode) {
 
 static inline void prep_query(Query_t *query) {
   stmt_ctx stmt_ctx;
-  make_stmt_ctx(&stmt_ctx, query->db_struct, &(query->stmt), query->sql, 1, NULL);
+  make_stmt_ctx(&stmt_ctx, query->db_struct, &(query->stmt), query->sql, 0, NULL);
   prep_single_stmt(&stmt_ctx);
-  if (!(stmt_ctx.flags & STMT_CTX_F_CACHE_HIT))
-    rb_hash_aset(query->db_struct->stmt_cache, query->sql, ULONG2NUM((uint64_t)(query->stmt)));
 }
 
 static inline void query_reset(Query_t *query) {
@@ -252,6 +288,7 @@ static inline VALUE Query_perform_next(VALUE self, int max_rows, safe_query_impl
     ROW_YIELD_OR_MODE(max_rows == SINGLE_ROW ? ROW_SINGLE : ROW_MULTI),
     MAX_ROWS(max_rows)
   );
+  ctx.query = query;
   VALUE result = call(&ctx);
   query->eof = ctx.eof;
   return (ctx.row_mode == ROW_YIELD) ? self : result;
@@ -425,6 +462,7 @@ VALUE Query_batch_execute(VALUE self, VALUE parameters) {
     ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
   );
+  ctx.query = query;
   return safe_batch_execute(&ctx);
 }
 
@@ -473,6 +511,7 @@ VALUE Query_batch_query(VALUE self, VALUE parameters) {
     ROW_YIELD_OR_MODE(ROW_MULTI),
     ALL_ROWS
   );
+  ctx.query = query;
   return safe_batch_query(&ctx);
 }
 
@@ -531,9 +570,8 @@ VALUE Query_clone(VALUE self) {
  */
 VALUE Query_close(VALUE self) {
   Query_t *query = self_to_query(self);
-  if (query->stmt) {
-    query->stmt = NULL;
-  }
+  query_finalize_stmt(query);
+  query_unlink(query);
   query->closed = 1;
   return self;
 }

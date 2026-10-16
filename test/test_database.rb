@@ -2378,3 +2378,252 @@ class StmtCacheText < Minitest::Test
     }
   end
 end
+
+class StmtCacheOwnershipTest < Minitest::Test
+  SELECT_SQL = 'select id from t where id > ?'
+  INSERT_SQL = 'insert into t values (?, ?)'
+
+  def setup
+    @db = make_db
+  end
+
+  def teardown
+    @db.close unless @db.closed?
+    super
+  end
+
+  def make_db(**opts)
+    db = Extralite::Database.new(':memory:', **opts)
+    db.execute('create table t (id integer primary key, x integer check (x >= 0))')
+    db.execute('insert into t values (1, 1), (2, 2), (3, 3)')
+    db
+  end
+
+  def stmt_bytes(db)
+    db.status(Extralite::SQLITE_DBSTATUS_STMT_USED).first
+  end
+
+  # use-after-free since 3.1.0: the failed stmt was cached and then finalized
+  def test_execute_after_step_error
+    assert_raises(Extralite::Error) { @db.execute(INSERT_SQL, 1, 0) }
+    assert_equal 1, @db.execute(INSERT_SQL, 9, 0)
+    assert_equal 1, @db.execute(INSERT_SQL, 10, 0)
+    assert_equal [1, 2, 3, 9, 10], @db.query_splat('select id from t order by id')
+  end
+
+  def test_execute_after_step_error_on_cache_hit
+    @db.execute(INSERT_SQL, 9, 0)
+    assert_raises(Extralite::Error) { @db.execute(INSERT_SQL, 9, 0) }
+    assert_equal 1, @db.execute(INSERT_SQL, 10, 0)
+    assert_equal [1, 2, 3, 9, 10], @db.query_splat('select id from t order by id')
+  end
+
+  def test_execute_after_step_error_in_loop
+    100.times do |i|
+      assert_raises(Extralite::Error) { @db.execute(INSERT_SQL, 1, 0) }
+      @db.execute(INSERT_SQL, 100 + i, 0)
+    end
+    assert_equal 103, @db.query_single_splat('select count(*) from t')
+  end
+
+  def test_execute_after_step_error_in_transaction
+    @db.transaction do
+      assert_raises(Extralite::Error) { @db.execute(INSERT_SQL, 1, 0) }
+      @db.execute(INSERT_SQL, 9, 0)
+    end
+    assert_equal [1, 2, 3, 9], @db.query_splat('select id from t order by id')
+  end
+
+  def test_execute_after_bind_error
+    @db.execute(INSERT_SQL, 9, 0)
+    assert_raises(Extralite::ParameterError) { @db.execute(INSERT_SQL, 10, Object.new) }
+    assert_equal 1, @db.execute(INSERT_SQL, 10, 0)
+    assert_raises(Extralite::ParameterError) { @db.execute(INSERT_SQL, 11, Object.new) }
+    assert_equal 1, @db.execute(INSERT_SQL, 11, 0)
+    assert_equal [1, 2, 3, 9, 10, 11], @db.query_splat('select id from t order by id')
+  end
+
+  def test_execute_after_error_then_close
+    assert_raises(Extralite::Error) { @db.execute(INSERT_SQL, 1, 0) }
+    @db.close
+    assert @db.closed?
+  end
+
+  # 3.1.3: Query objects shared cached stmts with other users of the same SQL
+  def test_two_queries_with_same_sql
+    q1 = @db.prepare_splat(SELECT_SQL, 0)
+    q2 = @db.prepare_splat(SELECT_SQL, 0)
+    assert_equal [1, 1, 2, 2, 3, 3, nil, nil],
+      [q1.next, q2.next, q1.next, q2.next, q1.next, q2.next, q1.next, q2.next]
+  end
+
+  def test_query_interleaved_with_db_query
+    q = @db.prepare_splat(SELECT_SQL, 0)
+    assert_equal 1, q.next
+    assert_equal [1, 2, 3], @db.query_splat(SELECT_SQL, 0)
+    assert_equal [2, 3, nil], [q.next, q.next, q.next]
+  end
+
+  def test_iterator_interleaved_with_db_query
+    it = @db.prepare_splat(SELECT_SQL, 0).each
+    assert_equal 1, it.next
+    assert_equal [2, 3], @db.query_splat(SELECT_SQL, 1)
+    assert_equal 2, it.next
+    assert_equal 3, it.next
+  end
+
+  def test_query_dup
+    q = @db.prepare_splat(SELECT_SQL, 0)
+    # dup copies the SQL, but not the bound parameters
+    q2 = q.dup.bind(0)
+    assert_equal [1, 1, 2, 2], [q.next, q2.next, q.next, q2.next]
+  end
+
+  def test_query_does_not_use_cache
+    q = @db.prepare_splat(SELECT_SQL, 0)
+    q.to_a
+    assert_equal({}, @db.stmt_cache)
+    q.close
+    assert_equal [2, 3], @db.query_splat(SELECT_SQL, 1)
+    assert_equal [SELECT_SQL], @db.stmt_cache.keys
+  end
+
+  # batch_query* finalized a stmt that was still in the cache
+  def test_batch_query_after_cached_query
+    assert_equal [2, 3], @db.query_splat(SELECT_SQL, 1)
+    assert_equal [[3]], @db.batch_query_splat(SELECT_SQL, [[2]])
+    assert_equal [[{ id: 3 }]], @db.batch_query(SELECT_SQL, [[2]])
+    assert_equal [[[3]]], @db.batch_query_array(SELECT_SQL, [[2]])
+    assert_equal [1, 2, 3], @db.query_splat(SELECT_SQL, 0)
+    assert_equal [1, 2, 3], @db.query_splat(SELECT_SQL, 0)
+  end
+
+  def test_batch_query_with_non_array_params
+    assert_equal [2, 3], @db.query_splat(SELECT_SQL, 1)
+    params = [[1], [2]]
+    assert_equal [[2, 3], [3]], @db.batch_query_splat(SELECT_SQL, -> { params.shift })
+    assert_equal [[3]], @db.batch_query_splat(SELECT_SQL, [[2]].each)
+    assert_equal [1, 2, 3], @db.query_splat(SELECT_SQL, 0)
+  end
+
+  def test_db_close_in_query_block
+    rows = []
+    assert_raises(Extralite::Error) do
+      @db.query_splat(SELECT_SQL, 0) { |r| rows << r; @db.close }
+    end
+    assert_equal [1], rows
+    assert @db.closed?
+  end
+
+  def test_db_close_in_query_block_without_params
+    assert_raises(Extralite::Error) do
+      @db.query_splat('select id from t') { @db.close }
+    end
+    assert @db.closed?
+  end
+
+  def test_db_close_in_batch_query_params_proc
+    params = [[1], [2]]
+    assert_raises(Extralite::Error) do
+      @db.batch_query_splat(SELECT_SQL, -> { @db.close if params.size == 1; params.shift })
+    end
+    assert @db.closed?
+  end
+
+  def test_db_close_in_prepared_query_block
+    q = @db.prepare_splat(SELECT_SQL, 0)
+    assert_raises(Extralite::Error) { q.each { @db.close } }
+    assert_raises(Extralite::Error) { q.next }
+    assert_raises(Extralite::Error) { q.reset }
+  end
+
+  def test_query_close_in_own_block
+    q = @db.prepare_splat(SELECT_SQL, 0)
+    rows = []
+    assert_raises(Extralite::Error) { q.each { |r| rows << r; q.close } }
+    assert_equal [1], rows
+    assert q.closed?
+    assert_equal [1, 2, 3], @db.query_splat(SELECT_SQL, 0)
+  end
+
+  def test_nested_same_sql
+    result = []
+    @db.query_splat(SELECT_SQL, 0) do |a|
+      result << [a, @db.query_splat(SELECT_SQL, a)]
+    end
+    assert_equal [[1, [2, 3]], [2, [3]], [3, []]], result
+    assert_equal [SELECT_SQL], @db.stmt_cache.keys
+    assert_equal [1, 2, 3], @db.query_splat(SELECT_SQL, 0)
+  end
+
+  def test_nested_same_execute
+    @db.query_splat(SELECT_SQL, 0) do |a|
+      @db.execute('update t set x = x + ? where id = ?', 10, a)
+      @db.query_splat(SELECT_SQL, a) { |b| @db.execute('update t set x = x + ? where id = ?', 1, b) }
+    end
+    assert_equal [11, 13, 15], @db.query_splat('select x from t order by id')
+    assert_equal 2, @db.stmt_cache.size
+  end
+
+  def test_cache_entry_not_overwritten
+    @db.query_splat(SELECT_SQL, 0) { @db.query_splat(SELECT_SQL, 0) }
+    before = stmt_bytes(@db)
+    100.times { @db.query_splat(SELECT_SQL, 0) { @db.query_splat(SELECT_SQL, 0) } }
+    assert_equal before, stmt_bytes(@db)
+  end
+
+  def test_gc_finalizes_query_stmts
+    GC.disable
+    1000.times { |i| @db.prepare("select #{i}").next }
+    peak = stmt_bytes(@db)
+    GC.enable
+    GC.start
+    assert_operator stmt_bytes(@db), :<, peak / 10
+  end
+
+  def test_query_close_finalizes_stmt
+    before = stmt_bytes(@db)
+    q = @db.prepare('select 1')
+    q.next
+    assert_operator stmt_bytes(@db), :>, before
+    q.close
+    assert_equal before, stmt_bytes(@db)
+  end
+
+  def test_gc_queries_and_database
+    100.times do
+      db = make_db
+      qs = 10.times.map { |i| db.prepare_splat("select id + #{i} from t where id > ?", 0) }
+      qs.each(&:next)
+      db.query_splat(SELECT_SQL, 0)
+    end
+    GC.start
+  end
+
+  def test_gc_queries_after_db_close
+    db = make_db
+    qs = 10.times.map { |i| db.prepare_splat("select id + #{i} from t") }
+    qs.each(&:next)
+    db.close
+    qs = nil
+    GC.start
+    assert db.closed?
+  end
+
+  def test_db_close_twice
+    db = make_db
+    db.query_splat(SELECT_SQL, 0)
+    db.close
+    db.close
+    assert db.closed?
+  end
+
+  def test_query_close_after_db_close
+    db = make_db
+    q = db.prepare_splat(SELECT_SQL, 0)
+    q.next
+    db.close
+    q.close
+    assert q.closed?
+  end
+end
