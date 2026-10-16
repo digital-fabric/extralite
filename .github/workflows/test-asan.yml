@@ -33,3 +33,5 @@ jobs:
       run: EXTRALITE_BUNDLE=1 EXTRALITE_ASAN=1 bundle exec rake compile
     - name: Run tests
       run: bundle exec rake ${{matrix.test_task}}
+    - name: Run tests with GC.stress
+      run: EXTRALITE_GC_STRESS=1 bundle exec rake ${{matrix.test_task}}

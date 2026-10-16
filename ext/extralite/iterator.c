@@ -54,7 +54,7 @@ static inline Iterator_t *self_to_iterator(VALUE obj) {
  */
 VALUE Iterator_initialize(VALUE self, VALUE query) {
   Iterator_t *iterator = self_to_iterator(self);
-  iterator->query = query;
+  RB_OBJ_WRITE(self, &iterator->query, query);
   return Qnil;
 }
 

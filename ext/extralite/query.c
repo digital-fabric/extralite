@@ -649,7 +649,7 @@ VALUE Query_transform_get(VALUE self) {
  */
 VALUE Query_transform_set(VALUE self, VALUE transform) {
   Query_t *query = self_to_query(self);
-  query->transform = transform;
+  RB_OBJ_WRITE(self, &query->transform, transform);
   query->transform_object = rb_obj_is_instance_of(transform, cTransform);
   return self;
 }
