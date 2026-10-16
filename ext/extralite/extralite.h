@@ -261,8 +261,6 @@ int stmt_iterate(query_ctx *ctx);
 void release_stmt(Database_t *db, VALUE sql, sqlite3_stmt *stmt, unsigned int flags, int ok);
 VALUE run_stmt(query_ctx *ctx, VALUE (*call)(query_ctx *), int argc, VALUE *argv);
 
-void Database_detach_queries(Database_t *db, int db_freed);
-
 void Database_pre_query_hook(Database_t *db, sqlite3_stmt *stmt, VALUE sql, int argc, VALUE *argv);
 sqlite3 *Database_sqlite3_db(VALUE self);
 enum gvl_mode Database_prepare_gvl_mode(Database_t *db);

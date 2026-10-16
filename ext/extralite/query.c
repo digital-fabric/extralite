@@ -70,21 +70,6 @@ static inline void query_finalize_stmt(Query_t *query) {
   query->stmt = NULL;
 }
 
-void Database_detach_queries(Database_t *db, int db_freed) {
-  Query_t *query = db->queries;
-  while (query) {
-    Query_t *next = query->next_query;
-    query->stmt = NULL;
-    if (db_freed) {
-      query->db_struct = NULL;
-      query->prev_query = query->next_query = NULL;
-      query->linked = 0;
-    }
-    query = next;
-  }
-  if (db_freed) db->queries = NULL;
-}
-
 static void Query_free(void *ptr) {
   Query_t *query = ptr;
   query_finalize_stmt(query);

@@ -81,6 +81,25 @@ static inline void finalize_all_stmts(sqlite3 *db) {
   }
 }
 
+// Detaches all Query objects from the database so they stop referring to its
+// stmts. When db_freed is set, the Database_t itself is going away and the
+// queries must forget it completely (Ruby may free the database before its
+// queries in the same GC run).
+static void Database_detach_queries(Database_t *db, int db_freed) {
+  Query_t *query = db->queries;
+  while (query) {
+    Query_t *next = query->next_query;
+    query->stmt = NULL;
+    if (db_freed) {
+      query->db_struct = NULL;
+      query->prev_query = query->next_query = NULL;
+      query->linked = 0;
+    }
+    query = next;
+  }
+  if (db_freed) db->queries = NULL;
+}
+
 static void Database_free(void *ptr) {
   Database_t *db = ptr;
   Database_detach_queries(db, 1);
