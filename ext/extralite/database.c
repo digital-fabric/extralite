@@ -627,7 +627,7 @@ VALUE Database_batch_query(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   stmt_ctx stmt_ctx;
-  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, (TYPE(parameters) == T_ARRAY) ? RARRAY_LEN(parameters) : 0, NULL);
   prep_single_stmt(&stmt_ctx);
   // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
@@ -664,7 +664,7 @@ VALUE Database_batch_query_array(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   stmt_ctx stmt_ctx;
-  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, (TYPE(parameters) == T_ARRAY) ? RARRAY_LEN(parameters) : 0, NULL);
   prep_single_stmt(&stmt_ctx);
   // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(
@@ -701,7 +701,7 @@ VALUE Database_batch_query_splat(VALUE self, VALUE sql, VALUE parameters) {
   sqlite3_stmt *stmt;
 
   stmt_ctx stmt_ctx;
-  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, RARRAY_LEN(parameters), NULL);
+  make_stmt_ctx(&stmt_ctx, db, &stmt, sql, (TYPE(parameters) == T_ARRAY) ? RARRAY_LEN(parameters) : 0, NULL);
   prep_single_stmt(&stmt_ctx);
   // prepare_xsingle_stmt(DB_GVL_MODE(db), db->stmt_cache, db->sqlite3_db, &stmt, sql, 0, NULL);
   query_ctx ctx = QUERY_CTX(

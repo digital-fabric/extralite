@@ -3,6 +3,7 @@
 require 'bundler/setup'
 require 'extralite'
 require 'minitest/autorun'
+require 'tempfile'
 
 puts "sqlite3 version: #{Extralite.sqlite3_version}"
 
@@ -22,7 +23,43 @@ module TestExtensions
     @db = nil
     GC.start
     super
+  ensure
+    @tempfiles&.each(&:close!)
+  end
+
+  # Returns the path of a new temp file. The Tempfile is kept until teardown,
+  # otherwise GC may delete the file while a database is still using it.
+  def tempfile_path(name)
+    (@tempfiles ||= []) << (tmp = Tempfile.new(name))
+    tmp.path
   end
 end
 
 Minitest::Test.prepend(TestExtensions)
+
+# EXTRALITE_GC_STRESS=1 runs every test with GC.stress enabled, which makes GC
+# bugs in the C extension (objects freed too early, wrong free order) show up
+# reliably. It's slow, so you may want to run only some test files, e.g.:
+#
+#   EXTRALITE_GC_STRESS=1 ruby test/test_stmt_cache.rb
+if ENV['EXTRALITE_GC_STRESS']
+  module GCStressExtensions
+    def before_setup
+      super
+      GC.stress = true
+    end
+
+    def after_teardown
+      GC.stress = false
+      super
+    end
+  end
+
+  Minitest::Test.prepend(GCStressExtensions)
+end
+
+module Minitest::Assertions
+  def skip_with_gc_stress
+    skip 'timing-sensitive, too slow with GC.stress' if ENV['EXTRALITE_GC_STRESS']
+  end
+end
