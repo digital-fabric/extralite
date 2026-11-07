@@ -1,3 +1,7 @@
+# 3.1.4 2026-11-07
+
+- Fix loading of extension on some systems running Ruby from distro packages (#96)
+
 # 3.1.3 2026-10-03
 
 - Fix database finalization of stmts (on free/close)
