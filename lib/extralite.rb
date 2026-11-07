@@ -1,4 +1,4 @@
-require_relative './extralite_ext'
+require 'extralite_ext'
 
 # Extralite is a Ruby gem for working with SQLite databases
 module Extralite
