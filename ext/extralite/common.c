@@ -208,42 +208,44 @@ static inline void row_to_splat_values(sqlite3_stmt *stmt, int column_count, VAL
   }
 }
 
-static inline void lookup_cache_entry(stmt_ctx *ctx) {
-  VALUE cached = rb_hash_aref(ctx->stmt_cache, ctx->sql);
+// A cached stmt is removed from the cache while in use, so nested or concurrent
+// users of the same SQL get their own stmt. It's put back only after a clean
+// finish, otherwise it's finalized.
+static inline void checkout_cache_entry(stmt_ctx *ctx) {
+  VALUE cached = rb_hash_delete(ctx->stmt_cache, ctx->sql);
   *(ctx->stmtptr) = NIL_P(cached) ? NULL : (sqlite3_stmt *)NUM2ULONG(cached);
-  if (*(ctx->stmtptr)) {
-    sqlite3_reset(*(ctx->stmtptr));
-    ctx->flags |= STMT_CTX_F_CACHE_HIT;
-  }
+  if (*(ctx->stmtptr)) ctx->flags |= STMT_CTX_F_CACHE_HIT;
 }
 
-static inline void finalize_stmt_ctx(stmt_ctx *ctx) {
-  if (!*(ctx->stmtptr)) return;
+void release_stmt(Database_t *db, VALUE sql, sqlite3_stmt *stmt, unsigned int flags, int ok) {
+  // if the database was closed, the stmt was already finalized
+  if (!stmt || !db->sqlite3_db) return;
 
-  if (!(ctx->flags & STMT_CTX_F_USE_CACHE)) {
-    sqlite3_finalize(*(ctx->stmtptr));
-    *(ctx->stmtptr) = NULL;
-    return;
+  if (ok && (flags & STMT_CTX_F_USE_CACHE)) {
+    sqlite3_reset(stmt);
+    sqlite3_clear_bindings(stmt);
+    if (NIL_P(rb_hash_lookup(db->stmt_cache, sql))) {
+      rb_hash_aset(db->stmt_cache, sql, ULONG2NUM((uint64_t)stmt));
+      return;
+    }
   }
-
-  sqlite3_reset(*(ctx->stmtptr));
-  sqlite3_clear_bindings(*(ctx->stmtptr));
-  if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
-    rb_hash_aset(ctx->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)*(ctx->stmtptr)));
+  sqlite3_finalize(stmt);
 }
 
 void make_stmt_ctx(
   stmt_ctx *ctx, Database_t *db, sqlite3_stmt **stmt, VALUE sql, int argc, VALUE *argv
 ) {
+  ctx->database = db;
   ctx->stmt_cache = db->stmt_cache;
   ctx->sql = sql;
 
   ctx->db = db->sqlite3_db;
   ctx->stmtptr = stmt;
+  *stmt = NULL;
 
   int use_cache = (argc > 0) && (db->flags & DB_F_STMT_CACHE);
   ctx->flags = use_cache ? STMT_CTX_F_USE_CACHE : 0;
-  if (use_cache) lookup_cache_entry(ctx);
+  if (use_cache) checkout_cache_entry(ctx);
 
   if (!use_cache || !(*(ctx->stmtptr))) {
     ctx->str = RSTRING_PTR(sql);
@@ -275,68 +277,26 @@ static inline void finalize_stmt(sqlite3_stmt **stmt) {
   }
 }
 
-static inline void *exec_bind_parameters(void *ptr) {
-  stmt_ctx *ctx = (stmt_ctx *)ptr;
-  bind_all_parameters(*(ctx->stmtptr), ctx->argc, ctx->argv);
-  return NULL;
-}
-
 void *exec_multi_stmt_impl(void *ptr) {
   stmt_ctx *ctx = (stmt_ctx *)ptr;
-
-  if (ctx->flags & STMT_CTX_F_CACHE_HIT) {
-    rb_thread_call_with_gvl(exec_bind_parameters, ctx);
-    ctx->rc = exec_stmt_iterate(*(ctx->stmtptr));
-    if (ctx->rc == SQLITE_OK)
-      ctx->total_changes += sqlite3_changes(ctx->db);
-    else
-      ctx->total_changes = 0;
-    finalize_stmt_ctx(ctx);
-    return NULL;
-  }
 
   const char *rest = NULL;
   const char *str = ctx->str;
   const char *end = ctx->str + ctx->len;
-  sqlite3_stmt *next_stmt = NULL;
   ctx->total_changes = 0;
   while (1) {
-    if (next_stmt) {
-      *(ctx->stmtptr) = next_stmt;
-      next_stmt = NULL;
-      ctx->rc = SQLITE_OK;
-    }
-    else
-      ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmtptr, &rest);
-
-    if ((ctx->rc != SQLITE_OK) || !(*(ctx->stmtptr))) goto done;
-    if (ctx->argc) {
-      // parameters were provided - check if str contains multiple statements
-      if (rest != end) {
-        int res = sqlite3_prepare_v2(ctx->db, rest, end-rest, &next_stmt, NULL);
-        if (next_stmt) res = SQLITE_MISUSE;
-        if (res != SQLITE_OK) {
-          ctx->flags &= ~STMT_CTX_F_USE_CACHE;
-          ctx->rc = res;
-          goto done;
-        }
-      }
-      rb_thread_call_with_gvl(exec_bind_parameters, ctx);
-    }
+    ctx->rc = sqlite3_prepare_v2(ctx->db, str, end - str, ctx->stmtptr, &rest);
+    if ((ctx->rc != SQLITE_OK) || !(*(ctx->stmtptr))) return NULL;
 
     ctx->rc = exec_stmt_iterate(*(ctx->stmtptr));
-    if (ctx->rc != SQLITE_OK) goto done;
+    if (ctx->rc != SQLITE_OK) return NULL;
 
     ctx->total_changes += sqlite3_changes(ctx->db);
-    finalize_stmt_ctx(ctx);
+    finalize_stmt(ctx->stmtptr);
 
     if (rest == end) return NULL;
     str = rest;
   }
-done:
-  finalize_stmt(&next_stmt);
-  finalize_stmt_ctx(ctx);
-  return NULL;
 }
 
 inline int raise_error(stmt_ctx *ctx) {
@@ -353,20 +313,52 @@ inline int raise_error(stmt_ctx *ctx) {
   return 0;
 }
 
+static void *exec_single_stmt_impl(void *ptr) {
+  stmt_ctx *ctx = (stmt_ctx *)ptr;
+  ctx->rc = exec_stmt_iterate(*(ctx->stmtptr));
+  ctx->total_changes = (ctx->rc == SQLITE_OK) ? sqlite3_changes(ctx->db) : 0;
+  return NULL;
+}
+
+static VALUE exec_bind_parameters(VALUE ptr) {
+  stmt_ctx *ctx = (stmt_ctx *)ptr;
+  bind_all_parameters(*(ctx->stmtptr), ctx->argc, ctx->argv);
+  return Qnil;
+}
+
+static int exec_single_stmt(stmt_ctx *ctx) {
+  int state = 0;
+
+  prep_single_stmt(ctx);
+  if (!*(ctx->stmtptr)) return 0;
+
+  rb_protect(exec_bind_parameters, (VALUE)ctx, &state);
+  if (!state)
+    gvl_call(ctx->gvl_mode, exec_single_stmt_impl, (void *)ctx);
+
+  int ok = !state && (ctx->rc == SQLITE_OK);
+  release_stmt(ctx->database, ctx->sql, *(ctx->stmtptr), ctx->flags, ok);
+  *(ctx->stmtptr) = NULL;
+
+  if (state) rb_jump_tag(state);
+  if (!ok) raise_error(ctx);
+  return ctx->total_changes;
+}
+
 /*
-This function prepares a statement from an SQL string containing one or more SQL
-statements. It will release the GVL while the statements are being prepared and
-executed. All statements excluding the last one are executed. The last statement
-is not executed, but instead handed back to the caller for looping over results.
+This function executes the SQL string, which may contain multiple statements if
+no parameters are given. It will release the GVL while the statements are being
+prepared and executed.
 
 @return [int] total changes
 */
 int exec_multi_stmt(stmt_ctx *ctx) {
+  if (ctx->argc > 0) return exec_single_stmt(ctx);
+
   gvl_call(ctx->gvl_mode, exec_multi_stmt_impl, (void *)ctx);
   if (ctx->rc == SQLITE_OK) return ctx->total_changes;
 
-  if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
-
+  finalize_stmt(ctx->stmtptr);
   return raise_error(ctx);
 }
 
@@ -402,8 +394,7 @@ void prep_single_stmt(stmt_ctx *ctx) {
   gvl_call(ctx->gvl_mode, prep_single_stmt_impl, (void *)ctx);
   if (ctx->rc == SQLITE_OK) return;
 
-  if (*(ctx->stmtptr)) sqlite3_finalize(*(ctx->stmtptr));
-
+  finalize_stmt(ctx->stmtptr);
   raise_error(ctx);
 }
 
@@ -428,7 +419,15 @@ inline enum gvl_mode stepwise_gvl_mode(query_ctx *ctx) {
   return (ctx->step_count % ctx->gvl_release_threshold) ? GVL_HOLD : GVL_RELEASE;
 }
 
+// a block or proc may have closed the database or query, finalizing the stmt
+static inline void verify_stmt_open(query_ctx *ctx) {
+  if (!ctx->db->sqlite3_db) rb_raise(cError, "Database is closed");
+  if (ctx->query && ctx->query->closed) rb_raise(cError, "Query is closed");
+}
+
 inline int stmt_iterate(query_ctx *ctx) {
+  verify_stmt_open(ctx);
+
   struct step_ctx step_ctx = {ctx->stmt, 0};
   ctx->step_count += 1;
   gvl_call(stepwise_gvl_mode(ctx), stmt_iterate_step, (void *)&step_ctx);
@@ -451,19 +450,31 @@ inline int stmt_iterate(query_ctx *ctx) {
   return 0;
 }
 
-VALUE cleanup_stmt(query_ctx *ctx) {
-  if (!ctx->stmt) goto done;
+struct run_stmt_ctx {
+  query_ctx *ctx;
+  VALUE (*call)(query_ctx *);
+  int argc;
+  VALUE *argv;
+};
 
-  if (!(ctx->flags & STMT_CTX_F_USE_CACHE))
-    sqlite3_finalize(ctx->stmt);
-  else {
-    sqlite3_reset(ctx->stmt);
-    sqlite3_clear_bindings(ctx->stmt);
-    if (!(ctx->flags & STMT_CTX_F_CACHE_HIT))
-      rb_hash_aset(ctx->db->stmt_cache, ctx->sql, ULONG2NUM((uint64_t)(ctx->stmt)));
-  }
-done:
-  return Qnil;
+static VALUE run_stmt_safe(VALUE ptr) {
+  struct run_stmt_ctx *run_ctx = (struct run_stmt_ctx *)ptr;
+  if (run_ctx->argc > 0)
+    bind_all_parameters(run_ctx->ctx->stmt, run_ctx->argc, run_ctx->argv);
+  return run_ctx->call(run_ctx->ctx);
+}
+
+VALUE run_stmt(query_ctx *ctx, VALUE (*call)(query_ctx *), int argc, VALUE *argv) {
+  struct run_stmt_ctx run_ctx = { ctx, call, argc, argv };
+  int state = 0;
+
+  VALUE result = rb_protect(run_stmt_safe, (VALUE)&run_ctx, &state);
+  release_stmt(ctx->db, ctx->sql, ctx->stmt, ctx->flags, !state);
+  ctx->stmt = NULL;
+
+  if (state) rb_jump_tag(state);
+  RB_GC_GUARD(result);
+  return result;
 }
 
 static inline void add_transform_container_obj(VALUE row, struct transform_node *col, VALUE obj) {
@@ -950,6 +961,7 @@ static inline VALUE batch_run_array(query_ctx *ctx, enum batch_mode batch_mode) 
   int changes = 0;
 
   for (int i = 0; i < count; i++) {
+    verify_stmt_open(ctx);
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
     VALUE params = RARRAY_AREF(ctx->params, i);
@@ -988,6 +1000,7 @@ static VALUE batch_run_each_iter(RB_BLOCK_CALL_FUNC_ARGLIST(yield_value, vctx)) 
   struct batch_execute_each_ctx *each_ctx = (struct batch_execute_each_ctx*)vctx;
   VALUE rows = Qnil;
 
+  verify_stmt_open(each_ctx->ctx);
   sqlite3_reset(each_ctx->ctx->stmt);
   sqlite3_clear_bindings(each_ctx->ctx->stmt);
   bind_all_parameters_from_object(each_ctx->ctx->stmt, yield_value);
@@ -1034,6 +1047,7 @@ static inline VALUE batch_run_proc(query_ctx *ctx, enum batch_mode batch_mode) {
     params = INVOKE_PROC(ctx->params, 0, NULL);
     if (NIL_P(params)) break;
 
+    verify_stmt_open(ctx);
     sqlite3_reset(ctx->stmt);
     sqlite3_clear_bindings(ctx->stmt);
     bind_all_parameters_from_object(ctx->stmt, params);
